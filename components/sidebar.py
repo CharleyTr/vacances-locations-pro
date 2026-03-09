@@ -31,32 +31,22 @@ def sidebar() -> str:
 
         st.divider()
 
-        # ── Sélecteur propriété global ────────────────────────────────────
-        # La clé "propriete_selectionnee" est lue directement par toutes les pages
-        # via st.session_state — pas besoin de rerun ni de setter
+        # ── Sélecteur propriété ───────────────────────────────────────────
+        # Le key="propriete_selectionnee" stocke DIRECTEMENT l'ID (0, 1, 2...)
+        # dans st.session_state["propriete_selectionnee"]
         st.markdown("**🏠 Propriété active**")
 
-        props = get_proprietes_dict()
+        props = get_proprietes_dict()  # {1: "Le Turenne...", 2: "Villa Tobias..."}
         options_ids    = [0] + list(props.keys())
-        options_labels = ["🏠 Toutes"] + list(props.values())
+        options_labels = {0: "🏠 Toutes"} | {k: v for k, v in props.items()}
 
-        # Initialiser à 0 si absent
-        if "propriete_selectionnee" not in st.session_state:
-            st.session_state["propriete_selectionnee"] = 0
-
-        current = st.session_state["propriete_selectionnee"]
-        current_idx = options_ids.index(current) if current in options_ids else 0
-
-        chosen_idx = st.selectbox(
+        st.selectbox(
             "prop_sidebar",
-            options=range(len(options_labels)),
-            format_func=lambda i: options_labels[i],
-            index=current_idx,
+            options=options_ids,
+            format_func=lambda x: options_labels.get(x, f"Propriété {x}"),
+            key="propriete_selectionnee",   # ← valeur = l'ID directement
             label_visibility="collapsed",
         )
-
-        # Mettre à jour session_state directement sans rerun
-        st.session_state["propriete_selectionnee"] = options_ids[chosen_idx]
 
         st.divider()
 
