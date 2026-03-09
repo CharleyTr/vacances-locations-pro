@@ -32,17 +32,25 @@ def show():
         st.info("Aucune réservation à afficher.")
         return
 
-    # ── Contrôles ─────────────────────────────────────────────────────────
-    col1, col2, col3, col4 = st.columns([2, 2, 2, 2])
+    # ── Forcer propriete_id en int ────────────────────────────────────────
+    df["propriete_id"] = df["propriete_id"].fillna(0).astype(int)
 
-    with col1:
-        proprietes_dispo = sorted(df["propriete_id"].dropna().unique().tolist())
-        prop_choix = st.selectbox(
-            "🏠 Propriété",
-            options=[0] + proprietes_dispo,
-            format_func=lambda x: "Toutes" if x == 0 else PROPRIETES.get(int(x), f"Propriété {x}"),
-            key="cal_prop"
-        )
+    # ── Filtre propriété (boutons radio) ──────────────────────────────────
+    proprietes_dispo = sorted(df["propriete_id"].unique().tolist())
+    labels_prop  = ["🏠 Toutes"] + [PROPRIETES.get(p, f"Propriété {p}") for p in proprietes_dispo]
+    options_prop = [0] + proprietes_dispo
+
+    prop_idx = st.radio(
+        "Propriété",
+        range(len(labels_prop)),
+        format_func=lambda i: labels_prop[i],
+        horizontal=True,
+        key="cal_prop"
+    )
+    prop_choix = options_prop[prop_idx]
+
+    # ── Autres contrôles ──────────────────────────────────────────────────
+    col2, col3, col4 = st.columns([2, 2, 2])
     with col2:
         annees = sorted(df["annee"].dropna().unique().tolist())
         annee = st.selectbox("Année", annees, index=len(annees) - 1, key="cal_annee")
