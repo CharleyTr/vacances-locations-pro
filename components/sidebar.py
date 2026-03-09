@@ -16,14 +16,6 @@ PAGES = {
 }
 
 
-def _on_prop_change():
-    """Callback : copie l'index sélectionné vers prop_id réel."""
-    idx = st.session_state["_prop_select_idx"]
-    props = get_proprietes_dict()
-    options_ids = [0] + list(props.keys())
-    st.session_state["prop_id"] = options_ids[idx]
-
-
 def sidebar() -> str:
     with st.sidebar:
         st.title("🏖️ Vacances-Locations")
@@ -45,26 +37,25 @@ def sidebar() -> str:
         options_ids    = [0] + list(props.keys())
         options_labels = ["🏠 Toutes"] + list(props.values())
 
-        # Retrouver l'index courant depuis prop_id
-        current_id  = st.session_state.get("prop_id", 0)
-        current_idx = options_ids.index(current_id) if current_id in options_ids else 0
+        # On stocke l'ID directement — options contient les vrais IDs
+        current_id = int(st.session_state.get("prop_id", 0))
+        if current_id not in options_ids:
+            current_id = 0
+        current_idx = options_ids.index(current_id)
 
-        # Stocker l'index dans une clé séparée, le callback traduit en ID réel
-        if "_prop_select_idx" not in st.session_state:
-            st.session_state["_prop_select_idx"] = current_idx
-
-        st.selectbox(
+        chosen = st.selectbox(
             "prop_sidebar",
-            options=range(len(options_labels)),
-            format_func=lambda i: options_labels[i],
+            options=options_ids,                          # ← les IDs réels (0, 1, 2…)
+            format_func=lambda x: options_labels[options_ids.index(x)],
             index=current_idx,
-            key="_prop_select_idx",
-            on_change=_on_prop_change,
             label_visibility="collapsed",
         )
 
-        if current_id != 0:
-            st.caption(f"📍 {props.get(current_id, '')}")
+        # Écriture directe dans session_state — pas de callback, pas de rerun
+        st.session_state["prop_id"] = int(chosen)
+
+        if chosen != 0:
+            st.caption(f"📍 {props.get(chosen, '')}")
 
         st.divider()
 
