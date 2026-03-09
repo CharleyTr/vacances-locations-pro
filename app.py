@@ -2,7 +2,6 @@ import streamlit as st
 from components.sidebar import sidebar
 from pages import dashboard, reservations, calendar, analytics, gaps
 
-# Pages optionnelles (chargées si disponibles)
 try:
     from pages import paiements
     HAS_PAIEMENTS = True
@@ -27,6 +26,12 @@ try:
 except ImportError:
     HAS_ICAL = False
 
+try:
+    from pages import proprietes
+    HAS_PROPRIETES = True
+except ImportError:
+    HAS_PROPRIETES = False
+
 st.set_page_config(
     page_title="Vacances-Locations PRO",
     page_icon="🏖️",
@@ -47,22 +52,12 @@ elif page == "Analyses":
 elif page == "Créneaux":
     gaps.show()
 elif page == "Paiements":
-    if HAS_PAIEMENTS:
-        paiements.show()
-    else:
-        st.error("Page Paiements non disponible — uploadez `pages/paiements.py` sur GitHub.")
+    paiements.show() if HAS_PAIEMENTS else st.error("Uploadez `pages/paiements.py`")
 elif page == "Ménage":
-    if HAS_MENAGE:
-        menage.show()
-    else:
-        st.error("Page Ménage non disponible — uploadez `pages/menage.py` sur GitHub.")
+    menage.show() if HAS_MENAGE else st.error("Uploadez `pages/menage.py`")
 elif page == "Messages":
-    if HAS_MESSAGES:
-        messages.show()
-    else:
-        st.error("Page Messages non disponible — uploadez `pages/messages.py` sur GitHub.")
+    messages.show() if HAS_MESSAGES else st.error("Uploadez `pages/messages.py`")
 elif page == "iCal":
-    if HAS_ICAL:
-        ical_sync.show()
-    else:
-        st.error("Page iCal non disponible — uploadez `pages/ical_sync.py` sur GitHub.")
+    ical_sync.show() if HAS_ICAL else st.error("Uploadez `pages/ical_sync.py`")
+elif page == "Propriétés":
+    proprietes.show() if HAS_PROPRIETES else st.error("Uploadez `pages/proprietes.py`")
