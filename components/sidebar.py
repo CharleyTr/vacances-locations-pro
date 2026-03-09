@@ -16,6 +16,14 @@ PAGES = {
 }
 
 
+def _on_prop_change():
+    """Callback : copie l'index sélectionné vers prop_id réel."""
+    idx = st.session_state["_prop_select_idx"]
+    props = get_proprietes_dict()
+    options_ids = [0] + list(props.keys())
+    st.session_state["prop_id"] = options_ids[idx]
+
+
 def sidebar() -> str:
     with st.sidebar:
         st.title("🏖️ Vacances-Locations")
@@ -31,22 +39,32 @@ def sidebar() -> str:
 
         st.divider()
 
-        # ── Sélecteur propriété ───────────────────────────────────────────
-        # Le key="propriete_selectionnee" stocke DIRECTEMENT l'ID (0, 1, 2...)
-        # dans st.session_state["propriete_selectionnee"]
         st.markdown("**🏠 Propriété active**")
 
-        props = get_proprietes_dict()  # {1: "Le Turenne...", 2: "Villa Tobias..."}
+        props = get_proprietes_dict()
         options_ids    = [0] + list(props.keys())
-        options_labels = {0: "🏠 Toutes"} | {k: v for k, v in props.items()}
+        options_labels = ["🏠 Toutes"] + list(props.values())
+
+        # Retrouver l'index courant depuis prop_id
+        current_id  = st.session_state.get("prop_id", 0)
+        current_idx = options_ids.index(current_id) if current_id in options_ids else 0
+
+        # Stocker l'index dans une clé séparée, le callback traduit en ID réel
+        if "_prop_select_idx" not in st.session_state:
+            st.session_state["_prop_select_idx"] = current_idx
 
         st.selectbox(
             "prop_sidebar",
-            options=options_ids,
-            format_func=lambda x: options_labels.get(x, f"Propriété {x}"),
-            key="propriete_selectionnee",   # ← valeur = l'ID directement
+            options=range(len(options_labels)),
+            format_func=lambda i: options_labels[i],
+            index=current_idx,
+            key="_prop_select_idx",
+            on_change=_on_prop_change,
             label_visibility="collapsed",
         )
+
+        if current_id != 0:
+            st.caption(f"📍 {props.get(current_id, '')}")
 
         st.divider()
 
