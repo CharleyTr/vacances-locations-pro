@@ -9,7 +9,7 @@ from services.import_service import import_csv_file, preview_csv
 from database.supabase_client import is_connected
 import database.reservations_repo as repo
 
-PROPRIETES = {1: "Villa Tobias", 2: "Propriété 2"}
+PROPRIETES = {1: "Le Turenne - BORDEAUX", 2: "Villa Tobias - NICE"}
 PLATEFORMES = ["Booking", "Airbnb", "Direct", "Abritel", "Fermeture"]
 
 COLONNES_AFFICHAGE = [
