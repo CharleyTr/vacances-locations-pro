@@ -5,14 +5,16 @@ import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
 from services.reservation_service import load_reservations
+from services.proprietes_service import get_proprietes_dict, filter_df
 
-PROPRIETES = {1: "Villa Tobias", 2: "Propriété 2"}
+
 
 
 def show():
     st.title("🧹 Planning Ménage")
 
-    df = load_reservations()
+    df_all = load_reservations()
+    df = filter_df(df_all)
     if df.empty:
         st.info("Aucune réservation disponible.")
         return
@@ -52,7 +54,7 @@ def show():
             "Propriété",
             options=list(PROPRIETES.keys()),
             default=list(PROPRIETES.keys()),
-            format_func=lambda x: PROPRIETES.get(x, f"Propriété {x}")
+            format_func=lambda x: get_proprietes_dict().get(x, f"Propriété {x}")
         )
 
     # Appliquer filtres
@@ -77,7 +79,7 @@ def show():
 
     # Vue par propriété
     for prop_id in sorted(df_plan["propriete_id"].unique()):
-        nom_prop = PROPRIETES.get(int(prop_id), f"Propriété {prop_id}")
+        nom_prop = get_proprietes_dict().get(int(prop_id), f"Propriété {prop_id}")
         df_prop  = df_plan[df_plan["propriete_id"] == prop_id]
 
         with st.expander(f"🏠 {nom_prop} — {len(df_prop)} ménage(s)", expanded=True):
