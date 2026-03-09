@@ -4,8 +4,9 @@ from services.reservation_service import load_reservations
 from services.analytics_service import compute_kpis, compute_monthly
 from services.alert_service import upcoming_arrivals, unpaid_reservations
 from database.supabase_client import is_connected, get_supabase
+from services.proprietes_service import get_proprietes_dict, filter_df, get_propriete_selectionnee
 
-PROPRIETES = {0: "Toutes les propriétés", 1: "Villa Tobias", 2: "Propriété 2"}
+
 
 
 def show():
@@ -36,22 +37,22 @@ def show():
         return
 
     # ── Filtre propriété ──────────────────────────────────────────────────
-    col_prop, col_annee, _ = st.columns([2, 2, 4])
-    with col_prop:
-        prop_choix = st.selectbox(
-            "🏠 Propriété",
-            options=list(PROPRIETES.keys()),
-            format_func=lambda x: PROPRIETES[x],
-            key="dash_prop"
-        )
+    # Filtre propriété depuis la sidebar (session_state)
+    prop_choix = get_propriete_selectionnee()
+    props = get_proprietes_dict()
+
+    col_info, col_annee, _ = st.columns([3, 2, 3])
+    with col_info:
+        if prop_choix != 0:
+            st.info(f"🏠 {props.get(prop_choix, f'Propriété {prop_choix}')}")
+        else:
+            st.info(f"🏠 Toutes les propriétés ({len(props)})")
     with col_annee:
         annees = sorted(df_all["annee"].dropna().unique().tolist(), reverse=True)
         annee_choix = st.selectbox("📆 Année", ["Toutes"] + annees, key="dash_annee")
 
     # Appliquer filtres
-    df = df_all.copy()
-    if prop_choix != 0:
-        df = df[df["propriete_id"] == prop_choix]
+    df = filter_df(df_all, prop_choix)
     if annee_choix != "Toutes":
         df = df[df["annee"] == int(annee_choix)]
 
