@@ -1,5 +1,5 @@
 import streamlit as st
-from database.supabase_client import is_connected
+from database.supabase_client import is_connected, get_connection_error
 
 PAGES = {
     "📊 Dashboard":      "Dashboard",
@@ -20,9 +20,12 @@ def sidebar() -> str:
         st.caption("PRO — Gestion locative")
 
         if is_connected():
-            st.success("🟢 Supabase", icon="✅")
+            st.success("🟢 Supabase connecté", icon="✅")
         else:
-            st.warning("🟡 Mode CSV local")
+            err = get_connection_error()
+            st.error("🔴 Supabase non connecté")
+            if err:
+                st.caption(f"⚠️ {err}")
 
         st.divider()
         choice = st.radio(
