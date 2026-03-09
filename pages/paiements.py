@@ -5,16 +5,18 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 from services.reservation_service import load_reservations
+from services.proprietes_service import get_proprietes_dict, filter_df, get_propriete_selectionnee
 from database.supabase_client import is_connected
 import database.reservations_repo as repo
 
-PROPRIETES = {1: "Villa Tobias", 2: "Propriété 2"}
+
 
 
 def show():
     st.title("💳 Suivi des paiements")
 
-    df = load_reservations()
+    df_all = load_reservations()
+    df = filter_df(df_all)
     if df.empty:
         st.info("Aucune réservation disponible.")
         return
@@ -61,7 +63,7 @@ def _show_non_payes(df: pd.DataFrame):
     cols_ok = [c for c in cols if c in df.columns]
     df_view = df[cols_ok].sort_values("date_arrivee").copy()
     df_view["propriete_id"] = df_view["propriete_id"].map(
-        lambda x: PROPRIETES.get(int(x), f"Prop {x}")
+        lambda x: get_proprietes_dict().get(int(x), f"Prop {x}")
     )
 
     st.dataframe(
