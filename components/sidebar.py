@@ -30,32 +30,26 @@ def sidebar() -> str:
                 st.caption(f"⚠️ {err}")
 
         st.divider()
-
         st.markdown("**🏠 Propriété active**")
 
-        props = get_proprietes_dict()
+        props = get_proprietes_dict()  # {1: "Le Turenne...", 2: "Villa Tobias..."}
         options_ids    = [0] + list(props.keys())
         options_labels = ["🏠 Toutes"] + list(props.values())
 
-        # On stocke l'ID directement — options contient les vrais IDs
-        current_id = int(st.session_state.get("prop_id", 0))
-        if current_id not in options_ids:
-            current_id = 0
-        current_idx = options_ids.index(current_id)
-
-        chosen = st.selectbox(
+        # key="prop_id" → Streamlit écrit DIRECTEMENT la valeur sélectionnée
+        # (l'un des options_ids) dans st.session_state["prop_id"]
+        # Pas de index=, pas de callback, pas de rerun — Streamlit gère tout seul
+        st.selectbox(
             "prop_sidebar",
-            options=options_ids,                          # ← les IDs réels (0, 1, 2…)
+            options=options_ids,
             format_func=lambda x: options_labels[options_ids.index(x)],
-            index=current_idx,
+            key="prop_id",
             label_visibility="collapsed",
         )
 
-        # Écriture directe dans session_state — pas de callback, pas de rerun
-        st.session_state["prop_id"] = int(chosen)
-
-        if chosen != 0:
-            st.caption(f"📍 {props.get(chosen, '')}")
+        current = st.session_state.get("prop_id", 0)
+        if current and current != 0:
+            st.caption(f"📍 {props.get(current, '')}")
 
         st.divider()
 
