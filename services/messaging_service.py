@@ -142,3 +142,70 @@ def send_payment_sms(reservation: dict) -> dict:
         f"pour votre reservation. Merci. - Vacances-Locations"
     )
     return send_sms(telephone, message)
+
+
+# ── WhatsApp ────────────────────────────────────────────────────────────────
+
+def build_wa_confirmation(reservation: dict) -> str:
+    nom     = reservation.get("nom_client", "").split()[0]
+    arrivee = reservation.get("date_arrivee", "")
+    depart  = reservation.get("date_depart", "")
+    nuits   = reservation.get("nuitees", "")
+    prix    = reservation.get("prix_net", 0)
+    return (
+        f"Bonjour {nom} 👋\n\n"
+        f"✅ *Confirmation de votre réservation*\n\n"
+        f"📅 Arrivée : *{arrivee}*\n"
+        f"📅 Départ : *{depart}*\n"
+        f"🌙 Durée : *{nuits} nuit(s)*\n"
+        f"💶 Montant : *{float(prix):.0f} €*\n\n"
+        f"Nous vous contacterons pour les détails d'arrivée.\n"
+        f"À très bientôt ! 🏖️"
+    )
+
+
+def build_wa_checkin(reservation: dict) -> str:
+    nom     = reservation.get("nom_client", "").split()[0]
+    arrivee = reservation.get("date_arrivee", "")
+    return (
+        f"Bonjour {nom} 👋\n\n"
+        f"🏖️ Votre arrivée approche ! Vous êtes attendu(e) *{arrivee}*.\n\n"
+        f"Nous vous enverrons les informations pratiques (accès, clés) très prochainement.\n\n"
+        f"N'hésitez pas à nous contacter si vous avez des questions. À bientôt !"
+    )
+
+
+def build_wa_checkout(reservation: dict) -> str:
+    nom = reservation.get("nom_client", "").split()[0]
+    return (
+        f"Bonjour {nom} 👋\n\n"
+        f"🙏 Merci pour votre séjour ! Nous espérons que tout s'est bien passé.\n\n"
+        f"Votre avis nous est précieux — n'hésitez pas à laisser un commentaire.\n\n"
+        f"À bientôt peut-être ! 🌟"
+    )
+
+
+def build_wa_payment(reservation: dict) -> str:
+    nom     = reservation.get("nom_client", "").split()[0]
+    montant = reservation.get("prix_net", 0)
+    arrivee = reservation.get("date_arrivee", "")
+    return (
+        f"Bonjour {nom} 👋\n\n"
+        f"💳 *Rappel de paiement*\n\n"
+        f"Votre réservation du *{arrivee}* est en attente de règlement.\n"
+        f"Montant dû : *{float(montant):.0f} €*\n\n"
+        f"Merci de procéder au paiement dans les meilleurs délais."
+    )
+
+
+def send_wa_auto(reservation: dict, template: str) -> dict:
+    """Envoi WhatsApp via Twilio (automatique)."""
+    from integrations.whatsapp_client import send_whatsapp
+    builders = {
+        "confirmation": build_wa_confirmation,
+        "checkin":      build_wa_checkin,
+        "checkout":     build_wa_checkout,
+        "paiement":     build_wa_payment,
+    }
+    msg = builders.get(template, build_wa_checkin)(reservation)
+    return send_whatsapp(reservation.get("telephone", ""), msg)
