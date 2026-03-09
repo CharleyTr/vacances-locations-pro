@@ -1,4 +1,16 @@
 import streamlit as st
+
+st.set_page_config(
+    page_title="Vacances-Locations PRO",
+    page_icon="🏖️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ── Initialisation session_state ──────────────────────────────────────────
+if "prop_id" not in st.session_state:
+    st.session_state["prop_id"] = 0
+
 from components.sidebar import sidebar
 from pages import dashboard, reservations, calendar, analytics, gaps
 
@@ -7,37 +19,26 @@ try:
     HAS_PAIEMENTS = True
 except ImportError:
     HAS_PAIEMENTS = False
-
 try:
     from pages import menage
     HAS_MENAGE = True
 except ImportError:
     HAS_MENAGE = False
-
 try:
     from pages import messages
     HAS_MESSAGES = True
 except ImportError:
     HAS_MESSAGES = False
-
 try:
     from pages import ical_sync
     HAS_ICAL = True
 except ImportError:
     HAS_ICAL = False
-
 try:
     from pages import proprietes
     HAS_PROPRIETES = True
 except ImportError:
     HAS_PROPRIETES = False
-
-st.set_page_config(
-    page_title="Vacances-Locations PRO",
-    page_icon="🏖️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 page = sidebar()
 
