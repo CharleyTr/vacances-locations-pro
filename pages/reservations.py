@@ -5,11 +5,12 @@ import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
 from services.reservation_service import load_reservations
+from services.proprietes_service import get_proprietes_dict
 from services.import_service import import_csv_file, preview_csv
 from database.supabase_client import is_connected
 import database.reservations_repo as repo
 
-PROPRIETES = {1: "Le Turenne - BORDEAUX", 2: "Villa Tobias - NICE"}
+
 PLATEFORMES = ["Booking", "Airbnb", "Direct", "Abritel", "Fermeture"]
 
 COLONNES_AFFICHAGE = [
@@ -55,8 +56,8 @@ def _show_liste():
         with col3:
             statut_paye = st.selectbox("Paiement", ["Tous", "Payés", "En attente"], key="filt_paye")
         with col4:
-            prop_options = list(PROPRIETES.items())
-            prop_labels  = ["Toutes"] + [v for _, v in prop_options]
+            _props = get_proprietes_dict()
+            prop_labels  = ["Toutes"] + list(_props.values())
             prop_choix   = st.selectbox("Propriété", prop_labels, key="filt_prop")
 
     df = load_reservations()
@@ -73,8 +74,10 @@ def _show_liste():
     elif statut_paye == "En attente":
         df = df[df["paye"] == False]
     if prop_choix != "Toutes":
-        prop_id = next(k for k, v in PROPRIETES.items() if v == prop_choix)
-        df = df[df["propriete_id"] == prop_id]
+        _props = get_proprietes_dict()
+        prop_id = next((k for k, v in _props.items() if v == prop_choix), None)
+        if prop_id:
+            df = df[df["propriete_id"] == prop_id]
 
     cols = [c for c in COLONNES_AFFICHAGE if c in df.columns]
     st.markdown(f"**{len(df)} réservation(s)**")
@@ -125,8 +128,8 @@ def _show_formulaire_ajout():
             st.markdown("**🏠 Séjour**")
             propriete_id = st.selectbox(
                 "Propriété *",
-                options=list(PROPRIETES.keys()),
-                format_func=lambda x: PROPRIETES[x]
+                options=list(get_proprietes_dict().keys()),
+                format_func=lambda x: get_proprietes_dict()[x]
             )
             plateforme = st.selectbox("Plateforme *", PLATEFORMES)
             date_arrivee = st.date_input("Date d'arrivée *", value=date.today())
@@ -251,10 +254,10 @@ def _show_formulaire_modifier():
             st.markdown("**🏠 Séjour**")
             propriete_id = st.selectbox(
                 "Propriété *",
-                options=list(PROPRIETES.keys()),
-                format_func=lambda x: PROPRIETES[x],
-                index=list(PROPRIETES.keys()).index(int(row.get("propriete_id", 1)))
-                      if int(row.get("propriete_id", 1)) in PROPRIETES else 0
+                options=list(get_proprietes_dict().keys()),
+                format_func=lambda x: get_proprietes_dict()[x],
+                index=list(get_proprietes_dict().keys()).index(int(row.get("propriete_id", 1)))
+                      if int(row.get("propriete_id", 1)) in get_proprietes_dict() else 0
             )
             plat_idx = PLATEFORMES.index(row["plateforme"]) if row.get("plateforme") in PLATEFORMES else 0
             plateforme   = st.selectbox("Plateforme *", PLATEFORMES, index=plat_idx)
