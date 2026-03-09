@@ -273,7 +273,7 @@ def _show_sms_manuel(df: pd.DataFrame):
 
     if template_sms != "SMS personnalisé":
         if template_sms == "Rappel arrivée":
-            preview = f"Bonjour {row.get('nom_client','').split()[0]}, votre arrivée est prévue le {row.get('date_arrivee','')}. A bientot ! - Vacances-Locations"
+            preview = f"Bonjour {row.get('nom_client','').split()[0]}, votre arrivée est prévue le {row.get('date_arrivee','')}.Merci de bien vouloir nous indiquer votre heure afin que nous puissions vous accueillir sur place. A bientot ! - Vacances-Locations"
         else:
             preview = f"Rappel: paiement de {row.get('prix_net',0):.0f}€ en attente. Merci. - Vacances-Locations"
         st.caption(f"Aperçu : *{preview[:160]}*")
