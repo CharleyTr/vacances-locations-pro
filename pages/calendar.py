@@ -8,8 +8,9 @@ import plotly.express as px
 import json
 from datetime import date, timedelta
 from services.reservation_service import load_reservations
+from services.proprietes_service import get_proprietes_dict, get_propriete_selectionnee, filter_df
 
-PROPRIETES = {1: "Villa Tobias", 2: "Propriété 2"}
+
 
 COULEURS = {
     "Booking":   "#1565C0",
@@ -35,19 +36,25 @@ def show():
     # ── Forcer propriete_id en int ────────────────────────────────────────
     df["propriete_id"] = df["propriete_id"].fillna(0).astype(int)
 
-    # ── Filtre propriété (boutons radio) ──────────────────────────────────
-    proprietes_dispo = sorted(df["propriete_id"].unique().tolist())
-    labels_prop  = ["🏠 Toutes"] + [PROPRIETES.get(p, f"Propriété {p}") for p in proprietes_dispo]
-    options_prop = [0] + proprietes_dispo
+    # ── Filtre propriété depuis sidebar ───────────────────────────────────
+    prop_choix = get_propriete_selectionnee()
+    props = get_proprietes_dict()
 
-    prop_idx = st.radio(
-        "Propriété",
-        range(len(labels_prop)),
-        format_func=lambda i: labels_prop[i],
-        horizontal=True,
-        key="cal_prop"
-    )
-    prop_choix = options_prop[prop_idx]
+    # Affichage propriété active
+    if prop_choix != 0:
+        st.info(f"🏠 {props.get(prop_choix, f'Propriété {prop_choix}')} — changer dans la sidebar")
+    else:
+        # Boutons rapides si toutes sélectionnées
+        labels_prop  = ["🏠 Toutes"] + list(props.values())
+        options_prop = [0] + list(props.keys())
+        prop_idx = st.radio(
+            "Filtrer par propriété",
+            range(len(labels_prop)),
+            format_func=lambda i: labels_prop[i],
+            horizontal=True,
+            key="cal_prop_local"
+        )
+        prop_choix = options_prop[prop_idx]
 
     # ── Autres contrôles ──────────────────────────────────────────────────
     col2, col3, col4 = st.columns([2, 2, 2])
