@@ -1,4 +1,5 @@
-Page Calendrier — Vue Google Calendar mensuelle + Vue Gantt.
+"""
+Page Calendrier - Vue Google Calendar mensuelle + Vue Gantt.
 """
 import streamlit as st
 import streamlit.components.v1 as components
