@@ -1,5 +1,5 @@
 """
-Page Messages — Email (Brevo) + SMS (Brevo) + WhatsApp (wa.me / Twilio)
+Page Messages - Email (Brevo) + SMS (Brevo) + WhatsApp (wa.me / Twilio)
 """
 import streamlit as st
 import pandas as pd
@@ -344,7 +344,7 @@ def _show_sms_manuel(df: pd.DataFrame):
         msg = st.text_area("Message (160 car. max)", max_chars=160)
     else:
         if tpl == "Rappel arrivée":
-            msg = f"Bonjour {row.get('nom_client','').split()[0]}, votre arrivée est le {row.get('date_arrivee','')}. Merci de bien vouloir nous confirmer votre heure d'arrivée. Nous serons sur place pour vous accueillir. A bientôt ! - Vacances-Locations"
+            msg = f"Bonjour {row.get('nom_client','').split()[0]}, votre arrivée est le {row.get('date_arrivee','')}. A bientôt ! - Vacances-Locations"
         else:
             msg = f"Rappel: paiement de {row.get('prix_net',0):.0f}€ en attente. Merci. - Vacances-Locations"
         st.caption(f"Aperçu : *{msg[:160]}*")
