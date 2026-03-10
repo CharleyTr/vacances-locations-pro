@@ -1,5 +1,5 @@
 """
-Page Propriétés — Gestion des biens locatifs.
+Page Propriétés - Gestion des biens locatifs.
 """
 import streamlit as st
 from database.proprietes_repo import (
