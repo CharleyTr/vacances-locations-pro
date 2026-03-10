@@ -67,7 +67,10 @@ def show():
     c1.metric("💰 CA Brut",        f"{kpis['ca_brut']:,.0f} €")
     c2.metric("💵 CA Net",          f"{kpis['ca_net']:,.0f} €")
     c3.metric("📅 Réservations",    kpis["nb_reservations"])
-    c4.metric("🌙 Nuits totales",   kpis["nuits_total"])
+    nuits_louees    = kpis.get("nuits_louees", kpis["nuits_total"])
+    nuits_fermeture = kpis.get("nuits_fermeture", 0)
+    label_nuits     = f"{nuits_louees} (+{nuits_fermeture}🔒)" if nuits_fermeture else str(nuits_louees)
+    c4.metric("🌙 Nuits louées", label_nuits, help=f"{nuits_fermeture} nuit(s) de fermeture non comptées dans le revenu/nuit")
     c5.metric("📈 Revenu / nuit",   f"{kpis['revenu_nuit']:.0f} €")
 
     c6, c7, c8 = st.columns(3)
