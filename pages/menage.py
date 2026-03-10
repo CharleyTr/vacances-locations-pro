@@ -122,7 +122,7 @@ def show():
     export = df_plan.copy()
     export["date_menage"] = export["date_menage"].dt.strftime("%d/%m/%Y")
     export["propriete"]   = export["propriete_id"].map(
-        lambda x: PROPRIETES.get(int(x), f"Propriété {x}")
+        lambda x: get_proprietes_dict().get(int(x), f"Propriété {x}")
     )
     csv = export[["date_menage", "propriete", "nom_client", "prochain_client"]].to_csv(index=False).encode("utf-8")
     st.download_button("⬇️ Exporter planning ménage", csv,
