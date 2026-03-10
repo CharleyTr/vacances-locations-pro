@@ -1,5 +1,5 @@
 """
-Page Réservations — Liste + Filtres + Formulaire Ajout/Modification/Suppression + Import CSV.
+Page Réservations - Liste + Filtres + Formulaire Ajout/Modification/Suppression + Import CSV.
 """
 import streamlit as st
 import pandas as pd
