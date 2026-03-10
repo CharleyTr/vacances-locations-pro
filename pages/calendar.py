@@ -1,4 +1,3 @@
-"""
 Page Calendrier — Vue Google Calendar mensuelle + Vue Gantt.
 """
 import streamlit as st
