@@ -50,11 +50,12 @@ def show():
             "Cette semaine", "Ce mois", "Tous à venir", "Historique complet"
         ])
     with col2:
+        _props = get_proprietes_dict()
         prop_filter = st.multiselect(
             "Propriété",
-            options=list(PROPRIETES.keys()),
-            default=list(PROPRIETES.keys()),
-            format_func=lambda x: get_proprietes_dict().get(x, f"Propriété {x}")
+            options=list(_props.keys()),
+            default=list(_props.keys()),
+            format_func=lambda x: _props.get(x, f"Propriété {x}")
         )
 
     # Appliquer filtres
