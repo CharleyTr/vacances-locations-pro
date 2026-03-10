@@ -27,13 +27,31 @@ def compute_kpis(df: pd.DataFrame) -> dict:
     # Réservations : uniquement les vraies (pas les fermetures)
     nb_reservations = len(df_reel)
 
-    # Nuits louées (sans fermetures) → pour revenu/nuit
-    nuits_louees = int(df_reel["nuitees"].sum()) if "nuitees" in df_reel.columns else 0
-    revenu_nuit  = round(ca_net / nuits_louees, 2) if nuits_louees > 0 else 0
+    # Calculer les nuits depuis les dates si nuitees est NULL/0
+    def _calc_nuits(d: pd.DataFrame) -> int:
+        if d.empty:
+            return 0
+        if "nuitees" in d.columns:
+            # Utiliser nuitees si disponible, sinon calculer depuis les dates
+            n = d["nuitees"].copy()
+            if "date_arrivee" in d.columns and "date_depart" in d.columns:
+                mask_null = n.isna() | (n == 0)
+                if mask_null.any():
+                    arr = pd.to_datetime(d.loc[mask_null, "date_arrivee"])
+                    dep = pd.to_datetime(d.loc[mask_null, "date_depart"])
+                    n.loc[mask_null] = (dep - arr).dt.days
+            return int(n.fillna(0).sum())
+        elif "date_arrivee" in d.columns and "date_depart" in d.columns:
+            arr = pd.to_datetime(d["date_arrivee"])
+            dep = pd.to_datetime(d["date_depart"])
+            return int((dep - arr).dt.days.fillna(0).sum())
+        return 0
 
-    # Nuits totales occupées (louées + fermetures) → pour taux d'occupation
-    nuits_fermeture = int(df_fermetu["nuitees"].sum()) if not df_fermetu.empty and "nuitees" in df_fermetu.columns else 0
+    # Nuits louées (sans fermetures) → pour revenu/nuit
+    nuits_louees    = _calc_nuits(df_reel)
+    nuits_fermeture = _calc_nuits(df_fermetu)
     nuits_total     = nuits_louees + nuits_fermeture
+    revenu_nuit     = round(ca_net / nuits_louees, 2) if nuits_louees > 0 else 0
 
     # Taux d'occupation = (nuits louées + fermetures) / jours de l'année filtrée
     # On calcule sur l'année sélectionnée dans le df (pas forcément l'année courante)
