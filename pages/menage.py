@@ -1,5 +1,5 @@
 """
-Page Ménage — Planning des interventions par propriété.
+Page Ménage - Planning des interventions par propriété.
 """
 import streamlit as st
 import pandas as pd
