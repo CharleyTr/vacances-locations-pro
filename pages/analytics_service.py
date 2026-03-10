@@ -14,8 +14,12 @@ def compute_kpis(df: pd.DataFrame) -> dict:
     taxes       = df["taxes_sejour"].sum() if "taxes_sejour" in df.columns else 0
 
     nb_reservations = len(df)
+    # Nuits totales : toutes plateformes incluant Fermeture (pour le taux d'occupation)
     nuits_total     = int(df["nuitees"].sum()) if "nuitees" in df.columns else 0
-    revenu_nuit     = round(ca_net / nuits_total, 2) if nuits_total > 0 else 0
+    # Revenu/nuit : exclure Fermeture (pas de CA, fausserait la moyenne)
+    df_payant = df[df["plateforme"] != "Fermeture"] if "plateforme" in df.columns else df
+    nuits_payantes  = int(df_payant["nuitees"].sum()) if "nuitees" in df_payant.columns else 0
+    revenu_nuit     = round(ca_net / nuits_payantes, 2) if nuits_payantes > 0 else 0
 
     non_payes = df[df["paye"] == False] if "paye" in df.columns else pd.DataFrame()
     montant_en_attente = non_payes["prix_net"].sum() if not non_payes.empty else 0
@@ -68,27 +72,40 @@ def compute_monthly(df: pd.DataFrame) -> pd.DataFrame:
     ).reset_index()
 
     # ── Nuits ventilées par mois réel ─────────────────────────────────────
-    nuits_rows = []
-    for _, row in df.iterrows():
-        arrivee = row["date_arrivee"]
-        depart  = row["date_depart"]
-        if pd.isna(arrivee) or pd.isna(depart):
-            continue
-        # Parcourir chaque nuit (de arrivee à depart - 1 jour inclus)
-        current = arrivee
-        while current < depart:
-            nuits_rows.append({
-                "mois": current.to_period("M"),
-                "nuits": 1
-            })
-            current += pd.Timedelta(days=1)
+    # Pour chaque réservation, on calcule les nuits dans chaque mois qu'elle chevauche
+    all_months = df["mois"].unique()
+    nuits_par_mois = {}
 
-    if nuits_rows:
-        df_nuits = pd.DataFrame(nuits_rows).groupby("mois")["nuits"].sum().reset_index()
-        monthly = ca_monthly.merge(df_nuits, on="mois", how="left")
-    else:
-        ca_monthly["nuits"] = 0
-        monthly = ca_monthly
+    for period in all_months:
+        ms_p       = period.to_timestamp()                      # 1er jour du mois
+        me_exclu_p = (period + 1).to_timestamp()               # 1er jour du mois suivant
+
+        def _nuits(row, ms=ms_p, me=me_exclu_p):
+            debut = max(row["date_arrivee"], ms)
+            fin   = min(row["date_depart"],  me)
+            return max(0, (fin - debut).days)
+
+        nuits_par_mois[period] = int(df.apply(_nuits, axis=1).sum())
+
+    # Inclure aussi les mois touchés par des réservations qui dépassent (ex: arrivée en déc, départ en jan)
+    for _, row in df.iterrows():
+        arr, dep = row["date_arrivee"], row["date_depart"]
+        if pd.isna(arr) or pd.isna(dep):
+            continue
+        p = arr.to_period("M")
+        while p.to_timestamp() < dep:
+            if p not in nuits_par_mois:
+                ms_p       = p.to_timestamp()
+                me_exclu_p = (p + 1).to_timestamp()
+                def _n(row, ms=ms_p, me=me_exclu_p):
+                    return max(0, (min(row["date_depart"], me) - max(row["date_arrivee"], ms)).days)
+                nuits_par_mois[p] = int(df.apply(_n, axis=1).sum())
+            p += 1
+
+    df_nuits = pd.DataFrame([
+        {"mois": k, "nuits": v} for k, v in nuits_par_mois.items()
+    ])
+    monthly = ca_monthly.merge(df_nuits, on="mois", how="left")
 
     monthly["nuits"]   = monthly["nuits"].fillna(0).astype(int)
     monthly["mois_str"] = monthly["mois"].dt.strftime("%b %Y")
