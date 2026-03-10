@@ -402,16 +402,27 @@ def _build_events(df: pd.DataFrame, annee: int, mois: int) -> list:
 
 
 def _show_month_summary(df: pd.DataFrame, annee: int, mois: int):
-    """Résumé du mois sous le calendrier."""
+    """Résumé du mois — nuits ventilées jour par jour dans le bon mois."""
     import calendar as cal_lib
-    last_day = cal_lib.monthrange(annee, mois)[1]
     from datetime import date as ddate
+    last_day = cal_lib.monthrange(annee, mois)[1]
     ms = pd.Timestamp(ddate(annee, mois, 1))
     me = pd.Timestamp(ddate(annee, mois, last_day))
 
-    df_mois = df[
-        (df["date_arrivee"] <= me) & (df["date_depart"] >= ms)
-    ]
+    # me_exclu = 1er jour du mois suivant
+    me_exclu = me + pd.Timedelta(days=1)
+
+    # Réservations qui ont AU MOINS 1 nuit dans ce mois
+    def nuits_dans_mois(row):
+        debut = max(row["date_arrivee"], ms)
+        fin   = min(row["date_depart"],  me_exclu)
+        return max(0, (fin - debut).days)
+
+    df_tmp = df[(df["date_arrivee"] < me_exclu) & (df["date_depart"] > ms)].copy()
+    df_tmp["nuits_mois"] = df_tmp.apply(nuits_dans_mois, axis=1)
+
+    # Garder uniquement celles avec au moins 1 nuit dans le mois
+    df_mois = df_tmp[df_tmp["nuits_mois"] > 0].copy()
 
     st.divider()
     st.subheader(f"📊 Résumé {MOIS_FR[mois]} {annee}")
@@ -420,14 +431,18 @@ def _show_month_summary(df: pd.DataFrame, annee: int, mois: int):
         st.info("Aucune réservation ce mois.")
         return
 
+    nuits_reelles = int(df_mois["nuits_mois"].sum())
+    ca_net        = df_mois["prix_net"].sum()
+
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Réservations", len(df_mois))
-    c2.metric("Nuits",        int(df_mois["nuitees"].sum()))
-    c3.metric("CA Net",       f"{df_mois['prix_net'].sum():,.0f} €")
-    c4.metric("Revenu/nuit",  f"{df_mois['prix_net'].sum()/max(df_mois['nuitees'].sum(),1):.0f} €")
+    c2.metric("Nuits",        nuits_reelles)
+    c3.metric("CA Net",       f"{ca_net:,.0f} €")
+    c4.metric("Revenu/nuit",  f"{ca_net/max(nuits_reelles,1):.0f} €")
 
     with st.expander("📋 Détail du mois"):
-        cols = ["nom_client", "plateforme", "date_arrivee", "date_depart", "nuitees", "prix_net", "paye"]
+        df_mois = df_mois.rename(columns={"nuits_mois": "nuits_ce_mois"})
+        cols = ["nom_client", "plateforme", "date_arrivee", "date_depart", "nuits_ce_mois", "prix_net", "paye"]
         cols_ok = [c for c in cols if c in df_mois.columns]
         st.dataframe(df_mois[cols_ok].sort_values("date_arrivee"),
                      use_container_width=True, hide_index=True,
