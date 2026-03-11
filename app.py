@@ -60,6 +60,11 @@ try:
 except ImportError:
     avis = None
 
+try:
+    from pages import questionnaire
+except ImportError:
+    questionnaire = None
+
 page = sidebar()
 
 if page == "Dashboard":       dashboard.show()
@@ -75,3 +80,4 @@ elif page == "Propriétés":    proprietes.show() if proprietes else st.error("U
 elif page == "Rapports":      rapport.show()    if rapport    else st.error("Uploadez pages/rapport.py")
 elif page == "Tarifs":        tarifs.show()     if tarifs     else st.error("Uploadez pages/tarifs.py")
 elif page == "Livre d'or":    avis.show()       if avis       else st.error("Uploadez pages/avis.py")
+elif page == "Questionnaire": questionnaire.show() if questionnaire else st.error("Uploadez pages/questionnaire.py")
