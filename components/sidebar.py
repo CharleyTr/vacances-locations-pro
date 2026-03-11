@@ -13,6 +13,7 @@ PAGES = {
     "🔄 Sync iCal":      "iCal",
     "🕳️ Créneaux":      "Créneaux",
     "🏠 Propriétés":     "Propriétés",
+    "📊 Rapports":       "Rapports",
 }
 
 
