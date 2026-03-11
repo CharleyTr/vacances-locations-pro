@@ -99,9 +99,7 @@ def _prepare(data: dict) -> dict:
             clean[k] = v.isoformat()
         else:
             clean[k] = v
-    # Supprimer les colonnes calculées côté DB
-    for col in ["nuitees"]:
-        clean.pop(col, None)
+    # Supprimer les colonnes calculées côté DB (aucune ici - nuitees doit être fourni)
     return clean
 
 
