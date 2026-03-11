@@ -62,6 +62,6 @@ def sidebar() -> str:
             label_visibility="collapsed",
         )
         st.divider()
-        st.caption("v3.0 — 2026")
+        st.caption("v3.0 — 2026 - Charley TRIGANO")
 
     return PAGES[choice]
