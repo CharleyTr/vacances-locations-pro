@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 import plotly.express as px
 from services.reservation_service import load_reservations
 from services.analytics_service import compute_kpis, compute_monthly
@@ -62,16 +63,36 @@ def show():
 
     kpis = compute_kpis(df)
 
+    # ── Calcul Fermeture directement dans le dashboard ────────────────────
+    df_c = df.copy()
+    df_c["date_arrivee"] = pd.to_datetime(df_c["date_arrivee"])
+    df_c["date_depart"]  = pd.to_datetime(df_c["date_depart"])
+    mask_ferm   = df_c["plateforme"] == "Fermeture"
+    df_ferm     = df_c[mask_ferm]
+    df_reel     = df_c[~mask_ferm]
+
+    def _n(d):
+        if d.empty: return 0
+        n = d["nuitees"].copy() if "nuitees" in d.columns else pd.Series(dtype=float)
+        if n.empty: n = pd.Series([0]*len(d))
+        mask0 = n.isna() | (n == 0)
+        if mask0.any():
+            n.loc[mask0] = (d.loc[mask0,"date_depart"] - d.loc[mask0,"date_arrivee"]).dt.days
+        return int(n.fillna(0).sum())
+
+    nuits_fermeture = _n(df_ferm)
+    nuits_louees    = _n(df_reel)
+    ca_net_reel     = float(df_reel["prix_net"].sum()) if not df_reel.empty else 0
+    revenu_nuit     = round(ca_net_reel / nuits_louees) if nuits_louees > 0 else 0
+    label_nuits     = f"{nuits_louees} (+{nuits_fermeture} fermeture)" if nuits_fermeture else str(nuits_louees)
+
     # ── KPIs ──────────────────────────────────────────────────────────────
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("💰 CA Brut",        f"{kpis['ca_brut']:,.0f} €")
-    c2.metric("💵 CA Net",          f"{kpis['ca_net']:,.0f} €")
-    c3.metric("📅 Réservations",    kpis["nb_reservations"])
-    nuits_louees    = kpis.get("nuits_louees", kpis["nuits_total"])
-    nuits_fermeture = kpis.get("nuits_fermeture", 0)
-    label_nuits     = f"{nuits_louees} (+{nuits_fermeture}🔒)" if nuits_fermeture else str(nuits_louees)
-    c4.metric("🌙 Nuits louées", label_nuits, help=f"{nuits_fermeture} nuit(s) de fermeture non comptées dans le revenu/nuit")
-    c5.metric("📈 Revenu / nuit",   f"{kpis['revenu_nuit']:.0f} €")
+    c1.metric("💰 CA Brut",       f"{kpis['ca_brut']:,.0f} €")
+    c2.metric("💵 CA Net",         f"{kpis['ca_net']:,.0f} €")
+    c3.metric("📅 Réservations",   len(df_reel))
+    c4.metric("🌙 Nuits louées",   label_nuits)
+    c5.metric("📈 Revenu / nuit",  f"{revenu_nuit:.0f} €")
 
     c6, c7, c8 = st.columns(3)
     c6.metric("⏳ En attente",      f"{kpis['montant_en_attente']:,.0f} €")
