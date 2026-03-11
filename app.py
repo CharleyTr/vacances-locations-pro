@@ -1,8 +1,7 @@
 import streamlit as st
 
 # ── QUESTIONNAIRE PUBLIC - intercepté en tout premier ─────────────────────────
-# Le token arrive sur l'URL racine : https://vacances-locations-pro-iqmuq8xq9g3kxgw6n8ogpv.streamlit.app/Questionnaire?token=yt1RSOyZSUgzjo7r_9dBWIjUXYowMgotEgaGiYnEnoM/Questionnaire?token=XHBVOsQ7CI7fwmPuQFFgws_WdzMI5XbyKkmkSHYjCg0
-
+# Le token arrive sur l'URL racine : https://app.streamlit.app/?token=XXX
 # set_page_config DOIT être le tout premier appel Streamlit
 _token = st.query_params.get("token", "")
 
@@ -69,24 +68,50 @@ if _token:
 
     # ── Formulaire questionnaire ───────────────────────────────────────────────
     nom = avis.get("nom_client", "")
+    # Infos séjour depuis l'avis
+    _prop_nom   = avis.get("_prop_nom", "")
+    _plateforme = avis.get("plateforme", "")
+    _date_arr   = (avis.get("date_sejour") or "")[:10]
+
+    _sejour_info = ""
+    if _prop_nom or _plateforme or _date_arr:
+        parts = []
+        if _prop_nom:   parts.append(f"🏠 {_prop_nom}")
+        if _date_arr:   parts.append(f"📅 {_date_arr}")
+        if _plateforme: parts.append(f"🔑 {_plateforme}")
+        sep = " &nbsp;|&nbsp; "
+    _sejour_info = "<p style='opacity:.8;font-size:13px;margin:4px 0 0 0'>" + sep.join(parts) + "</p>"
+
     st.markdown(f"""
     <div style='text-align:center;margin-bottom:2rem;padding:1.5rem;
          background:linear-gradient(135deg,#1565C0,#1976D2);
          border-radius:16px;color:white'>
       <div style='font-size:44px'>🏠</div>
-      <h1 style='color:white;margin:8px 0 4px 0;font-size:24px'>Votre avis compte !</h1>
-      <p style='opacity:.9;margin:0;font-size:15px'>
-        Bonjour <b>{nom}</b>, merci pour votre séjour.<br>
-        2 minutes pour partager votre expérience.
+      <h1 style='color:white;margin:8px 0 4px 0;font-size:22px'>
+        🇫🇷 Votre avis compte !&nbsp;&nbsp;🇬🇧 Your review matters!
+      </h1>
+      <p style='opacity:.9;margin:4px 0 2px 0;font-size:15px'>
+        🇫🇷 Bonjour <b>{nom}</b>, merci pour votre séjour. 2 minutes pour partager votre expérience.<br>
+        🇬🇧 Hello <b>{nom}</b>, thank you for your stay. 2 minutes to share your experience.
       </p>
+      {_sejour_info}
     </div>""", unsafe_allow_html=True)
 
-    st.markdown("### ⭐ Évaluez votre séjour")
+    CRITERES_BILINGUES = {
+        "note_proprete":     ("🧹 Propreté / Cleanliness"),
+        "note_emplacement":  ("📍 Emplacement / Location"),
+        "note_personnel":    ("👤 Personnel / Staff"),
+        "note_confort":      ("🛋️ Confort / Comfort"),
+        "note_equipements":  ("⚙️ Équipements / Amenities"),
+        "note_qualite_prix": ("💶 Rapport qualité/prix / Value for money"),
+    }
+
+    st.markdown("### ⭐ Évaluez votre séjour / Rate your stay")
     notes = {}
-    for col_key, label in CRITERES:
-        c1, c2 = st.columns([2, 3])
+    for col_key, label in CRITERES_BILINGUES.items():
+        c1, c2 = st.columns([3, 3])
         with c1:
-            st.markdown(f"<div style='padding-top:8px;font-weight:500'>{label}</div>",
+            st.markdown(f"<div style='padding-top:8px;font-weight:500;font-size:14px'>{label}</div>",
                         unsafe_allow_html=True)
         with c2:
             notes[col_key] = st.select_slider(
@@ -99,13 +124,13 @@ if _token:
     couleur = "#4CAF50" if note_globale >= 4 else "#FF9800" if note_globale == 3 else "#F44336"
     st.markdown(f"""<div style='background:{couleur}18;border:2px solid {couleur};
         border-radius:10px;padding:12px;text-align:center;margin:16px 0'>
-        <b style='color:{couleur};font-size:18px'>Note globale : {ETOILES[note_globale]} {note_globale}/5</b>
+        <b style='color:{couleur};font-size:18px'>🇫🇷 Note globale / 🇬🇧 Overall score : {ETOILES[note_globale]} {note_globale}/5</b>
         </div>""", unsafe_allow_html=True)
 
     st.divider()
-    st.markdown("### 💬 Votre commentaire")
+    st.markdown("### 💬 Votre commentaire / Your review")
     commentaire = st.text_area("Décrivez votre séjour", height=120,
-        placeholder="Excellent séjour ! Appartement très propre, bien équipé...",
+        placeholder="🇫🇷 Excellent séjour, appartement très propre...  /  🇬🇧 Excellent stay, very clean apartment...",
         key="q_comment", label_visibility="collapsed")
 
     c1, c2 = st.columns(2)
@@ -116,12 +141,12 @@ if _token:
         ameliorations = st.text_area("💡 Suggestions", height=80,
                                       placeholder="Ce qui pourrait être amélioré...", key="q_amelio")
 
-    st.markdown("### 🔄 Recommanderiez-vous ce logement ?")
+    st.markdown("### 🔄 Recommanderiez-vous ce logement ? / Would you recommend this place?")
     recommande = st.radio("", ["Oui, absolument !", "Oui, probablement", "Peut-être", "Non"],
                            horizontal=True, key="q_reco", label_visibility="collapsed")
 
     st.divider()
-    if st.button("✅ Envoyer mon avis", type="primary", use_container_width=True):
+    if st.button("✅ Envoyer mon avis / Submit my review", type="primary", use_container_width=True):
         comment_final = commentaire or ""
         if points_forts:   comment_final += f"\n\n👍 Points forts : {points_forts}"
         if ameliorations:  comment_final += f"\n\n💡 Suggestions : {ameliorations}"
