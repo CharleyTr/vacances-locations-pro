@@ -1,14 +1,11 @@
+[server]
+maxUploadSize = 200
+
 [client]
 showSidebarNavigation = false
 
 [browser]
 gatherUsageStats = false
 
-[theme]
-base = "dark"
-
-
-
-
-
-
+[runner]
+fastReruns = true
