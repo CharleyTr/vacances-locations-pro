@@ -3,3 +3,12 @@ showSidebarNavigation = false
 
 [browser]
 gatherUsageStats = false
+
+[theme]
+base = "dark"
+
+
+
+
+
+
