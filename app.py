@@ -1,11 +1,25 @@
 import streamlit as st
 
+# Masquer la navigation automatique Streamlit (liste de fichiers dans la sidebar)
+_HIDE_STREAMLIT_NAV = """
+<style>
+/* Cache la liste de pages auto-générée par Streamlit MPA */
+[data-testid="stSidebarNavItems"],
+[data-testid="stSidebarNav"],
+section[data-testid="stSidebarNav"],
+div[data-testid="collapsedControl"] + div [data-testid="stSidebarNavItems"] {
+    display: none !important;
+}
+</style>
+"""
 st.set_page_config(
     page_title="Vacances-Locations PRO",
     page_icon="🏖️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+st.markdown(_HIDE_STREAMLIT_NAV, unsafe_allow_html=True)
 
 from components.sidebar import sidebar
 from pages import dashboard, reservations, calendar, analytics, gaps
