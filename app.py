@@ -5,13 +5,12 @@ import streamlit as st
 # set_page_config DOIT être le tout premier appel Streamlit
 _token = st.query_params.get("token", "")
 
-
 if _token:
     # Mode questionnaire : page épurée sans sidebar
     st.set_page_config(
         page_title="Votre avis",
         page_icon="⭐",
-        layout="wide",
+        layout="centered",
         initial_sidebar_state="collapsed",
     )
     st.markdown("""
