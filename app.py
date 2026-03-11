@@ -1,7 +1,8 @@
 import streamlit as st
 
 # ── QUESTIONNAIRE PUBLIC - intercepté en tout premier ─────────────────────────
-# Le token arrive sur l'URL racine : https://app.streamlit.app/?token=XXX
+# Le token arrive sur l'URL racine : https://vacances-locations-pro-iqmuq8xq9g3kxgw6n8ogpv.streamlit.app/Questionnaire?token=yt1RSOyZSUgzjo7r_9dBWIjUXYowMgotEgaGiYnEnoM/Questionnaire?token=XHBVOsQ7CI7fwmPuQFFgws_WdzMI5XbyKkmkSHYjCg0
+
 # set_page_config DOIT être le tout premier appel Streamlit
 _token = st.query_params.get("token", "")
 
