@@ -45,6 +45,11 @@ try:
 except ImportError:
     proprietes = None
 
+try:
+    from pages import rapport
+except ImportError:
+    rapport = None
+
 page = sidebar()
 
 if page == "Dashboard":       dashboard.show()
@@ -57,3 +62,4 @@ elif page == "Ménage":        menage.show()    if menage    else st.error("Uplo
 elif page == "Messages":      messages.show() if messages  else st.error("Uploadez pages/messages.py")
 elif page == "iCal":          ical_sync.show() if ical_sync else st.error("Uploadez pages/ical_sync.py")
 elif page == "Propriétés":    proprietes.show() if proprietes else st.error("Uploadez pages/proprietes.py")
+elif page == "Rapports":      rapport.show()    if rapport    else st.error("Uploadez pages/rapport.py")
