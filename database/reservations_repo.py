@@ -99,7 +99,8 @@ def _prepare(data: dict) -> dict:
             clean[k] = v.isoformat()
         else:
             clean[k] = v
-    # Supprimer les colonnes calculées côté DB (aucune ici - nuitees doit être fourni)
+    # Supprimer id (auto-généré par Supabase) et colonnes calculées
+    clean.pop("id", None)
     return clean
 
 
