@@ -14,6 +14,8 @@ PAGES = {
     "🕳️ Créneaux":      "Créneaux",
     "🏠 Propriétés":     "Propriétés",
     "📊 Rapports":       "Rapports",
+    "💶 Tarifs":         "Tarifs",
+    "⭐ Livre d'or":     "Livre d'or",
 }
 
 
