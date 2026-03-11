@@ -16,27 +16,36 @@ st.set_page_config(
 # Masquer TOUT le chrome Streamlit
 st.markdown("""
 <style>
+/* Toutes les versions de Streamlit */
 [data-testid="stSidebar"],
 [data-testid="stSidebarNav"],
 [data-testid="stSidebarNavItems"],
 [data-testid="collapsedControl"],
 [data-testid="stSidebarNavSeparator"],
-[data-testid="stSidebarNavItems"],
 section[data-testid="stSidebarNav"],
+[data-testid="stToolbar"],
+[data-testid="stDecoration"],
+[data-testid="stStatusWidget"],
 #MainMenu, header, footer,
-button[data-testid="baseButton-header"] {
+button[data-testid="baseButton-header"],
+.stDeployButton,
+[data-testid="stAppViewBlockContainer"] > div:first-child > div:first-child > div:first-child > div[data-testid="stVerticalBlock"] > div:first-child {
     display: none !important;
     visibility: hidden !important;
     width: 0 !important;
     height: 0 !important;
+    overflow: hidden !important;
 }
 .stApp > header { display: none !important; }
+.stApp { background: #FAFAFA; }
 .main .block-container {
     max-width: 680px;
-    padding: 2rem 1.5rem 4rem 1.5rem;
+    padding: 1rem 1.5rem 4rem 1.5rem;
     margin: 0 auto;
 }
-.stApp { background: #FAFAFA; }
+/* Forcer la largeur pleine sans sidebar */
+.main { margin-left: 0 !important; }
+section.main > div { padding-left: 1rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
