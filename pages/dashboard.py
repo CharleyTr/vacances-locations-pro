@@ -84,7 +84,7 @@ def show():
     nuits_louees    = _n(df_reel)
     ca_net_reel     = float(df_reel["prix_net"].sum()) if not df_reel.empty else 0
     revenu_nuit     = round(ca_net_reel / nuits_louees) if nuits_louees > 0 else 0
-    label_nuits     = f"{nuits_louees} (+{nuits_fermeture} fermeture)" if nuits_fermeture else str(nuits_louees)
+    label_nuits     = f"{nuits_louees} (+{nuits_fermeture}🔒)" if nuits_fermeture else str(nuits_louees)
 
     # ── KPIs ──────────────────────────────────────────────────────────────
     c1, c2, c3, c4, c5 = st.columns(5)
