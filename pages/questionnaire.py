@@ -61,12 +61,18 @@ except Exception:
     token = ""
 
 if not token:
+    # Debug temporaire : afficher tous les params reçus
     st.markdown("""
-    <div style='text-align:center;padding:4rem 1rem'>
-      <div style='font-size:56px'>❌</div>
-      <h2 style='color:#C62828'>Lien invalide</h2>
-      <p style='color:#666'>Utilisez le lien reçu par email ou WhatsApp.</p>
+    <div style='text-align:center;padding:2rem 1rem'>
+      <div style='font-size:56px'>🔍</div>
+      <h2 style='color:#C62828'>Token manquant</h2>
+      <p style='color:#666'>Vérifiez que le lien complet a bien été copié.</p>
     </div>""", unsafe_allow_html=True)
+    
+    # Debug : montrer les params reçus
+    all_params = dict(st.query_params)
+    st.info(f"Params reçus : {all_params}")
+    st.info(f"URL complète attendue : ...streamlit.app/Questionnaire?token=VOTRE_TOKEN")
     st.stop()
 
 # ── Récupérer l'avis depuis Supabase ─────────────────────────────────────────
