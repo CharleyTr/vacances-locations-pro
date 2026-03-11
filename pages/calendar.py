@@ -1,5 +1,5 @@
 """
-Page Calendrier - Vue Google Calendar mensuelle + Vue Gantt.
+Page Calendrier - Vue mensuelle + Vue semaine + Gantt + Blocage dates + Conflits.
 """
 import streamlit as st
 import streamlit.components.v1 as components
@@ -9,8 +9,9 @@ import json
 from datetime import date, timedelta
 from services.reservation_service import load_reservations
 from services.proprietes_service import get_proprietes_dict, get_propriete_selectionnee, filter_df
-
-
+from services.conflict_service import detect_conflicts
+from database.reservations_repo import insert_reservation
+from database.supabase_client import is_connected
 
 COULEURS = {
     "Booking":   "#1565C0",
@@ -19,482 +20,602 @@ COULEURS = {
     "Abritel":   "#F57C00",
     "Fermeture": "#9E9E9E",
 }
-
-MOIS_FR = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-           "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+MOIS_FR  = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+             "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
 JOURS_FR = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
 
 def show():
     st.title("📅 Calendrier des réservations")
 
-    df = load_reservations()
-    if df.empty:
+    df_all = load_reservations()
+    if df_all.empty:
         st.info("Aucune réservation à afficher.")
         return
 
-    # ── Forcer propriete_id en int ────────────────────────────────────────
-    df["propriete_id"] = df["propriete_id"].fillna(0).astype(int)
-
-    # ── Filtre propriété depuis sidebar ───────────────────────────────────
+    df_all["propriete_id"] = df_all["propriete_id"].fillna(0).astype(int)
     prop_choix = get_propriete_selectionnee()
-    props = get_proprietes_dict()
+    props      = get_proprietes_dict()
 
-    # Affichage propriété active
     if prop_choix != 0:
-        st.info(f"🏠 {props.get(prop_choix, f'Propriété {prop_choix}')} — changer dans la sidebar")
+        st.info(f"🏠 {props.get(prop_choix, f'Propriété {prop_choix}')} - changer dans la sidebar")
     else:
-        # Boutons rapides si toutes sélectionnées
         labels_prop  = ["🏠 Toutes"] + list(props.values())
         options_prop = [0] + list(props.keys())
-        prop_idx = st.radio(
-            "Filtrer par propriété",
-            range(len(labels_prop)),
-            format_func=lambda i: labels_prop[i],
-            horizontal=True,
-            key="cal_prop_local"
-        )
+        prop_idx = st.radio("Filtrer par propriété", range(len(labels_prop)),
+                             format_func=lambda i: labels_prop[i],
+                             horizontal=True, key="cal_prop_local")
         prop_choix = options_prop[prop_idx]
 
-    # ── Autres contrôles ──────────────────────────────────────────────────
-    col2, col3, col4 = st.columns([2, 2, 2])
+    col1, col2, col3 = st.columns([2, 2, 3])
+    with col1:
+        annees = sorted(df_all["annee"].dropna().unique().tolist())
+        annee  = st.selectbox("Année", annees, index=len(annees)-1, key="cal_annee")
     with col2:
-        annees = sorted(df["annee"].dropna().unique().tolist())
-        annee = st.selectbox("Année", annees, index=len(annees) - 1, key="cal_annee")
-    with col3:
-        mois_idx = date.today().month
         mois = st.selectbox("Mois", list(range(1, 13)),
-                            format_func=lambda x: MOIS_FR[x],
-                            index=mois_idx - 1, key="cal_mois")
-    with col4:
-        vue = st.radio("Vue", ["📅 Calendrier", "📊 Gantt"], horizontal=True, key="cal_vue")
+                             format_func=lambda x: MOIS_FR[x],
+                             index=date.today().month-1, key="cal_mois")
+    with col3:
+        vue = st.radio("Vue", ["📅 Mois", "🗓️ Semaine", "📊 Gantt",
+                                "🚫 Conflits", "🔒 Bloquer dates"],
+                        horizontal=True, key="cal_vue")
 
-    # ── Filtrage ──────────────────────────────────────────────────────────
-    df_f = df.copy()
+    df_f = df_all.copy()
     if prop_choix != 0:
         df_f = df_f[df_f["propriete_id"] == prop_choix]
-    df_f = df_f[df_f["annee"] == annee]
+    df_year = df_f[df_f["annee"] == annee]
 
-    if df_f.empty:
-        st.warning("Aucune réservation pour ces filtres.")
-        return
+    if "📅 Mois" in vue:
+        if df_year.empty:
+            st.warning("Aucune réservation pour ces filtres.")
+        else:
+            _show_google_calendar(df_year, annee, mois)
+            _show_month_summary(df_year, annee, mois)
 
-    if "📅 Calendrier" in vue:
-        _show_google_calendar(df_f, annee, mois)
-    else:
-        _show_gantt(df_f, prop_choix)
+    elif "🗓️ Semaine" in vue:
+        _show_week_view(df_year, annee, mois, props, prop_choix)
+
+    elif "📊 Gantt" in vue:
+        if df_year.empty:
+            st.warning("Aucune réservation pour ces filtres.")
+        else:
+            _show_gantt(df_year, prop_choix)
+
+    elif "🚫 Conflits" in vue:
+        _show_conflicts(df_all, props, prop_choix)
+
+    elif "🔒 Bloquer" in vue:
+        _show_blocage(prop_choix, props)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# VUE GOOGLE CALENDAR
+# VUE MOIS (Google Calendar style)
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _show_google_calendar(df: pd.DataFrame, annee: int, mois: int):
     st.subheader(f"📅 {MOIS_FR[mois]} {annee}")
 
-    # Construire les events JSON pour le mois affiché + débordement
-    events = _build_events(df, annee, mois)
-    events_json = json.dumps(events)
-    couleurs_json = json.dumps(COULEURS)
-    mois_fr_json  = json.dumps(MOIS_FR)
-    jours_fr_json = json.dumps(JOURS_FR)
+    df = df.copy()
+    df["date_arrivee"] = pd.to_datetime(df["date_arrivee"])
+    df["date_depart"]  = pd.to_datetime(df["date_depart"])
 
-    html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }}
-
-  body {{ background: #f8f9fa; padding: 8px; }}
-
-  .cal-header {{
-    display: flex; align-items: center; justify-content: space-between;
-    background: white; border-radius: 10px; padding: 12px 20px;
-    margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-  }}
-  .cal-header h2 {{ font-size: 18px; color: #1a1a2e; font-weight: 600; }}
-  .nav-btn {{
-    background: #f1f3f4; border: none; border-radius: 6px;
-    padding: 6px 14px; cursor: pointer; font-size: 14px; color: #444;
-    transition: background 0.2s;
-  }}
-  .nav-btn:hover {{ background: #e0e0e0; }}
-
-  .legend {{
-    display: flex; gap: 12px; flex-wrap: wrap;
-    background: white; border-radius: 10px; padding: 10px 16px;
-    margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  }}
-  .legend-item {{ display: flex; align-items: center; gap: 6px; font-size: 12px; color: #555; }}
-  .legend-dot {{ width: 10px; height: 10px; border-radius: 50%; }}
-
-  .cal-grid {{
-    background: white; border-radius: 10px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1); overflow: hidden;
-  }}
-  .day-headers {{
-    display: grid; grid-template-columns: repeat(7, 1fr);
-    background: #f8f9fa; border-bottom: 1px solid #e8eaed;
-  }}
-  .day-header {{
-    padding: 10px 6px; text-align: center;
-    font-size: 12px; font-weight: 600; color: #70757a; letter-spacing: 0.5px;
-  }}
-  .day-header.weekend {{ color: #EA4335; }}
-
-  .weeks {{ display: flex; flex-direction: column; }}
-  .week {{ display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid #f1f3f4; }}
-  .week:last-child {{ border-bottom: none; }}
-
-  .day {{
-    min-height: 110px; padding: 6px 4px;
-    border-right: 1px solid #f1f3f4; position: relative; vertical-align: top;
-  }}
-  .day:last-child {{ border-right: none; }}
-  .day.other-month {{ background: #fafafa; }}
-  .day.today {{ background: #fff8e1; }}
-  .day.today .day-num {{ background: #1a73e8; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: 600; }}
-
-  .day-num {{
-    font-size: 13px; color: #3c4043; font-weight: 500;
-    margin-bottom: 4px; width: 24px; height: 24px;
-    display: flex; align-items: center; justify-content: center;
-  }}
-  .day.other-month .day-num {{ color: #b0b3b8; }}
-  .day.weekend-day .day-num {{ color: #EA4335; }}
-
-  .event {{
-    border-radius: 4px; padding: 2px 6px; margin-bottom: 2px;
-    font-size: 11px; font-weight: 500; color: white;
-    cursor: pointer; white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis; transition: opacity 0.15s; line-height: 1.5;
-    position: relative;
-  }}
-  .event:hover {{ opacity: 0.85; }}
-  .event.start {{ border-radius: 4px 0 0 4px; margin-right: -2px; }}
-  .event.middle {{ border-radius: 0; margin-left: -2px; margin-right: -2px; opacity: 0.85; }}
-  .event.end {{ border-radius: 0 4px 4px 0; margin-left: -2px; }}
-  .event.single {{ border-radius: 4px; }}
-
-  /* Tooltip */
-  .tooltip {{
-    display: none; position: fixed; z-index: 9999;
-    background: #202124; color: white; border-radius: 8px;
-    padding: 12px 14px; font-size: 12px; min-width: 200px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.3); pointer-events: none;
-    line-height: 1.8;
-  }}
-  .tooltip.visible {{ display: block; }}
-  .tooltip b {{ font-size: 13px; }}
-</style>
-</head>
-<body>
-
-<div class="legend" id="legend"></div>
-<div class="cal-grid">
-  <div class="day-headers" id="dayHeaders"></div>
-  <div class="weeks" id="calBody"></div>
-</div>
-
-<div class="tooltip" id="tooltip"></div>
-
-<script>
-const EVENTS   = {events_json};
-const COULEURS = {couleurs_json};
-const MOIS_FR  = {mois_fr_json};
-const JOURS_FR = {jours_fr_json};
-let currentYear  = {annee};
-let currentMonth = {mois};
-const today = new Date();
-
-function pad(n) {{ return String(n).padStart(2, '0'); }}
-function dateStr(y, m, d) {{ return y + '-' + pad(m) + '-' + pad(d); }}
-
-function buildLegend() {{
-  const leg = document.getElementById('legend');
-  const plateformes = [...new Set(EVENTS.map(e => e.plateforme))];
-  leg.innerHTML = plateformes.map(p =>
-    `<div class="legend-item">
-      <div class="legend-dot" style="background:${{COULEURS[p] || '#607D8B'}}"></div>
-      <span>${{p}}</span>
-    </div>`
-  ).join('');
-}}
-
-function buildHeaders() {{
-  const h = document.getElementById('dayHeaders');
-  h.innerHTML = JOURS_FR.map((j, i) =>
-    `<div class="day-header${{i >= 5 ? ' weekend' : ''}}">${{j}}</div>`
-  ).join('');
-}}
-
-function getEventsForDate(ds) {{
-  return EVENTS.filter(e => e.start <= ds && e.end > ds);
-}}
-
-function buildCalendar() {{
-  const body = document.getElementById('calBody');
-  body.innerHTML = '';
-
-  const firstDay = new Date(currentYear, currentMonth - 1, 1);
-  const lastDay  = new Date(currentYear, currentMonth, 0);
-  
-  // Lundi=0 ... Dimanche=6
-  let startDow = (firstDay.getDay() + 6) % 7;
-  
-  let days = [];
-  // Jours mois précédent
-  for (let i = startDow - 1; i >= 0; i--) {{
-    const d = new Date(firstDay); d.setDate(-i);
-    days.push({{ date: d, otherMonth: true }});
-  }}
-  // Jours du mois
-  for (let d = 1; d <= lastDay.getDate(); d++) {{
-    days.push({{ date: new Date(currentYear, currentMonth - 1, d), otherMonth: false }});
-  }}
-  // Compléter jusqu'à 42 cases (6 semaines)
-  while (days.length < 42) {{
-    const last = days[days.length - 1].date;
-    const next = new Date(last); next.setDate(last.getDate() + 1);
-    days.push({{ date: next, otherMonth: true }});
-  }}
-
-  for (let w = 0; w < 6; w++) {{
-    const week = document.createElement('div');
-    week.className = 'week';
-    
-    for (let d = 0; d < 7; d++) {{
-      const {{ date: dt, otherMonth }} = days[w * 7 + d];
-      const y = dt.getFullYear(), m = dt.getMonth() + 1, day = dt.getDate();
-      const ds = dateStr(y, m, day);
-      const isToday = (y === today.getFullYear() && m === today.getMonth() + 1 && day === today.getDate());
-      const isWeekend = (d === 5 || d === 6);
-      
-      const cell = document.createElement('div');
-      cell.className = 'day' +
-        (otherMonth ? ' other-month' : '') +
-        (isToday ? ' today' : '') +
-        (isWeekend && !otherMonth ? ' weekend-day' : '');
-
-      const numDiv = document.createElement('div');
-      numDiv.className = 'day-num';
-      numDiv.textContent = day;
-      cell.appendChild(numDiv);
-
-      // Events de ce jour
-      const evs = getEventsForDate(ds);
-      evs.slice(0, 3).forEach(ev => {{
-        const isStart  = ev.start === ds;
-        const isEnd    = ev.endDisplay === ds;
-        const isSingle = ev.start === ev.endDisplay;
-        
-        const evDiv = document.createElement('div');
-        evDiv.className = 'event ' + (isSingle ? 'single' : isStart ? 'start' : isEnd ? 'end' : 'middle');
-        evDiv.style.background = COULEURS[ev.plateforme] || '#607D8B';
-        
-        // Texte uniquement au début
-        if (isStart || isSingle) {{
-          evDiv.textContent = ev.client;
-        }} else {{
-          evDiv.textContent = '\u00A0';  // espace insécable pour garder la hauteur
-        }}
-        
-        evDiv.addEventListener('mouseenter', (e) => showTooltip(e, ev));
-        evDiv.addEventListener('mouseleave', hideTooltip);
-        cell.appendChild(evDiv);
-      }});
-      
-      if (evs.length > 3) {{
-        const more = document.createElement('div');
-        more.style.cssText = 'font-size:10px; color:#70757a; padding:1px 4px;';
-        more.textContent = `+${{evs.length - 3}} autre(s)`;
-        cell.appendChild(more);
-      }}
-
-      week.appendChild(cell);
-    }}
-    body.appendChild(week);
-  }}
-}}
-
-function showTooltip(e, ev) {{
-  const t = document.getElementById('tooltip');
-  t.innerHTML = `
-    <b>${{ev.client}}</b><br>
-    📅 ${{ev.startFr}} → ${{ev.endFr}}<br>
-    🌙 ${{ev.nuits}} nuit(s)<br>
-    🏷️ ${{ev.plateforme}}<br>
-    💶 ${{ev.prix}} € net<br>
-    ${{ev.paye ? '✅ Payé' : '⏳ En attente'}}
-  `;
-  t.classList.add('visible');
-  moveTooltip(e);
-}}
-
-function moveTooltip(e) {{
-  const t = document.getElementById('tooltip');
-  const x = e.clientX + 12, y = e.clientY + 12;
-  t.style.left = Math.min(x, window.innerWidth - 220) + 'px';
-  t.style.top  = Math.min(y, window.innerHeight - 160) + 'px';
-}}
-
-function hideTooltip() {{
-  document.getElementById('tooltip').classList.remove('visible');
-}}
-
-document.addEventListener('mousemove', moveTooltip);
-
-buildLegend();
-buildHeaders();
-buildCalendar();
-</script>
-</body>
-</html>
-"""
-    components.html(html, height=760, scrolling=False)
-
-    # Navigation mois précédent / suivant via selectbox Streamlit (au-dessus)
-    _show_month_summary(df, annee, mois)
-
-
-def _build_events(df: pd.DataFrame, annee: int, mois: int) -> list:
-    """Construit la liste d'events pour le calendrier HTML."""
-    events = []
-    # Inclure les réservations qui chevauchent le mois
-    from datetime import date as ddate
-    import calendar
-    last_day = calendar.monthrange(annee, mois)[1]
-    month_start = ddate(annee, mois, 1)
-    month_end   = ddate(annee, mois, last_day)
-
-    # Élargir fenêtre pour afficher débordements
-    win_start = month_start - timedelta(days=7)
-    win_end   = month_end   + timedelta(days=7)
-
-    for _, row in df.iterrows():
-        arr = row["date_arrivee"]
-        dep = row["date_depart"]
-        if hasattr(arr, "date"): arr = arr.date()
-        if hasattr(dep, "date"): dep = dep.date()
-
-        if dep <= win_start or arr >= win_end:
-            continue
-
-        # endDisplay = dernier jour visible (veille du départ)
-        end_display = dep - timedelta(days=1)
-
-        events.append({
-            "client":     row.get("nom_client", "—"),
-            "start":      str(arr),
-            "end":        str(dep),       # exclusif pour comparaison
-            "endDisplay": str(end_display),
-            "startFr":    arr.strftime("%d/%m/%Y"),
-            "endFr":      dep.strftime("%d/%m/%Y"),
-            "nuits":      int(row.get("nuitees", 0)),
-            "plateforme": row.get("plateforme", "Direct"),
-            "prix":       f"{float(row.get('prix_net', 0)):.0f}",
-            "paye":       bool(row.get("paye", False)),
-        })
-
-    return events
-
-
-def _show_month_summary(df: pd.DataFrame, annee: int, mois: int):
-    """Résumé du mois — nuits ventilées jour par jour dans le bon mois."""
     import calendar as cal_lib
     from datetime import date as ddate
-    last_day = cal_lib.monthrange(annee, mois)[1]
-    ms = pd.Timestamp(ddate(annee, mois, 1))
-    me = pd.Timestamp(ddate(annee, mois, last_day))
 
-    # me_exclu = 1er jour du mois suivant
-    me_exclu = me + pd.Timedelta(days=1)
+    premier_jour = ddate(annee, mois, 1)
+    nb_jours     = cal_lib.monthrange(annee, mois)[1]
+    dernier_jour = ddate(annee, mois, nb_jours)
 
-    # Réservations qui ont AU MOINS 1 nuit dans ce mois
-    def nuits_dans_mois(row):
+    plateau = []
+    for d in range(nb_jours):
+        current = premier_jour + timedelta(days=d)
+        ts = pd.Timestamp(current)
+        resa_jour = []
+        for _, row in df.iterrows():
+            arr = row["date_arrivee"]
+            dep = row["date_depart"]
+            if arr <= ts < dep:
+                resa_jour.append(row)
+        plateau.append((current, resa_jour))
+
+    mois_fr_json   = json.dumps(MOIS_FR)
+    jours_fr_json  = json.dumps(JOURS_FR)
+    couleurs_json  = json.dumps(COULEURS)
+    plateau_json   = json.dumps([
+        {
+            "date": str(j[0]),
+            "reservations": [
+                {
+                    "client":     r.get("nom_client", "-"),
+                    "plateforme": r.get("plateforme", "-"),
+                    "arrivee":    str(r["date_arrivee"].date()),
+                    "depart":     str(r["date_depart"].date()),
+                    "nuitees":    int(r.get("nuitees", 0) or 0),
+                    "prix_net":   float(r.get("prix_net", 0) or 0),
+                    "paye":       bool(r.get("paye", False)),
+                }
+                for r in j[1]
+            ]
+        }
+        for j in plateau
+    ])
+
+    first_dow = premier_jour.weekday()  # 0=lundi
+
+    html = f"""
+<style>
+  .cal-wrap  {{ font-family: Arial, sans-serif; user-select:none; }}
+  .cal-grid  {{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:8px; }}
+  .cal-hdr   {{ background:#1565C0; color:#fff; text-align:center;
+                font-weight:bold; padding:6px; border-radius:4px; font-size:13px; }}
+  .cal-cell  {{ background:#fff; border:1px solid #E0E0E0; border-radius:6px;
+                min-height:90px; padding:6px; cursor:default; position:relative; }}
+  .cal-cell.today {{ border:2px solid #1565C0; background:#E3F2FD; }}
+  .cal-cell.empty {{ background:#FAFAFA; border:1px solid #F0F0F0; }}
+  .cal-day-num {{ font-size:12px; color:#666; font-weight:bold; margin-bottom:4px; }}
+  .cal-resa  {{ border-radius:4px; padding:2px 5px; font-size:11px;
+                margin-bottom:2px; color:#fff; white-space:nowrap;
+                overflow:hidden; text-overflow:ellipsis; cursor:pointer;
+                transition:opacity .15s; }}
+  .cal-resa:hover {{ opacity:.85; }}
+  .cal-resa.arrive {{ border-left:4px solid rgba(255,255,255,.6); }}
+  .cal-resa.depart {{ border-right:4px solid rgba(255,255,255,.6); }}
+  .tooltip   {{ display:none; position:absolute; left:50%; transform:translateX(-50%);
+                top:110%; background:#212121; color:#fff; padding:8px 12px;
+                border-radius:6px; z-index:999; font-size:12px; min-width:180px;
+                box-shadow:0 4px 12px rgba(0,0,0,.3); pointer-events:none; }}
+  .cal-cell:hover .tooltip {{ display:block; }}
+  @media(max-width:600px) {{ .cal-resa {{ font-size:9px; }} }}
+</style>
+<div class='cal-wrap'>
+<div class='cal-grid'>
+  <div class='cal-hdr'>Lun</div><div class='cal-hdr'>Mar</div>
+  <div class='cal-hdr'>Mer</div><div class='cal-hdr'>Jeu</div>
+  <div class='cal-hdr'>Ven</div><div class='cal-hdr'>Sam</div>
+  <div class='cal-hdr'>Dim</div>
+</div>
+<div class='cal-grid' id='calGrid'></div>
+</div>
+<script>
+const PLATEAU   = {plateau_json};
+const COULEURS  = {couleurs_json};
+const today     = new Date().toISOString().slice(0,10);
+const firstDow  = {first_dow};
+
+function couleur(plat) {{
+  return COULEURS[plat] || '#607D8B';
+}}
+
+const grid = document.getElementById('calGrid');
+
+// Cases vides avant le 1er
+for(let i=0; i<firstDow; i++) {{
+  const e = document.createElement('div');
+  e.className = 'cal-cell empty';
+  grid.appendChild(e);
+}}
+
+PLATEAU.forEach(day => {{
+  const cell = document.createElement('div');
+  cell.className = 'cal-cell' + (day.date === today ? ' today' : '');
+
+  let html = `<div class='cal-day-num'>${{day.date.slice(8)}}</div>`;
+
+  day.reservations.forEach(r => {{
+    const isArr = r.arrivee === day.date;
+    const isDep = r.depart  === day.date;
+    const bg    = couleur(r.plateforme);
+    const cls   = isArr ? 'arrive' : (isDep ? 'depart' : '');
+    const paye  = r.paye ? '✅' : '⏳';
+    html += `
+      <div class='cal-resa ${{cls}}' style='background:${{bg}}' title=''>
+        ${{r.plateforme}} - ${{r.client}}
+        <div class='tooltip'>
+          <b>${{r.client}}</b><br>
+          ${{r.arrivee}} → ${{r.depart}}<br>
+          ${{r.nuitees}} nuits | ${{r.prix_net.toFixed(0)}} € net ${{paye}}
+        </div>
+      </div>`;
+  }});
+
+  cell.innerHTML = html;
+  grid.appendChild(cell);
+}});
+</script>"""
+
+    components.html(html, height=520, scrolling=True)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# VUE SEMAINE
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _show_week_view(df: pd.DataFrame, annee: int, mois: int, props: dict, prop_choix: int):
+    st.subheader("🗓️ Vue semaine")
+
+    # Sélection de la semaine
+    import calendar as cal_lib
+    premier = date(annee, mois, 1)
+    nb_jours = cal_lib.monthrange(annee, mois)[1]
+
+    # Semaines du mois
+    semaines = []
+    d = premier
+    while d <= date(annee, mois, nb_jours):
+        lundi = d - timedelta(days=d.weekday())
+        dim   = lundi + timedelta(days=6)
+        label = f"{lundi.strftime('%d %b')} - {dim.strftime('%d %b')}"
+        if label not in [s[0] for s in semaines]:
+            semaines.append((label, lundi))
+        d += timedelta(days=1)
+
+    sem_labels = [s[0] for s in semaines]
+    sem_idx    = st.selectbox("Semaine", range(len(sem_labels)),
+                               format_func=lambda i: sem_labels[i], key="cal_sem")
+    lundi_sem  = semaines[sem_idx][1]
+    jours_sem  = [lundi_sem + timedelta(days=i) for i in range(7)]
+
+    df = df.copy()
+    df["date_arrivee"] = pd.to_datetime(df["date_arrivee"])
+    df["date_depart"]  = pd.to_datetime(df["date_depart"])
+
+    # Affichage grille semaine
+    cols = st.columns(7)
+    noms_jours = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+    today = date.today()
+
+    for i, (col, jour) in enumerate(zip(cols, jours_sem)):
+        is_today = jour == today
+        bg_hdr   = "#1565C0" if is_today else "#F5F5F5"
+        fg_hdr   = "white"   if is_today else "#212121"
+
+        resa_jour = []
+        for _, row in df.iterrows():
+            arr = row["date_arrivee"].date() if hasattr(row["date_arrivee"], 'date') else row["date_arrivee"]
+            dep = row["date_depart"].date()  if hasattr(row["date_depart"],  'date') else row["date_depart"]
+            if arr <= jour < dep:
+                resa_jour.append(row)
+
+        with col:
+            st.markdown(
+                f"""<div style='background:{bg_hdr};color:{fg_hdr};
+                text-align:center;padding:6px;border-radius:8px 8px 0 0;
+                font-weight:bold;font-size:13px'>
+                {noms_jours[i]}<br><span style='font-size:18px'>{jour.day}</span>
+                </div>""", unsafe_allow_html=True
+            )
+            if not resa_jour:
+                st.markdown(
+                    "<div style='background:#FAFAFA;border:1px solid #E0E0E0;"
+                    "border-radius:0 0 8px 8px;min-height:120px;padding:8px;"
+                    "text-align:center;color:#BDBDBD;font-size:12px'>Libre</div>",
+                    unsafe_allow_html=True
+                )
+            else:
+                content = ""
+                for r in resa_jour:
+                    couleur = COULEURS.get(r.get("plateforme", ""), "#607D8B")
+                    is_arr  = r["date_arrivee"].date() == jour if hasattr(r["date_arrivee"], 'date') else False
+                    is_dep  = r["date_depart"].date()  == jour if hasattr(r["date_depart"],  'date') else False
+                    icon    = "→" if is_arr else ("←" if is_dep else "·")
+                    content += f"""<div style='background:{couleur};color:white;
+                        border-radius:6px;padding:4px 6px;margin:3px 0;
+                        font-size:11px;font-weight:bold'>
+                        {icon} {r.get('nom_client','?')[:12]}<br>
+                        <span style='font-weight:normal'>{r.get('plateforme','')}</span>
+                        </div>"""
+                st.markdown(
+                    f"<div style='border:1px solid #E0E0E0;border-radius:0 0 8px 8px;"
+                    f"padding:6px;min-height:120px'>{content}</div>",
+                    unsafe_allow_html=True
+                )
+
+    # Taux d'occupation par propriété cette semaine
+    if props:
+        st.divider()
+        st.markdown("**Taux d'occupation cette semaine par propriété :**")
+        cols_occ = st.columns(len(props))
+        for i, (pid, pnom) in enumerate(props.items()):
+            df_p    = df[df["propriete_id"] == pid]
+            jours_occ = 0
+            for jour in jours_sem:
+                for _, row in df_p.iterrows():
+                    arr = row["date_arrivee"].date() if hasattr(row["date_arrivee"],'date') else row["date_arrivee"]
+                    dep = row["date_depart"].date()  if hasattr(row["date_depart"], 'date') else row["date_depart"]
+                    if arr <= jour < dep:
+                        jours_occ += 1
+                        break
+            pct = round(jours_occ / 7 * 100)
+            with cols_occ[i]:
+                st.metric(f"🏠 {pnom}", f"{pct}%",
+                          delta=f"{jours_occ}/7 jours")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# TAUX OCCUPATION PAR PROPRIETE (Vue annuelle)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _show_month_summary(df: pd.DataFrame, annee: int, mois: int):
+    import calendar as cal_lib
+    from datetime import date as ddate
+
+    ms       = pd.Timestamp(ddate(annee, mois, 1))
+    nb_jours = cal_lib.monthrange(annee, mois)[1]
+    me_exclu = ms + pd.offsets.MonthBegin(1)
+
+    props = get_proprietes_dict()
+
+    # Taux occupation côte à côte par propriété
+    if len(props) > 1:
+        st.divider()
+        st.markdown(f"**Taux d'occupation — {MOIS_FR[mois]} {annee} par propriété :**")
+        cols = st.columns(len(props))
+        for i, (pid, pnom) in enumerate(props.items()):
+            df_p = df[df["propriete_id"] == pid].copy()
+            df_p["date_arrivee"] = pd.to_datetime(df_p["date_arrivee"])
+            df_p["date_depart"]  = pd.to_datetime(df_p["date_depart"])
+            df_p_reel = df_p[df_p.get("plateforme", pd.Series(dtype=str)).ne("Fermeture")] \
+                if "plateforme" in df_p.columns else df_p
+
+            nuits = 0
+            for _, row in df_p_reel.iterrows():
+                debut = max(row["date_arrivee"], ms)
+                fin   = min(row["date_depart"],  me_exclu)
+                nuits += max(0, (fin - debut).days)
+
+            pct = round(nuits / nb_jours * 100, 1)
+            ca  = float(df_p_reel["prix_net"].sum()) if "prix_net" in df_p_reel.columns else 0
+            with cols[i]:
+                st.metric(f"🏠 {pnom}", f"{pct}%",
+                          delta=f"{nuits} nuits | {ca:,.0f} €")
+
+        return  # Si plusieurs propriétés, on arrête là
+
+    # Résumé mensuel pour propriété unique
+    df = df.copy()
+    df["date_arrivee"] = pd.to_datetime(df["date_arrivee"])
+    df["date_depart"]  = pd.to_datetime(df["date_depart"])
+
+    def _nuits_mois(row):
         debut = max(row["date_arrivee"], ms)
         fin   = min(row["date_depart"],  me_exclu)
         return max(0, (fin - debut).days)
 
-    df_tmp = df[(df["date_arrivee"] < me_exclu) & (df["date_depart"] > ms)].copy()
-    df_tmp["nuits_mois"] = df_tmp.apply(nuits_dans_mois, axis=1)
+    df["nuits_mois"] = df.apply(_nuits_mois, axis=1)
+    df_mois = df[df["nuits_mois"] > 0]
 
-    # Garder uniquement celles avec au moins 1 nuit dans le mois
-    df_mois = df_tmp[df_tmp["nuits_mois"] > 0].copy()
+    if df_mois.empty:
+        return
 
     st.divider()
     st.subheader(f"📊 Résumé {MOIS_FR[mois]} {annee}")
 
-    if df_mois.empty:
-        st.info("Aucune réservation ce mois.")
-        return
-
-    nuits_reelles = int(df_mois["nuits_mois"].sum())
-    ca_net        = df_mois["prix_net"].sum()
+    df_reel = df_mois[df_mois["plateforme"] != "Fermeture"] if "plateforme" in df_mois.columns else df_mois
+    nuits_louees    = int(df_reel["nuits_mois"].sum())
+    nuits_fermeture = int(df_mois[df_mois["plateforme"] == "Fermeture"]["nuits_mois"].sum()) \
+                      if "plateforme" in df_mois.columns else 0
+    ca_net = float(df_reel["prix_net"].sum()) if "prix_net" in df_reel.columns else 0
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Réservations", len(df_mois))
-    c2.metric("Nuits",        nuits_reelles)
-    c3.metric("CA Net",       f"{ca_net:,.0f} €")
-    c4.metric("Revenu/nuit",  f"{ca_net/max(nuits_reelles,1):.0f} €")
+    c1.metric("📅 Réservations",   len(df_reel))
+    c2.metric("🌙 Nuits louées",   nuits_louees)
+    c3.metric("🔒 Fermeture",      nuits_fermeture)
+    c4.metric("💵 CA Net",         f"{ca_net:,.0f} €")
+    taux = round((nuits_louees + nuits_fermeture) / nb_jours * 100, 1)
+    st.metric("🏡 Taux occupation", f"{taux}%",
+              help=f"({nuits_louees} louées + {nuits_fermeture} fermées) / {nb_jours} jours")
 
-    with st.expander("📋 Détail du mois"):
-        df_mois = df_mois.rename(columns={"nuits_mois": "nuits_ce_mois"})
-        cols = ["nom_client", "plateforme", "date_arrivee", "date_depart", "nuits_ce_mois", "prix_net", "paye"]
-        cols_ok = [c for c in cols if c in df_mois.columns]
-        st.dataframe(df_mois[cols_ok].sort_values("date_arrivee"),
-                     use_container_width=True, hide_index=True,
-                     column_config={
-                         "prix_net": st.column_config.NumberColumn("Prix net", format="%.0f €"),
-                         "paye":     st.column_config.CheckboxColumn("Payé"),
-                     })
+    for _, row in df_mois.sort_values("date_arrivee").iterrows():
+        if row["nuits_mois"] <= 0:
+            continue
+        couleur = COULEURS.get(row.get("plateforme", ""), "#607D8B")
+        paye    = "✅" if row.get("paye") else "⏳"
+        arr     = str(row["date_arrivee"])[:10]
+        dep     = str(row["date_depart"])[:10]
+        st.markdown(
+            f"""<div style='border-left:5px solid {couleur};background:#FAFAFA;
+            padding:10px 14px;border-radius:0 8px 8px 0;margin-bottom:8px'>
+            <b>{row.get('nom_client','?')}</b> — {row.get('plateforme','')}<br>
+            <small>🗓️ {arr} → {dep} &nbsp;|&nbsp;
+            🌙 {int(row['nuits_mois'])} nuits ce mois &nbsp;|&nbsp;
+            💶 {float(row.get('prix_net',0) or 0):.0f} € net {paye}</small>
+            </div>""", unsafe_allow_html=True
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# VUE GANTT
+# GANTT
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _show_gantt(df: pd.DataFrame, prop_choix: int):
-    st.subheader("📊 Planning Gantt")
+    st.subheader("📊 Vue Gantt")
+    df = df.copy()
+    df["date_arrivee"] = pd.to_datetime(df["date_arrivee"])
+    df["date_depart"]  = pd.to_datetime(df["date_depart"])
+    df = df.dropna(subset=["date_arrivee", "date_depart"])
 
-    df_g = df.copy()
-    df_g["date_arrivee"] = pd.to_datetime(df_g["date_arrivee"])
-    df_g["date_depart"]  = pd.to_datetime(df_g["date_depart"])
-    df_g["Propriété"] = df_g["propriete_id"].map(
-        lambda x: PROPRIETES.get(int(x), f"Propriété {x}")
-    )
-    df_g["Label"] = df_g.apply(
-        lambda r: f"{r['nom_client']}  ({int(r['nuitees'])}n)", axis=1
-    )
-    df_g["Info"] = df_g.apply(
-        lambda r: (
-            f"<b>{r['nom_client']}</b><br>"
-            f"📅 {r['date_arrivee'].strftime('%d/%m')} → {r['date_depart'].strftime('%d/%m/%Y')}<br>"
-            f"🌙 {int(r['nuitees'])} nuits — {r['plateforme']}<br>"
-            f"💶 {r['prix_net']:.0f} € net — "
-            f"{'✅ Payé' if r['paye'] else '⏳ En attente'}"
-        ), axis=1
-    )
+    props = get_proprietes_dict()
+    df["Propriété"] = df["propriete_id"].map(lambda x: props.get(int(x), f"Prop {x}"))
+    df["Client"]    = df["nom_client"].fillna("?") + " (" + df["plateforme"].fillna("") + ")"
+    df["Info"]      = df["nom_client"].fillna("?") + "<br>" + \
+                      df["date_arrivee"].dt.strftime("%d/%m") + " → " + \
+                      df["date_depart"].dt.strftime("%d/%m")
 
-    nb_props = df_g["propriete_id"].nunique() if prop_choix == 0 else 1
+    y_col = "Propriété" if prop_choix == 0 else "Client"
+
     fig = px.timeline(
-        df_g, x_start="date_arrivee", x_end="date_depart",
-        y="Propriété", color="plateforme",
-        color_discrete_map=COULEURS, text="Label",
-        custom_data=["Info"],
+        df, x_start="date_arrivee", x_end="date_depart", y=y_col,
+        color="plateforme",
+        hover_name="nom_client",
+        hover_data={"date_arrivee": True, "date_depart": True, "nuitees": True, "prix_net": True},
+        color_discrete_map=COULEURS,
     )
-    fig.update_traces(
-        textposition="inside", insidetextanchor="middle",
-        textfont=dict(size=11, color="white"),
-        hovertemplate="%{customdata[0]}<extra></extra>",
-    )
-    fig.update_layout(
-        height=max(250, nb_props * 120 + 100),
-        margin=dict(l=10, r=10, t=20, b=10),
-        xaxis=dict(tickformat="%d %b", dtick="M1", showgrid=True, gridcolor="#EEEEEE"),
-        yaxis=dict(autorange="reversed"),
-        plot_bgcolor="white", legend_title="Plateforme",
-    )
+    fig.update_yaxes(autorange="reversed")
+    fig.update_layout(height=max(350, len(df) * 30 + 100),
+                      showlegend=True, margin=dict(t=20, b=20))
     st.plotly_chart(fig, use_container_width=True)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# DETECTION CONFLITS
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _show_conflicts(df: pd.DataFrame, props: dict, prop_choix: int):
+    st.subheader("🚫 Détection des conflits")
+    st.markdown(
+        "Un conflit survient quand deux réservations se chevauchent "
+        "sur la **même propriété**."
+    )
+
+    df_check = df.copy()
+    if prop_choix != 0:
+        df_check = df_check[df_check["propriete_id"] == prop_choix]
+
+    # Exclure les fermetures de la détection de conflits
+    df_check = df_check[df_check["plateforme"] != "Fermeture"] if "plateforme" in df_check.columns else df_check
+
+    conflicts = detect_conflicts(df_check)
+
+    if conflicts.empty:
+        st.success("✅ Aucun conflit détecté ! Toutes les réservations sont cohérentes.")
+
+        # Afficher quand même le récap par propriété
+        if props:
+            st.divider()
+            st.markdown("**Récapitulatif par propriété :**")
+            cols = st.columns(len(props))
+            for i, (pid, pnom) in enumerate(props.items()):
+                df_p = df[df["propriete_id"] == pid]
+                with cols[i]:
+                    st.metric(f"🏠 {pnom}", f"{len(df_p)} réservations",
+                               delta="0 conflit ✅")
+        return
+
+    st.error(f"⚠️ {len(conflicts)} conflit(s) détecté(s) !")
+
+    for _, row in conflicts.iterrows():
+        prop_nom = props.get(int(row["propriete_id"]), f"Propriété {row['propriete_id']}")
+        st.markdown(
+            f"""<div style='background:#FFEBEE;border-left:5px solid #C62828;
+            padding:14px 18px;border-radius:0 8px 8px 0;margin-bottom:12px'>
+            <b>🏠 {prop_nom}</b> — Chevauchement de <b>{int(row['overlap_days'])} jour(s)</b><br>
+            <table style='margin-top:8px;font-size:13px;width:100%'>
+              <tr>
+                <td>📋 <b>{row['res1_client']}</b></td>
+                <td>{row['res1_arrivee']} → {row['res1_depart']}</td>
+                <td><span style='background:#1565C0;color:white;padding:2px 8px;border-radius:12px'>
+                    {row['res1_plat']}</span></td>
+              </tr>
+              <tr style='margin-top:4px'>
+                <td>📋 <b>{row['res2_client']}</b></td>
+                <td>{row['res2_arrivee']} → {row['res2_depart']}</td>
+                <td><span style='background:#E53935;color:white;padding:2px 8px;border-radius:12px'>
+                    {row['res2_plat']}</span></td>
+              </tr>
+            </table>
+            </div>""", unsafe_allow_html=True
+        )
+
+    # Export CSV des conflits
+    if not conflicts.empty:
+        csv = conflicts.to_csv(index=False).encode("utf-8")
+        st.download_button("⬇️ Exporter les conflits", csv,
+                           file_name="conflits.csv", mime="text/csv")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# BLOCAGE DATES
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _show_blocage(prop_choix: int, props: dict):
+    st.subheader("🔒 Bloquer des dates")
+    st.markdown(
+        "Créez une **Fermeture** directement depuis le calendrier "
+        "(travaux, indisponibilité, usage personnel...)."
+    )
+
+    if not is_connected():
+        st.warning("⚠️ Connexion Supabase requise pour bloquer des dates.")
+        return
+
+    if not props:
+        st.info("Aucune propriété configurée.")
+        return
+
+    # Sélection propriété
+    if prop_choix != 0:
+        prop_id  = prop_choix
+        prop_nom = props.get(prop_choix, "")
+        st.info(f"🏠 Propriété : **{prop_nom}**")
+    else:
+        prop_id = st.selectbox("Propriété", options=list(props.keys()),
+                                format_func=lambda x: props[x], key="bloc_prop")
+        prop_nom = props[prop_id]
+
+    col1, col2 = st.columns(2)
+    with col1:
+        date_debut = st.date_input("Début du blocage",  value=date.today(), key="bloc_debut")
+    with col2:
+        date_fin   = st.date_input("Fin du blocage",    value=date.today() + timedelta(days=7), key="bloc_fin")
+
+    raison = st.selectbox("Raison", [
+        "Travaux", "Usage personnel", "Maintenance", "Indisponibilité", "Autre"
+    ], key="bloc_raison")
+
+    note = st.text_input("Note (optionnel)", placeholder="Ex: Plombier prévu ces jours-là", key="bloc_note")
+
+    nuitees = (date_fin - date_debut).days
+    if nuitees <= 0:
+        st.warning("La date de fin doit être après la date de début.")
+        return
+
+    st.info(f"🔒 **{nuitees} nuit(s)** bloquée(s) sur **{prop_nom}**")
+
+    if st.button("🔒 Bloquer ces dates", type="primary", use_container_width=True):
+        data = {
+            "propriete_id": prop_id,
+            "nom_client":   raison,
+            "plateforme":   "Fermeture",
+            "date_arrivee": date_debut.isoformat(),
+            "date_depart":  date_fin.isoformat(),
+            "nuitees":      nuitees,
+            "prix_brut":    0, "prix_net": 0, "commissions": 0,
+            "menage": 0, "taxes_sejour": 0, "paye": True,
+            "numero_reservation": note or raison,
+        }
+        try:
+            result = insert_reservation(data)
+            if result:
+                st.success(f"✅ Dates bloquées du {date_debut} au {date_fin} ({nuitees} nuits) !")
+                st.balloons()
+            else:
+                st.error("Erreur lors du blocage.")
+        except Exception as e:
+            st.error(f"Erreur : {e}")
+
+    # Fermetures existantes pour cette propriété
+    st.divider()
+    df_all = load_reservations()
+    df_ferm = df_all[
+        (df_all["plateforme"] == "Fermeture") &
+        (df_all["propriete_id"] == prop_id)
+    ].copy() if not df_all.empty else pd.DataFrame()
+
+    if not df_ferm.empty:
+        df_ferm["date_arrivee"] = pd.to_datetime(df_ferm["date_arrivee"])
+        df_ferm = df_ferm[df_ferm["date_arrivee"] >= pd.Timestamp(date.today())]
+
+    if not df_ferm.empty:
+        st.markdown(f"**Fermetures à venir ({len(df_ferm)}) :**")
+        for _, row in df_ferm.sort_values("date_arrivee").iterrows():
+            arr = str(row["date_arrivee"])[:10]
+            dep = str(row.get("date_depart", ""))[:10]
+            st.markdown(
+                f"<div style='background:#F5F5F5;border-left:4px solid #9E9E9E;"
+                f"padding:8px 14px;border-radius:0 6px 6px 0;margin-bottom:6px'>"
+                f"🔒 <b>{row.get('nom_client','')}</b> &nbsp;|&nbsp; {arr} → {dep} "
+                f"({int(row.get('nuitees',0) or 0)} nuits)</div>",
+                unsafe_allow_html=True
+            )
+    else:
+        st.caption("Aucune fermeture à venir.")
