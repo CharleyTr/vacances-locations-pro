@@ -43,7 +43,13 @@ button[data-testid="baseButton-header"] {
 ETOILES = {1: "⭐", 2: "⭐⭐", 3: "⭐⭐⭐", 4: "⭐⭐⭐⭐", 5: "⭐⭐⭐⭐⭐"}
 
 # ── Lire le token ─────────────────────────────────────────────────────────────
-token = st.query_params.get("token", "")
+# Lecture robuste des query params (Streamlit Cloud peut retourner liste ou string)
+_params = st.query_params
+try:
+    _token_raw = _params.get("token", "") or _params.get("Token", "")
+    token = _token_raw[0] if isinstance(_token_raw, list) else str(_token_raw or "")
+except Exception:
+    token = ""
 
 if not token:
     st.markdown("""
