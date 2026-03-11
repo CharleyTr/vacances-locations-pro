@@ -21,6 +21,28 @@ st.set_page_config(
 
 st.markdown(_HIDE_STREAMLIT_NAV, unsafe_allow_html=True)
 
+# Sur la page Questionnaire : masquer tout le chrome Streamlit
+if st.query_params.get("token"):
+    st.markdown("""
+    <style>
+    [data-testid="stSidebar"],
+    [data-testid="stSidebarNav"],
+    [data-testid="stSidebarNavItems"],
+    [data-testid="collapsedControl"],
+    #MainMenu, header, footer,
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    [data-testid="stStatusWidget"] {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+    }
+    .stApp > header { display: none !important; }
+    section[data-testid="stMain"] > div:first-child { padding-top: 0 !important; }
+    .main .block-container { max-width: 700px; margin: 0 auto; padding: 2rem 1.5rem; }
+    </style>
+    """, unsafe_allow_html=True)
+
 from components.sidebar import sidebar
 from pages import dashboard, reservations, calendar, analytics, gaps
 
