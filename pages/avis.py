@@ -276,7 +276,7 @@ def _show_envoyer(prop_id: int, prop_nom: str, props: dict):
             "visible":           True,
         }
         if save_avis(data):
-            lien = f"{app_url}/Questionnaire?token={token}"
+            lien = f"{app_url}/?token={token}"
 
             st.success(f"✅ Lien généré pour **{nom_client}** — valable 30 jours")
             st.code(lien, language=None)
