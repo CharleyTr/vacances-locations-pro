@@ -62,6 +62,17 @@ def show():
 
     kpis = compute_kpis(df)
 
+    # ── DEBUG FERMETURE (à retirer après validation) ──────────────────────
+    with st.expander("🔍 Debug Fermeture", expanded=True):
+        if "plateforme" in df.columns:
+            st.write("**Plateformes uniques dans le df filtré :**", df["plateforme"].unique().tolist())
+            df_ferm = df[df["plateforme"] == "Fermeture"]
+            st.write(f"**Lignes Fermeture :** {len(df_ferm)}")
+            if not df_ferm.empty:
+                st.dataframe(df_ferm[["nom_client","plateforme","date_arrivee","date_depart","nuitees"]].head(10))
+        st.write("**kpis['nuits_fermeture'] =**", kpis.get("nuits_fermeture", "clé absente"))
+        st.write("**kpis['nuits_louees'] =**", kpis.get("nuits_louees", "clé absente"))
+
     # ── KPIs ──────────────────────────────────────────────────────────────
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("💰 CA Brut",        f"{kpis['ca_brut']:,.0f} €")
