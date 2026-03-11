@@ -573,14 +573,22 @@ def _show_blocage(prop_choix: int, props: dict):
 
     if st.button("🔒 Bloquer ces dates", type="primary", use_container_width=True):
         data = {
-            "propriete_id": prop_id,
-            "nom_client":   raison,
-            "plateforme":   "Fermeture",
-            "date_arrivee": date_debut.isoformat(),
-            "date_depart":  date_fin.isoformat(),
-            "nuitees":      nuitees,
-            "prix_brut":    0, "prix_net": 0, "commissions": 0,
-            "menage": 0, "taxes_sejour": 0, "paye": True,
+            "propriete_id":       prop_id,
+            "nom_client":         raison,
+            "plateforme":         "Fermeture",
+            "date_arrivee":       date_debut.isoformat(),
+            "date_depart":        date_fin.isoformat(),
+            "nuitees":            nuitees,
+            "prix_brut":          0.0,
+            "prix_net":           0.0,
+            "commissions":        0.0,
+            "commissions_hote":   0.0,
+            "menage":             0.0,
+            "taxes_sejour":       0.0,
+            "base":               0.0,
+            "charges":            0.0,
+            "pct_commission":     0.0,
+            "paye":               True,
             "numero_reservation": note or raison,
         }
         try:
