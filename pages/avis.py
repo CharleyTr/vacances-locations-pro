@@ -234,12 +234,14 @@ def _show_envoyer(prop_id: int, prop_nom: str, props: dict):
         choix = st.selectbox("Réservation", list(options.keys()), key="env_res")
         row   = options[choix]
 
-        nom_client  = str(row.get("nom_client", ""))
-        email       = str(row.get("email", "") or "")
-        telephone   = str(row.get("telephone", "") or "")
-        date_sejour = str(row.get("date_arrivee", ""))[:10]
-        plateforme  = str(row.get("plateforme", ""))
-        res_prop_id = int(row.get("propriete_id", prop_id) or prop_id)
+        nom_client   = str(row.get("nom_client", ""))
+        email        = str(row.get("email", "") or "")
+        telephone    = str(row.get("telephone", "") or "")
+        date_arrivee = str(row.get("date_arrivee", ""))[:10]
+        date_depart  = str(row.get("date_depart",  ""))[:10]
+        date_sejour  = date_arrivee
+        plateforme   = str(row.get("plateforme", ""))
+        res_prop_id  = int(row.get("propriete_id", prop_id) or prop_id)
         res_prop_nom = props.get(res_prop_id, prop_nom)
 
     else:
@@ -253,6 +255,8 @@ def _show_envoyer(prop_id: int, prop_nom: str, props: dict):
         res_prop_id  = prop_id if prop_id != 0 else (list(props.keys())[0] if props else 0)
         res_prop_nom = props.get(res_prop_id, prop_nom)
         plateforme   = st.selectbox("Plateforme", ["Airbnb","Booking","Abritel","Direct","Autre"], key="env_plat")
+        date_arrivee = date_sejour
+        date_depart  = ""
 
     if st.button("🔗 Générer le lien questionnaire", type="primary", use_container_width=True):
         if not nom_client:
@@ -281,28 +285,45 @@ def _show_envoyer(prop_id: int, prop_nom: str, props: dict):
             st.success(f"✅ Lien généré pour **{nom_client}** — valable 30 jours")
             st.code(lien, language=None)
 
-            # Message WhatsApp
-            msg_wa = (
-                f"Bonjour {nom_client} 😊\n\n"
-                f"Merci pour votre séjour à {res_prop_nom} !\n"
-                f"Votre avis nous aide beaucoup. Cela prend 2 minutes :\n\n"
-                f"👉 {lien}\n\n"
-                f"Merci d'avance !"
-            )
             import urllib.parse
+
+            # Infos séjour formatées
+            sejour_fr = f"{date_arrivee}"
+            sejour_en = f"{date_arrivee}"
+            if date_depart:
+                sejour_fr += f" au {date_depart}"
+                sejour_en += f" to {date_depart}"
+
+            # ── Message WhatsApp bilingue FR/EN ───────────────────────────
+            msg_wa = (
+                f"Bonjour {nom_client} 😊 / Hello {nom_client} 😊\n\n"
+                f"🏠 {res_prop_nom}\n"
+                f"📅 {sejour_fr} ({plateforme})\n\n"
+                f"🇫🇷 Merci pour votre séjour ! Votre avis nous aide beaucoup.\n"
+                f"🇬🇧 Thank you for your stay! Your review means a lot to us.\n\n"
+                f"⏱️ 2 min · 👉 {lien}\n\n"
+                f"Merci / Thank you! 🙏"
+            )
             wa_num = telephone.replace("+", "").replace(" ", "").replace("-", "") if telephone else ""
             wa_url = f"https://wa.me/{wa_num}?text={urllib.parse.quote(msg_wa)}" if wa_num else \
                      f"https://wa.me/?text={urllib.parse.quote(msg_wa)}"
 
-            # Message email
+            # ── Message email bilingue FR/EN ──────────────────────────────
             msg_email = (
-                f"Bonjour {nom_client},\n\n"
-                f"Merci pour votre séjour à {res_prop_nom} !\n\n"
-                f"Nous serions ravis d'avoir votre avis. "
-                f"Cela prend moins de 2 minutes :\n\n"
+                f"Bonjour {nom_client} / Hello {nom_client},\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🏠 {res_prop_nom}\n"
+                f"📅 {sejour_fr}\n"
+                f"🔑 {plateforme}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"🇫🇷 Merci pour votre séjour !\n"
+                f"Nous serions ravis d'avoir votre avis en 2 minutes :\n"
                 f"👉 {lien}\n\n"
-                f"Ce lien est valable 30 jours.\n\n"
-                f"Merci beaucoup !"
+                f"🇬🇧 Thank you for your stay!\n"
+                f"We would love to hear your feedback (2 minutes):\n"
+                f"👉 {lien}\n\n"
+                f"Ce lien est valable 30 jours / This link is valid for 30 days.\n\n"
+                f"Merci / Thank you! 🙏"
             )
 
             col1, col2 = st.columns(2)
