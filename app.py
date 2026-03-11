@@ -167,6 +167,12 @@ if _token:
     st.stop()
 
 # ── MODE NORMAL : application complète ────────────────────────────────────────
+st.set_page_config(
+    page_title="Vacances-Locations PRO",
+    page_icon="🏖️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 from components.sidebar import sidebar
 
 
