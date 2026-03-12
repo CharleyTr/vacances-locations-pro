@@ -73,23 +73,7 @@ def _pivot_table(df, col_key, fmt="{:.0f}", annees_dispo=None,
 def _show_comparatif(df_all, annee_ref):
     st.subheader(f"📅 Comparaison {annee_ref - 4} → {annee_ref}")
 
-    # ── Filtre plateforme ─────────────────────────────────────────────────
-    plateformes_dispo = sorted(
-        df_all[df_all["plateforme"] != PLATEFORME_FERMETURE]["plateforme"].dropna().unique()
-    )
-    plat_choix = st.multiselect(
-        "Filtrer par plateforme", plateformes_dispo,
-        default=[], key="compar_plat",
-        placeholder="Toutes les plateformes"
-    )
-    df_filtered = df_all.copy()
-    if plat_choix:
-        df_filtered = df_filtered[
-            (df_filtered["plateforme"].isin(plat_choix)) |
-            (df_filtered["plateforme"] == PLATEFORME_FERMETURE)
-        ]
-
-    df = _build_comparatif(df_filtered, annee_ref, nb_annees=4)
+    df = _build_comparatif(df_all, annee_ref, nb_annees=4)
     if df.empty:
         st.info("Pas assez de données historiques pour la comparaison.")
         return
@@ -152,6 +136,21 @@ def show():
         return
 
     annee = st.selectbox("Année de référence", annees, index=0, key="analytics_annee")
+
+    # ── Filtre plateforme global ──────────────────────────────────────────────
+    plateformes_dispo = sorted(
+        df[df["plateforme"] != "Fermeture"]["plateforme"].dropna().unique()
+    )
+    plat_global = st.multiselect(
+        "🔀 Filtrer par plateforme", plateformes_dispo,
+        default=[], key="analytics_plat",
+        placeholder="Toutes les plateformes"
+    )
+    if plat_global:
+        df = df[
+            (df["plateforme"].isin(plat_global)) |
+            (df["plateforme"] == "Fermeture")
+        ]
 
     # ── Onglets ───────────────────────────────────────────────────────────────
     tab_bilan, tab_compar = st.tabs(["📊 Bilan annuel", "📅 Comparaison pluriannuelle"])
