@@ -47,10 +47,10 @@ def _build_comparatif(df_all, annee_ref, nb_annees=4):
     return pd.DataFrame(rows) if rows else pd.DataFrame()
 
 
-def _pivot_table(df, col_key, fmt="{:.0f}", annees_dispo=None):
+def _pivot_table(df, col_key, fmt="{:.0f}", annees_dispo=None,
+                 total=True, total_fn="sum"):
     """Construit un tableau croisé mois x années pour une métrique."""
     annees = annees_dispo or sorted(df["annee"].unique())
-    # Base : 12 mois
     base = pd.DataFrame({"mois": list(range(1, 13)), "Mois": MOIS_FR})
     for an in annees:
         col_name = str(int(an))
@@ -59,36 +59,59 @@ def _pivot_table(df, col_key, fmt="{:.0f}", annees_dispo=None):
         df_an = df_an.rename(columns={col_key: col_name})
         base = base.merge(df_an, on="mois", how="left")
         base[col_name] = base[col_name].fillna(0).apply(lambda v: fmt.format(v))
-    # Ligne total
-    total = {"mois": 0, "Mois": "TOTAL"}
-    for an in annees:
-        col_name = str(int(an))
-        val = df[df["annee"] == an][col_key].sum()
-        total[col_name] = fmt.format(val)
-    base = pd.concat([base, pd.DataFrame([total])], ignore_index=True)
+    if total:
+        total_row = {"mois": 0, "Mois": "TOTAL"}
+        for an in annees:
+            col_name = str(int(an))
+            vals = df[df["annee"] == an][col_key]
+            val = vals.mean() if total_fn == "mean" else vals.sum()
+            total_row[col_name] = fmt.format(val)
+        base = pd.concat([base, pd.DataFrame([total_row])], ignore_index=True)
     return base.drop(columns=["mois"])
 
 
 def _show_comparatif(df_all, annee_ref):
     st.subheader(f"📅 Comparaison {annee_ref - 4} → {annee_ref}")
 
-    df = _build_comparatif(df_all, annee_ref, nb_annees=4)
+    # ── Filtre plateforme ─────────────────────────────────────────────────
+    plateformes_dispo = sorted(
+        df_all[df_all["plateforme"] != PLATEFORME_FERMETURE]["plateforme"].dropna().unique()
+    )
+    plat_choix = st.multiselect(
+        "Filtrer par plateforme", plateformes_dispo,
+        default=[], key="compar_plat",
+        placeholder="Toutes les plateformes"
+    )
+    df_filtered = df_all.copy()
+    if plat_choix:
+        df_filtered = df_filtered[
+            (df_filtered["plateforme"].isin(plat_choix)) |
+            (df_filtered["plateforme"] == PLATEFORME_FERMETURE)
+        ]
+
+    df = _build_comparatif(df_filtered, annee_ref, nb_annees=4)
     if df.empty:
         st.info("Pas assez de données historiques pour la comparaison.")
         return
 
     annees_dispo = sorted(df["annee"].unique())
 
+    # Calcul prix moyen/nuit (ca_brut / nuitees)
+    df["prix_nuit"] = (df["ca_brut"] / df["nuitees"].replace(0, float("nan"))).round(2).fillna(0)
+
     metriques = [
-        ("ca_brut",  "💶 Revenus Bruts (€)",        "{:,.0f}"),
-        ("ca_net",   "💵 Revenus Nets (€)",          "{:,.0f}"),
-        ("nuitees",  "🌙 Nuitées",                   "{:.0f}"),
-        ("taux_occ", "📊 Taux d'occupation (%)",     "{:.1f}"),
+        ("ca_brut",   "💶 Revenus Bruts (€)",         "{:,.0f}"),
+        ("ca_net",    "💵 Revenus Nets (€)",           "{:,.0f}"),
+        ("nuitees",   "🌙 Nuitées",                    "{:.0f}"),
+        ("taux_occ",  "📊 Taux d'occupation (%)",     "{:.1f}"),
+        ("prix_nuit", "💰 Prix moyen / nuit (€)",      "{:,.0f}"),
     ]
 
     for col_key, titre, fmt in metriques:
         st.markdown(f"#### {titre}")
-        pivot = _pivot_table(df, col_key, fmt=fmt, annees_dispo=annees_dispo)
+        pivot = _pivot_table(df, col_key, fmt=fmt, annees_dispo=annees_dispo,
+                             total=(col_key != "taux_occ" and col_key != "prix_nuit"),
+                             total_fn="mean" if col_key in ("taux_occ","prix_nuit") else "sum")
         st.dataframe(pivot, use_container_width=True, hide_index=True)
         st.divider()
 
