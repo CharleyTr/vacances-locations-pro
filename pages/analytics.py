@@ -3,7 +3,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 from services.reservation_service import load_reservations
-from services.analytics_service import compute_kpis, compute_monthly, PLATEFORME_FERMETURE
+from services.analytics_service import compute_kpis, compute_monthly
+PLATEFORME_FERMETURE = "Fermeture"  # local fallback
 from services.proprietes_service import get_proprietes_dict
 import calendar
 
