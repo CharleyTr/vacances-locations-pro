@@ -51,7 +51,12 @@ def _show_liste():
         with col1:
             plateforme = st.multiselect("Plateforme", PLATEFORMES, key="filt_plat")
         with col2:
-            annees_options = [2024, 2025, 2026]
+            # Années dynamiques depuis les données
+            if not df.empty and "annee" in df.columns:
+                annees_options = sorted(df["annee"].dropna().astype(int).unique().tolist(), reverse=True)
+            else:
+                from datetime import date
+                annees_options = list(range(date.today().year, 2013, -1))
             annee = st.selectbox("Année", ["Toutes"] + annees_options, key="filt_annee")
         with col3:
             statut_paye = st.selectbox("Paiement", ["Tous", "Payés", "En attente"], key="filt_paye")
