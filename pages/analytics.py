@@ -49,23 +49,21 @@ def _build_comparatif(df_all, annee_ref, nb_annees=4):
 
 def _pivot_table(df, col_key, fmt="{:.0f}", annees_dispo=None):
     """Construit un tableau croisé mois x années pour une métrique."""
-    mois_all = pd.DataFrame({"mois": range(1, 13), "Mois": MOIS_FR})
-    pivot = mois_all.set_index("mois")
-    for an in (annees_dispo or sorted(df["annee"].unique())):
-        df_a = df[df["annee"] == an].set_index("mois")
-        pivot[str(an)] = [
-            fmt.format(df_a.loc[m, col_key]) if m in df_a.index else "—"
-            for m in range(1, 13)
-        ]
+    annees = annees_dispo or sorted(df["annee"].unique())
+    rows = []
+    for m in range(1, 13):
+        row = {"Mois": MOIS_FR[m - 1]}
+        for an in annees:
+            df_a = df[(df["annee"] == an) & (df["mois"] == m)]
+            row[str(an)] = fmt.format(df_a[col_key].sum()) if not df_a.empty else "—"
+        rows.append(row)
     # Ligne Total
-    totaux = {"Mois": "**Total**"}
-    for an in (annees_dispo or sorted(df["annee"].unique())):
+    total_row = {"Mois": "Total"}
+    for an in annees:
         val = df[df["annee"] == an][col_key].sum()
-        totaux[str(an)] = fmt.format(val)
-    pivot = pivot.reset_index(drop=True)
-    pivot.insert(0, "Mois", MOIS_FR)
-    pivot = pd.concat([pivot, pd.DataFrame([totaux])], ignore_index=True)
-    return pivot
+        total_row[str(an)] = fmt.format(val)
+    rows.append(total_row)
+    return pd.DataFrame(rows)
 
 
 def _show_comparatif(df_all, annee_ref):
