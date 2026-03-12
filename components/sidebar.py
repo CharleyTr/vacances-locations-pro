@@ -16,6 +16,8 @@ PAGES = {
     "📊 Rapports":       "Rapports",
     "💶 Tarifs":         "Tarifs",
     "⭐ Livre d'or":     "Livre d'or",
+    "📥 Import Booking": "Import Booking",
+    "📥 Import Airbnb":  "Import Airbnb",
 }
 
 
@@ -62,6 +64,6 @@ def sidebar() -> str:
             label_visibility="collapsed",
         )
         st.divider()
-        st.caption("v3.0 — 2026 - Charley TRIGANO")
+        st.caption("v3.0 — 2026")
 
     return PAGES[choice]
