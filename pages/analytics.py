@@ -86,14 +86,7 @@ def _show_comparatif(df_all, annee_ref):
     for col_key, titre, fmt in metriques:
         st.markdown(f"#### {titre}")
         pivot = _pivot_table(df, col_key, fmt=fmt, annees_dispo=annees_dispo)
-        # Mettre en évidence l'année de référence
-        def highlight_current(s):
-            return ["font-weight:bold;background-color:#E3F2FD" 
-                    if s.name == str(annee_ref) else "" for _ in s]
-        st.dataframe(
-            pivot.style.apply(highlight_current, axis=0),
-            use_container_width=True, hide_index=True
-        )
+        st.dataframe(pivot, use_container_width=True, hide_index=True)
         st.divider()
 
 
