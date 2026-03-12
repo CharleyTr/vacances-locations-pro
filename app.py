@@ -215,6 +215,16 @@ except ImportError:
     avis = None
 
 try:
+    from pages import import_booking
+except ImportError:
+    import_booking = None
+
+try:
+    from pages import import_airbnb
+except ImportError:
+    import_airbnb = None
+
+try:
     from pages import questionnaire
 except ImportError:
     questionnaire = None
@@ -234,4 +244,6 @@ elif page == "Propriétés":    proprietes.show() if proprietes else st.error("U
 elif page == "Rapports":      rapport.show()    if rapport    else st.error("Uploadez pages/rapport.py")
 elif page == "Tarifs":        tarifs.show()     if tarifs     else st.error("Uploadez pages/tarifs.py")
 elif page == "Livre d'or":    avis.show()       if avis       else st.error("Uploadez pages/avis.py")
+elif page == "Import Booking": import_booking.show() if import_booking else st.error("Uploadez pages/import_booking.py")
+elif page == "Import Airbnb":  import_airbnb.show()  if import_airbnb  else st.error("Uploadez pages/import_airbnb.py")
 elif page == "Questionnaire": questionnaire.show() if questionnaire else st.error("Uploadez pages/questionnaire.py")
