@@ -94,7 +94,7 @@ def _show_comparatif(df_all, annee_ref):
     for col_key, titre, fmt in metriques:
         st.markdown(f"#### {titre}")
         pivot = _pivot_table(df, col_key, fmt=fmt, annees_dispo=annees_dispo,
-                             total=(col_key != "taux_occ" and col_key != "prix_nuit"),
+                             total=True,
                              total_fn="mean" if col_key in ("taux_occ","prix_nuit") else "sum")
         st.dataframe(pivot, use_container_width=True, hide_index=True)
         st.divider()
