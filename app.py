@@ -225,6 +225,11 @@ except ImportError:
     import_airbnb = None
 
 try:
+    from pages import templates
+except ImportError:
+    templates = None
+
+try:
     from pages import questionnaire
 except ImportError:
     questionnaire = None
@@ -246,4 +251,5 @@ elif page == "Tarifs":        tarifs.show()     if tarifs     else st.error("Upl
 elif page == "Livre d'or":    avis.show()       if avis       else st.error("Uploadez pages/avis.py")
 elif page == "Import Booking": import_booking.show() if import_booking else st.error("Uploadez pages/import_booking.py")
 elif page == "Import Airbnb":  import_airbnb.show()  if import_airbnb  else st.error("Uploadez pages/import_airbnb.py")
+elif page == "Modèles msgs":  templates.show()      if templates      else st.error("Uploadez pages/templates.py")
 elif page == "Questionnaire": questionnaire.show() if questionnaire else st.error("Uploadez pages/questionnaire.py")
