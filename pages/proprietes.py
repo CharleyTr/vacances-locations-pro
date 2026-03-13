@@ -33,6 +33,11 @@ def show():
                         value=prop.get("ical_url", "") or "",
                         placeholder="https://www.airbnb.fr/calendar/ical/..."
                     )
+                    signataire = st.text_input(
+                        "✍️ Signataire des messages",
+                        value=prop.get("signataire", "") or "",
+                        placeholder="Ex: Christophe & Marie"
+                    )
                     actif = st.checkbox("Propriété active", value=prop.get("actif", True))
 
                 col_a, col_b = st.columns(2)
@@ -44,10 +49,11 @@ def show():
             if save:
                 try:
                     update_propriete(prop["id"], {
-                        "nom":      nom.strip(),
-                        "adresse":  adresse or None,
-                        "ical_url": ical_url or None,
-                        "actif":    actif,
+                        "nom":        nom.strip(),
+                        "adresse":    adresse or None,
+                        "ical_url":   ical_url or None,
+                        "signataire": signataire.strip() or None,
+                        "actif":      actif,
                     })
                     st.success(f"✅ '{nom}' mis à jour !")
                     st.rerun()
@@ -77,7 +83,10 @@ def show():
                 "URL iCal (optionnel)",
                 placeholder="https://www.airbnb.fr/calendar/ical/..."
             )
-            st.markdown(" ")
+            new_signataire = st.text_input(
+                "✍️ Signataire des messages",
+                placeholder="Ex: Christophe & Marie"
+            )
 
         submitted = st.form_submit_button("✅ Créer la propriété", type="primary", use_container_width=True)
 
@@ -87,10 +96,11 @@ def show():
         else:
             try:
                 result = insert_propriete({
-                    "nom":      new_nom.strip(),
-                    "adresse":  new_adresse or None,
-                    "ical_url": new_ical or None,
-                    "actif":    True,
+                    "nom":        new_nom.strip(),
+                    "adresse":    new_adresse or None,
+                    "ical_url":   new_ical or None,
+                    "signataire": new_signataire.strip() or None,
+                    "actif":      True,
                 })
                 st.success(f"✅ Propriété '{new_nom}' créée ! (ID: {result.get('id', '?')})")
                 st.rerun()
