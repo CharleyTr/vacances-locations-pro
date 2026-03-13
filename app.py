@@ -230,6 +230,11 @@ except ImportError:
     templates = None
 
 try:
+    from pages import export_comptable
+except ImportError:
+    export_comptable = None
+
+try:
     from pages import questionnaire
 except ImportError:
     questionnaire = None
@@ -252,4 +257,5 @@ elif page == "Livre d'or":    avis.show()       if avis       else st.error("Upl
 elif page == "Import Booking": import_booking.show() if import_booking else st.error("Uploadez pages/import_booking.py")
 elif page == "Import Airbnb":  import_airbnb.show()  if import_airbnb  else st.error("Uploadez pages/import_airbnb.py")
 elif page == "Modèles msgs":  templates.show()      if templates      else st.error("Uploadez pages/templates.py")
+elif page == "Export comptable": export_comptable.show() if export_comptable else st.error("Uploadez pages/export_comptable.py")
 elif page == "Questionnaire": questionnaire.show() if questionnaire else st.error("Uploadez pages/questionnaire.py")
