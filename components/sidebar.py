@@ -18,6 +18,7 @@ PAGES = {
     "⭐ Livre d'or":     "Livre d'or",
     "📥 Import Booking": "Import Booking",
     "📥 Import Airbnb":  "Import Airbnb",
+    "📝 Modèles msgs":   "Modèles msgs",
 }
 
 
