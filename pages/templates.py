@@ -213,9 +213,15 @@ def _show_envoyer():
     prop_nom = props.get(prop_id, "")
     ville    = "Bordeaux" if prop_id == 1 else "Nice" if prop_id == 2 else ""
 
+    # Récupérer signataire depuis la fiche propriété
+    from database.proprietes_repo import fetch_all
+    props_full = {p["id"]: p for p in fetch_all()}
+    signataire = props_full.get(prop_id, {}).get("signataire", "") or ""
+
     # Aperçu message rempli
     msg_final = apply_template(tpl["contenu"], row,
-                                propriete_nom=prop_nom, ville=ville)
+                                propriete_nom=prop_nom, ville=ville,
+                                signataire=signataire)
 
     st.markdown("#### 👁️ Aperçu du message")
     st.text_area("Message final", value=msg_final, height=200, key="send_preview", disabled=True)
