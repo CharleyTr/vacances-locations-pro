@@ -252,16 +252,55 @@ def _show_visualisation(prop_id: int, prop_nom: str, props: dict):
     fig.update_layout(height=300, showlegend=False, margin=dict(t=10, b=10))
     st.plotly_chart(fig, use_container_width=True)
 
-    # Tableau récap
-    st.markdown("**Récapitulatif des tarifs :**")
-    df_display = pd.DataFrame([{
-        "Période":     t["nom"],
-        "Début":       t["date_debut"],
-        "Fin":         t["date_fin"],
-        "Prix/nuit":   f"{t['prix_nuit']:.0f} €",
-        "Ménage":      f"{t['prix_menage']:.0f} €",
+    # Tableau récap ÉDITABLE
+    st.markdown("**Récapitulatif des tarifs — modifiez directement les montants :**")
+    df_edit = pd.DataFrame([{
+        "_id":        t["id"],
+        "Période":    t["nom"],
+        "Début":      t["date_debut"],
+        "Fin":        t["date_fin"],
+        "Prix/nuit €": float(t["prix_nuit"]),
+        "Ménage €":   float(t["prix_menage"]),
     } for t in tarifs])
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+    edited = st.data_editor(
+        df_edit,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "_id":         st.column_config.Column(disabled=True, width="small"),
+            "Période":     st.column_config.TextColumn("Période", disabled=True),
+            "Début":       st.column_config.TextColumn("Début", disabled=True),
+            "Fin":         st.column_config.TextColumn("Fin", disabled=True),
+            "Prix/nuit €": st.column_config.NumberColumn(
+                "Prix/nuit €", min_value=0, max_value=9999, step=1, format="%.0f €"
+            ),
+            "Ménage €":    st.column_config.NumberColumn(
+                "Ménage €", min_value=0, max_value=999, step=1, format="%.0f €"
+            ),
+        },
+        key="tarif_editor"
+    )
+
+    if st.button("💾 Enregistrer les modifications", type="primary", key="save_tarifs_edit"):
+        nb_ok = 0
+        for _, row in edited.iterrows():
+            ok = save_tarif({
+                "id":          int(row["_id"]),
+                "propriete_id": prop_id,
+                "nom":         row["Période"],
+                "date_debut":  row["Début"],
+                "date_fin":    row["Fin"],
+                "prix_nuit":   float(row["Prix/nuit €"]),
+                "prix_menage": float(row["Ménage €"]),
+            })
+            if ok:
+                nb_ok += 1
+        if nb_ok > 0:
+            st.success(f"✅ {nb_ok} tarif(s) mis à jour !")
+            st.rerun()
+        else:
+            st.error("Erreur lors de la sauvegarde.")
 
     # Comparaison propriétés
     if len(props) > 1:
