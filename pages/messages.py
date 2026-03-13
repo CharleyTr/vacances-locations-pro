@@ -16,6 +16,9 @@ from integrations.whatsapp_client import build_wa_link, send_whatsapp
 from database.supabase_client import is_connected
 import database.reservations_repo as repo
 from config import BREVO_API_KEY, TWILIO_ACCOUNT_SID
+from database.templates_repo import get_templates
+from services.template_service import apply_template, MOMENTS
+from database.proprietes_repo import fetch_all as fetch_proprietes, fetch_dict as fetch_props_dict
 
 
 def show():
@@ -100,36 +103,39 @@ def _show_whatsapp(df: pd.DataFrame):
             format_func=lambda x: options[x],
             key="wa_sel"
         )
-    with col2:
-        template = st.selectbox("Template", [
-            "✅ Confirmation de réservation",
-            "🏖️ Rappel arrivée (J-2)",
-            "🙏 Message post-départ",
-            "💳 Rappel paiement",
-            "✏️ Message personnalisé",
-        ], key="wa_tpl")
-
     row = df[df["id"] == selected_id].iloc[0].to_dict()
     telephone = str(row.get("telephone", "") or "")
 
-    # Construire le message selon template
-    BUILDERS = {
-        "✅ Confirmation de réservation": build_wa_confirmation,
-        "🏖️ Rappel arrivée (J-2)":        build_wa_checkin,
-        "🙏 Message post-départ":         build_wa_checkout,
-        "💳 Rappel paiement":             build_wa_payment,
-    }
+    with col2:
+        # Charger modèles WhatsApp depuis la DB
+        tpls_wa = get_templates(canal="whatsapp")
+        tpl_options_wa = {0: "✏️ Message personnalisé"}
+        tpl_options_wa.update({t["id"]: f"{t['nom']}  ({MOMENTS.get(t.get('moment',''), '')})" for t in tpls_wa})
+        tpl_id_wa = st.selectbox("Modèle", list(tpl_options_wa.keys()),
+                                  format_func=lambda x: tpl_options_wa[x], key="wa_tpl")
 
-    if template == "✏️ Message personnalisé":
+    # Résoudre propriété & signataire
+    prop_id   = int(row.get("propriete_id", 0) or 0)
+    props_map = {p["id"]: p for p in fetch_proprietes()}
+    prop_nom  = props_map.get(prop_id, {}).get("nom", "")
+    ville     = props_map.get(prop_id, {}).get("adresse", "")
+    signataire = props_map.get(prop_id, {}).get("signataire", "") or ""
+
+    if tpl_id_wa == 0:
         message = st.text_area(
             "Message WhatsApp",
             value=f"Bonjour {row.get('nom_client','').split()[0]} 👋\n\n",
-            height=150,
-            key="wa_custom_msg"
+            height=150, key="wa_custom_msg"
         )
     else:
-        message = BUILDERS[template](row)
-        st.text_area("Aperçu du message", value=message, height=150, disabled=True, key="wa_preview")
+        tpl_obj = next((t for t in tpls_wa if t["id"] == tpl_id_wa), None)
+        if tpl_obj:
+            message = apply_template(tpl_obj["contenu"], row,
+                                     propriete_nom=prop_nom, ville=ville,
+                                     signataire=signataire)
+            st.text_area("Aperçu du message", value=message, height=180, disabled=True, key="wa_preview")
+        else:
+            message = ""
 
     tel_input = st.text_input("Numéro WhatsApp", value=telephone, placeholder="+33 6 12 34 56 78")
 
