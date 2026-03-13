@@ -20,6 +20,7 @@ VARIABLES = {
     "{propriete}":           "Nom du logement",
     "{ville}":               "Ville du logement",
     "{lien_questionnaire}":  "Lien vers le questionnaire satisfaction",
+    "{signataire}":          "Signataire (défini dans la fiche propriété)",
 }
 
 MOMENTS = {
@@ -35,7 +36,8 @@ MOMENTS = {
 
 
 def apply_template(contenu: str, reservation: dict, propriete_nom: str = "",
-                   ville: str = "", lien_questionnaire: str = "") -> str:
+                   ville: str = "", lien_questionnaire: str = "",
+                   signataire: str = "") -> str:
     """Remplace toutes les variables dans le contenu du template."""
 
     def _fmt_date(val):
@@ -67,6 +69,7 @@ def apply_template(contenu: str, reservation: dict, propriete_nom: str = "",
         "{propriete}":          propriete_nom,
         "{ville}":              ville,
         "{lien_questionnaire}": lien_questionnaire,
+        "{signataire}":          signataire,
     }
 
     result = contenu
