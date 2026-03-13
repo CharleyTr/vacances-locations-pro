@@ -254,13 +254,23 @@ def _show_visualisation(prop_id: int, prop_nom: str, props: dict):
 
     # Tableau récap ÉDITABLE
     st.markdown("**Récapitulatif des tarifs — modifiez directement les montants :**")
+    from datetime import date as _date
+    def _to_date(v):
+        if not v: return None
+        if hasattr(v, "date"): return v.date()
+        if isinstance(v, _date): return v
+        try:
+            from datetime import datetime
+            return datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+        except: return None
+
     df_edit = pd.DataFrame([{
-        "_id":        t["id"],
-        "Période":    t["nom"],
-        "Début":      t["date_debut"],
-        "Fin":        t["date_fin"],
+        "_id":         t["id"],
+        "Période":     t["nom"],
+        "Début":       _to_date(t["date_debut"]),
+        "Fin":         _to_date(t["date_fin"]),
         "Prix/nuit €": float(t["prix_nuit"]),
-        "Ménage €":   float(t["prix_menage"]),
+        "Ménage €":    float(t["prix_menage"]),
     } for t in tarifs])
 
     edited = st.data_editor(
@@ -270,8 +280,8 @@ def _show_visualisation(prop_id: int, prop_nom: str, props: dict):
         column_config={
             "_id":         st.column_config.Column(disabled=True, width="small"),
             "Période":     st.column_config.TextColumn("Période", disabled=True),
-            "Début":       st.column_config.TextColumn("Début", disabled=True),
-            "Fin":         st.column_config.TextColumn("Fin", disabled=True),
+            "Début":       st.column_config.DateColumn("Début", format="DD/MM/YYYY"),
+            "Fin":         st.column_config.DateColumn("Fin",   format="DD/MM/YYYY"),
             "Prix/nuit €": st.column_config.NumberColumn(
                 "Prix/nuit €", min_value=0, max_value=9999, step=1, format="%.0f €"
             ),
@@ -285,14 +295,16 @@ def _show_visualisation(prop_id: int, prop_nom: str, props: dict):
     if st.button("💾 Enregistrer les modifications", type="primary", key="save_tarifs_edit"):
         nb_ok = 0
         for _, row in edited.iterrows():
+            d_debut = row["Début"]
+            d_fin   = row["Fin"]
             ok = save_tarif({
-                "id":          int(row["_id"]),
+                "id":           int(row["_id"]),
                 "propriete_id": prop_id,
-                "nom":         row["Période"],
-                "date_debut":  row["Début"],
-                "date_fin":    row["Fin"],
-                "prix_nuit":   float(row["Prix/nuit €"]),
-                "prix_menage": float(row["Ménage €"]),
+                "nom":          row["Période"],
+                "date_debut":   str(d_debut) if d_debut else None,
+                "date_fin":     str(d_fin)   if d_fin   else None,
+                "prix_nuit":    float(row["Prix/nuit €"]),
+                "prix_menage":  float(row["Ménage €"]),
             })
             if ok:
                 nb_ok += 1
