@@ -71,18 +71,26 @@ def _show_whatsapp(df: pd.DataFrame):
 
     st.divider()
 
-    # Sélection réservation
-    df_tel = df[df["telephone"].notna() & (df["telephone"] != "")]
+    # Sélection réservation avec recherche
+    search_wa = st.text_input("🔎 Rechercher un client", placeholder="Tapez un nom...", key="wa_search")
     df_all_for_select = df.sort_values("date_arrivee", ascending=False)
+    if search_wa:
+        df_all_for_select = df_all_for_select[
+            df_all_for_select["nom_client"].str.contains(search_wa, case=False, na=False)
+        ]
 
     options = {
         row["id"]: (
-            f"#{row['id']} — {row['nom_client']} "
+            f"{row['nom_client']} "
             f"({'📱 ' + str(row.get('telephone','')) if row.get('telephone') else '❌ sans tél'})"
-            f"  |  {row['plateforme']}"
+            f"  |  {row['plateforme']}  |  {row['date_arrivee'].strftime('%d/%m/%Y') if hasattr(row['date_arrivee'], 'strftime') else str(row['date_arrivee'])[:10]}"
         )
         for _, row in df_all_for_select.iterrows()
     }
+
+    if not options:
+        st.info("Aucune réservation trouvée.")
+        return
 
     col1, col2 = st.columns([3, 2])
     with col1:
@@ -278,8 +286,15 @@ def _show_email_manuel(df: pd.DataFrame):
         st.error("⛔ BREVO_API_KEY non configurée dans les Secrets Streamlit Cloud.")
         return
 
-    options = {row["id"]: f"#{row['id']} — {row['nom_client']} ({row.get('email','sans email')})"
-               for _, row in df.sort_values("date_arrivee", ascending=False).iterrows()}
+    search_email = st.text_input("🔎 Rechercher un client", placeholder="Tapez un nom...", key="email_search")
+    df_email = df.sort_values("date_arrivee", ascending=False)
+    if search_email:
+        df_email = df_email[df_email["nom_client"].str.contains(search_email, case=False, na=False)]
+    options = {row["id"]: f"{row['nom_client']} ({row.get('email','sans email')})"
+               for _, row in df_email.iterrows()}
+    if not options:
+        st.info("Aucune réservation trouvée.")
+        return
     selected_id = st.selectbox("Réservation", list(options.keys()), format_func=lambda x: options[x], key="email_sel")
     row = df[df["id"] == selected_id].iloc[0].to_dict()
 
