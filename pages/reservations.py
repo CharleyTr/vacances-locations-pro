@@ -230,10 +230,18 @@ def _show_formulaire_modifier():
         st.warning("Aucune réservation disponible.")
         return
 
-    # Sélection de la réservation
+    # Recherche par nom avant le selectbox
+    search_mod = st.text_input("🔎 Rechercher un client", placeholder="Tapez un nom...", key="mod_search")
     df_sorted = df.sort_values("date_arrivee", ascending=False)
+    if search_mod:
+        df_sorted = df_sorted[df_sorted["nom_client"].str.contains(search_mod, case=False, na=False)]
+
+    if df_sorted.empty:
+        st.info("Aucune réservation trouvée pour ce nom.")
+        return
+
     options = {
-        row["id"]: f"#{row['id']} — {row['nom_client']}  |  "
+        row["id"]: f"{row['nom_client']}  |  "
                    f"{row['date_arrivee'].strftime('%d/%m/%Y')} → {row['date_depart'].strftime('%d/%m/%Y')}  |  "
                    f"{row['plateforme']}"
         for _, row in df_sorted.iterrows()
