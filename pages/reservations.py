@@ -52,6 +52,12 @@ def _show_liste():
         return
 
     with st.expander("🔍 Filtres", expanded=True):
+        # Recherche par nom — en premier, bien visible
+        search_nom = st.text_input(
+            "🔎 Rechercher un client",
+            placeholder="Tapez un nom...",
+            key="filt_nom"
+        )
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             plateforme = st.multiselect("Plateforme", PLATEFORMES, key="filt_plat")
@@ -69,6 +75,8 @@ def _show_liste():
             prop_labels  = ["Toutes"] + list(_props.values())
             prop_choix   = st.selectbox("Propriété", prop_labels, key="filt_prop")
 
+    if search_nom:
+        df = df[df["nom_client"].str.contains(search_nom, case=False, na=False)]
     if plateforme:
         df = df[df["plateforme"].isin(plateforme)]
     if annee != "Toutes":
