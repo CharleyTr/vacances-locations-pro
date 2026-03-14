@@ -20,6 +20,7 @@ PAGES = {
     "📥 Import Airbnb":  "Import Airbnb",
     "📝 Modèles msgs":   "Modèles msgs",
     "📊 Export comptable": "Export comptable",
+    "🏛️ Fiscal LMNP":      "Fiscal LMNP",
 }
 
 
