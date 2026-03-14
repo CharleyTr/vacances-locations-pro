@@ -372,6 +372,16 @@ def generate_export(df: pd.DataFrame, annee: int, prop_nom: str) -> bytes:
     """
     df_an = df[df["annee"] == annee].copy() if "annee" in df.columns else df.copy()
 
+    # Normaliser les noms de colonnes (différents selon source Booking/Airbnb)
+    if "commissions" in df_an.columns and "commission" not in df_an.columns:
+        df_an["commission"] = df_an["commissions"]
+    if "menage" in df_an.columns and "prix_menage" not in df_an.columns:
+        df_an["prix_menage"] = df_an["menage"]
+    if "frais_menage" in df_an.columns and "prix_menage" not in df_an.columns:
+        df_an["prix_menage"] = df_an["frais_menage"]
+    if "taxes_sejour" not in df_an.columns:
+        df_an["taxes_sejour"] = 0.0
+
     wb = Workbook()
     _sheet_detail(wb, df_an, annee, prop_nom)
     _sheet_mensuel(wb, df_an, annee)
