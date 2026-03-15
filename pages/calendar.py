@@ -405,22 +405,38 @@ def _show_month_summary(df: pd.DataFrame, annee: int, mois: int):
     st.metric("🏡 Taux occupation", f"{taux}%",
               help=f"({nuits_louees} louées + {nuits_fermeture} fermées) / {nb_jours} jours")
 
-    for _, row in df_mois.sort_values("date_arrivee").iterrows():
-        if row["nuits_mois"] <= 0:
-            continue
-        couleur = COULEURS.get(row.get("plateforme", ""), "#607D8B")
-        paye    = "✅" if row.get("paye") else "⏳"
-        arr     = str(row["date_arrivee"])[:10]
-        dep     = str(row["date_depart"])[:10]
-        st.markdown(
-            f"""<div style='border-left:5px solid {couleur};background:#FAFAFA;
-            padding:10px 14px;border-radius:0 8px 8px 0;margin-bottom:8px'>
-            <b>{row.get('nom_client','?')}</b> — {row.get('plateforme','')}<br>
-            <small>🗓️ {arr} → {dep} &nbsp;|&nbsp;
-            🌙 {int(row['nuits_mois'])} nuits ce mois &nbsp;|&nbsp;
-            💶 {float(row.get('prix_net',0) or 0):.0f} € net {paye}</small>
-            </div>""", unsafe_allow_html=True
-        )
+    # ── Tableau des réservations du mois ─────────────────────────────────
+    st.markdown("#### 📋 Réservations du mois")
+
+    df_display = df_reel.copy()
+    df_display["Arrivée"]    = df_display["date_arrivee"].dt.strftime("%d/%m/%Y")
+    df_display["Départ"]     = df_display["date_depart"].apply(
+        lambda x: str(x)[:10] if pd.notna(x) else "")
+    df_display["Nuits mois"] = df_display["nuits_mois"].astype(int)
+    df_display["CA Brut"]    = df_display["prix_brut"].fillna(0).apply(lambda v: f"{float(v):,.0f} €")
+    df_display["CA Net"]     = df_display["prix_net"].fillna(0).apply(lambda v: f"{float(v):,.0f} €")
+    df_display["Commission"] = df_display.get("commissions", pd.Series(0, index=df_display.index)).fillna(0).apply(lambda v: f"{float(v):,.0f} €")
+    df_display["Ménage"]     = df_display.get("prix_menage", 
+                               df_display.get("menage", pd.Series(0, index=df_display.index))).fillna(0).apply(lambda v: f"{float(v):,.0f} €")
+    df_display["Payé"]       = df_display["paye"].apply(lambda v: "✅" if v else "⏳")
+
+    cols_show = ["nom_client","plateforme","Arrivée","Départ","Nuits mois",
+                 "CA Brut","Commission","Ménage","CA Net","Payé"]
+    rename_map = {"nom_client":"Client","plateforme":"Plateforme"}
+    df_table = df_display[cols_show].rename(columns=rename_map).sort_values("Arrivée")
+
+    st.dataframe(df_table, use_container_width=True, hide_index=True)
+
+    # ── Ligne de totaux ───────────────────────────────────────────────────
+    st.markdown("---")
+    t1, t2, t3, t4, t5 = st.columns(5)
+    t1.metric("📋 Réservations", len(df_reel))
+    t2.metric("🌙 Nuits louées", nuits_louees)
+    t3.metric("💶 CA Brut",    f"{float(df_reel['prix_brut'].fillna(0).sum()):,.0f} €")
+    comm_total = float(df_reel["commissions"].fillna(0).sum()) if "commissions" in df_reel.columns else 0
+    men_total  = float(df_reel.get("prix_menage", df_reel.get("menage", pd.Series(0))).fillna(0).sum())
+    t4.metric("🔖 Commissions", f"{comm_total:,.0f} €")
+    t5.metric("💵 CA Net",     f"{ca_net:,.0f} €")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
