@@ -565,11 +565,15 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
         ir_micro = _impot_tranche((revenu_micro + autres_revenus) / nb_parts, b) * nb_parts
         csg_micro = ca_reel_prop * b["csg_crds"]
 
-        with col2:
-            total_reel  = ir_reel + csg_reel
-            total_micro = ir_micro + csg_micro
-            economie    = total_micro - total_reel
-            st.markdown("**Comparaison**")
+        # ── Tableau de comparaison ────────────────────────────────────────
+        st.divider()
+        st.subheader("📊 Résultat de la comparaison")
+        total_reel  = ir_reel + csg_reel
+        total_micro = ir_micro + csg_micro
+        economie    = total_micro - total_reel
+
+        col_t, col_g = st.columns([3, 2])
+        with col_t:
             st.markdown(f"""
 |  | Micro-BIC | Réel simplifié |
 |--|-----------|----------------|
@@ -588,12 +592,12 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
             else:
                 st.info("Les deux régimes sont équivalents.")
 
-            # Bar chart comparatif
+        with col_g:
             fig = go.Figure()
             for regime, ir, csg_v in [("Micro-BIC", ir_micro, csg_micro), ("Réel simplifié", ir_reel, csg_reel)]:
                 fig.add_trace(go.Bar(name="IR", x=[regime], y=[ir], marker_color="#1565C0"))
                 fig.add_trace(go.Bar(name="CSG/CRDS", x=[regime], y=[csg_v], marker_color="#E65100"))
-            fig.update_layout(barmode="stack", height=250,
+            fig.update_layout(barmode="stack", height=280,
                               margin=dict(t=10,b=10), showlegend=True,
                               legend=dict(orientation="h", y=1.1))
             st.plotly_chart(fig, use_container_width=True)
