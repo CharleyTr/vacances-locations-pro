@@ -9,6 +9,9 @@ from datetime import date, timedelta
 import calendar
 import numpy as np
 
+import requests
+import json
+import os
 from services.reservation_service import load_reservations
 from services.analytics_service import compute_monthly
 from database.proprietes_repo import fetch_all, fetch_dict
@@ -18,6 +21,72 @@ from database.pricing_repo import (
 )
 
 MOIS_FR = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Analyse IA (Claude)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _analyse_ia(prop_nom, prix_base, stats_df, evenements, concurrents):
+    """Envoie les données à Claude et retourne une analyse pricing."""
+    
+    # Préparer le contexte
+    stats_resume = ""
+    if not stats_df.empty:
+        for _, r in stats_df.iterrows():
+            stats_resume += f"  - {r['mois_str']} {r['annee']}: taux occ={r['taux_occ']}%, rev/nuit={r['rev_nuit']}€, CA net={r['ca_net']:,.0f}€\n"
+    
+    evts_resume = ""
+    for e in evenements[:10]:
+        evts_resume += f"  - {e['nom']} ({e['date_debut']} → {e['date_fin']}): impact {e['impact']} +{e.get('pct_impact',0)}%\n"
+    
+    conc_resume = ""
+    if concurrents:
+        prix_conc = [c['prix_nuit'] for c in concurrents]
+        conc_resume = f"  Prix concurrents observés: min={min(prix_conc):.0f}€, moy={sum(prix_conc)/len(prix_conc):.0f}€, max={max(prix_conc):.0f}€\n"
+        for c in concurrents[-5:]:
+            conc_resume += f"  - {c['concurrent']} ({c['plateforme']}): {c['prix_nuit']}€/nuit le {c['date_releve']}\n"
+
+    prompt = f"""Tu es un expert en revenue management pour la location saisonnière en France.
+
+Propriété : {prop_nom}
+Prix de base actuel : {prix_base}€/nuit
+
+Historique des performances (données réelles) :
+{stats_resume if stats_resume else "  Pas encore de données historiques."}
+
+Événements locaux programmés :
+{evts_resume if evts_resume else "  Aucun événement saisi."}
+
+Concurrents observés :
+{conc_resume if conc_resume else "  Pas de données concurrentes saisies."}
+
+Donne une analyse concise en 4 parties :
+1. **Diagnostic** (2-3 phrases sur les performances actuelles)
+2. **Opportunités** (mois ou périodes où le prix pourrait être augmenté)
+3. **Points d'attention** (périodes creuses, prix trop élevés vs concurrents)
+4. **3 recommandations concrètes** avec chiffres précis
+
+Réponds en français, de façon pratique et directe. Maximum 300 mots."""
+
+    try:
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={"Content-Type": "application/json"},
+            json={
+                "model": "claude-sonnet-4-20250514",
+                "max_tokens": 600,
+                "messages": [{"role": "user", "content": prompt}]
+            },
+            timeout=30
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return data["content"][0]["text"]
+        else:
+            return f"Erreur API ({resp.status_code})"
+    except Exception as e:
+        return f"Erreur de connexion : {e}"
 MOIS_LONG = ["Janvier","Février","Mars","Avril","Mai","Juin",
              "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
 
@@ -260,6 +329,23 @@ def show():
                           yaxis_title="€/nuit", showlegend=False,
                           yaxis=dict(range=[0, max(prix_vals)*1.2]))
         st.plotly_chart(fig, use_container_width=True)
+
+        # ── Analyse IA ────────────────────────────────────────────────────
+        st.divider()
+        st.subheader("🤖 Analyse & recommandations IA")
+        st.caption("Claude analyse votre historique, vos événements et vos concurrents pour vous conseiller.")
+
+        if st.button("🤖 Générer l'analyse IA", type="primary", key="btn_ia_pricing"):
+            with st.spinner("Claude analyse vos données..."):
+                analyse = _analyse_ia(
+                    prop_nom=prop_nom,
+                    prix_base=prix_base,
+                    stats_df=stats,
+                    evenements=evenements,
+                    concurrents=get_concurrents(prop_id),
+                )
+            st.markdown(analyse)
+            st.caption("⚠️ Analyse indicative — à croiser avec votre connaissance du marché local.")
 
         # Gestion événements
         st.divider()
