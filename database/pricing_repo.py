@@ -1,0 +1,63 @@
+"""Repository pour événements locaux et prix concurrents."""
+from database.supabase_client import get_supabase
+
+def get_evenements(propriete_id=None):
+    sb = get_supabase()
+    if sb is None: return []
+    try:
+        q = sb.table("evenements_locaux").select("*").order("date_debut")
+        if propriete_id:
+            q = q.or_(f"propriete_id.eq.{propriete_id},propriete_id.is.null")
+        return q.execute().data or []
+    except: return []
+
+def save_evenement(data):
+    sb = get_supabase()
+    if sb is None: return False
+    try:
+        d = {k: v for k, v in data.items() if k != "id"}
+        if data.get("id"):
+            sb.table("evenements_locaux").update(d).eq("id", data["id"]).execute()
+        else:
+            sb.table("evenements_locaux").insert(d).execute()
+        return True
+    except Exception as e:
+        print(f"save_evenement: {e}"); return False
+
+def delete_evenement(eid):
+    sb = get_supabase()
+    if sb is None: return False
+    try:
+        sb.table("evenements_locaux").delete().eq("id", eid).execute()
+        return True
+    except: return False
+
+def get_concurrents(propriete_id):
+    sb = get_supabase()
+    if sb is None: return []
+    try:
+        return sb.table("prix_concurrents").select("*")\
+            .eq("propriete_id", propriete_id)\
+            .order("date_releve", desc=True).execute().data or []
+    except: return []
+
+def save_concurrent(data):
+    sb = get_supabase()
+    if sb is None: return False
+    try:
+        d = {k: v for k, v in data.items() if k != "id"}
+        if data.get("id"):
+            sb.table("prix_concurrents").update(d).eq("id", data["id"]).execute()
+        else:
+            sb.table("prix_concurrents").insert(d).execute()
+        return True
+    except Exception as e:
+        print(f"save_concurrent: {e}"); return False
+
+def delete_concurrent(cid):
+    sb = get_supabase()
+    if sb is None: return False
+    try:
+        sb.table("prix_concurrents").delete().eq("id", cid).execute()
+        return True
+    except: return False
