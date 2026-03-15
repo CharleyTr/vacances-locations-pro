@@ -9,6 +9,8 @@ import plotly.graph_objects as go
 import plotly.express as px
 from services.reservation_service import load_reservations
 from database.proprietes_repo import fetch_all
+from database.frais_repo import get_frais, save_frais, delete_frais, CATEGORIES
+from database.supabase_client import is_connected
 
 # ─── Barèmes fiscaux 2024/2025 ───────────────────────────────────────────────
 
@@ -445,17 +447,116 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
         st.caption(f"CA {annee} — **{prop_label_reel}** : **{ca_reel_prop:,.0f} €**")
 
         st.divider()
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("**Vos charges réelles estimées**")
-            charges_amort    = st.number_input("Amortissements (€/an)", 0, 50000, 5000, 500, key="reel_amort")
-            charges_travaux  = st.number_input("Travaux & entretien (€)",  0, 50000, 1000, 100, key="reel_trav")
-            charges_gestion  = st.number_input("Frais gestion / compta (€)", 0, 10000, 500, 100, key="reel_gest")
-            charges_assur    = st.number_input("Assurances (€)", 0, 5000, 300, 50, key="reel_assur")
-            charges_copro    = st.number_input("Charges copropriété (€)", 0, 10000, 800, 100, key="reel_copro")
-            charges_autres   = st.number_input("Autres charges (€)", 0, 20000, 0, 100, key="reel_autres")
+        # ── Chargement frais depuis Supabase ─────────────────────────────
+        frais_list = get_frais(prop_id_reel, annee) if prop_id_reel != 0 else []
 
-        total_charges_reelles = charges_amort + charges_travaux + charges_gestion + charges_assur + charges_copro + charges_autres
+        # ── Tabs internes : Saisie / Récap ────────────────────────────────
+        sub_saisie, sub_recap = st.tabs(["📝 Saisie des frais", "📋 Récapitulatif"])
+
+        with sub_saisie:
+            if prop_id_reel == 0:
+                st.info("Sélectionnez une propriété pour saisir les frais déductibles.")
+            else:
+                st.markdown(f"**Frais déductibles — {prop_label_reel} — {annee}**")
+
+                # Tableau éditable des frais existants
+                if frais_list:
+                    st.markdown("##### Frais enregistrés")
+                    df_frais = pd.DataFrame(frais_list)
+
+                    edited_frais = st.data_editor(
+                        df_frais[["id", "categorie", "libelle", "montant"]],
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "id":        st.column_config.Column("ID", disabled=True, width="small"),
+                            "categorie": st.column_config.SelectboxColumn(
+                                "Catégorie", options=CATEGORIES, required=True
+                            ),
+                            "libelle":   st.column_config.TextColumn("Libellé", required=True),
+                            "montant":   st.column_config.NumberColumn(
+                                "Montant (€)", min_value=0, format="%.2f €"
+                            ),
+                        },
+                        key="frais_editor"
+                    )
+
+                    col_save, col_del = st.columns([2, 1])
+                    with col_save:
+                        if st.button("💾 Enregistrer les modifications", type="primary", key="save_frais_edit"):
+                            ok = 0
+                            for _, row in edited_frais.iterrows():
+                                if save_frais({
+                                    "id": int(row["id"]),
+                                    "propriete_id": prop_id_reel,
+                                    "annee": annee,
+                                    "categorie": row["categorie"],
+                                    "libelle":   row["libelle"],
+                                    "montant":   float(row["montant"]),
+                                }):
+                                    ok += 1
+                            st.success(f"✅ {ok} frais mis à jour !")
+                            st.rerun()
+
+                st.divider()
+
+                # Formulaire ajout nouveau frais
+                st.markdown("##### ➕ Ajouter un frais")
+                with st.form("form_add_frais", clear_on_submit=True):
+                    fa_col1, fa_col2, fa_col3 = st.columns([2, 3, 2])
+                    with fa_col1:
+                        fa_cat = st.selectbox("Catégorie", CATEGORIES, key="fa_cat")
+                    with fa_col2:
+                        fa_lib = st.text_input("Libellé", placeholder="Ex: Assurance PNO Generali", key="fa_lib")
+                    with fa_col3:
+                        fa_mnt = st.number_input("Montant (€)", min_value=0.0, step=10.0, key="fa_mnt")
+                    submitted_frais = st.form_submit_button("➕ Ajouter", type="primary", use_container_width=True)
+
+                if submitted_frais:
+                    if fa_lib and fa_mnt > 0:
+                        if save_frais({
+                            "propriete_id": prop_id_reel,
+                            "annee":        annee,
+                            "categorie":    fa_cat,
+                            "libelle":      fa_lib,
+                            "montant":      float(fa_mnt),
+                        }):
+                            st.success(f"✅ Frais ajouté : {fa_lib} — {fa_mnt:.0f} €")
+                            st.rerun()
+                    else:
+                        st.error("Libellé et montant sont obligatoires.")
+
+                # Suppression
+                if frais_list:
+                    with st.expander("🗑️ Supprimer un frais"):
+                        del_options = {f["id"]: f"{f['categorie']} — {f['libelle']} ({f['montant']:.0f} €)"
+                                       for f in frais_list}
+                        del_id = st.selectbox("Frais à supprimer", list(del_options.keys()),
+                                               format_func=lambda x: del_options[x], key="del_frais")
+                        if st.button("🗑️ Supprimer", type="secondary", key="btn_del_frais"):
+                            delete_frais(del_id)
+                            st.success("Supprimé !")
+                            st.rerun()
+
+        with sub_recap:
+            if frais_list:
+                st.markdown(f"**Récapitulatif par catégorie — {prop_label_reel} — {annee}**")
+                df_recap_frais = pd.DataFrame(frais_list)
+                recap_cat = df_recap_frais.groupby("categorie")["montant"].agg(
+                    Total="sum", Nb="count"
+                ).reset_index().sort_values("Total", ascending=False)
+                recap_cat["Total"] = recap_cat["Total"].map("{:,.2f} €".format)
+                st.dataframe(recap_cat.rename(columns={
+                    "categorie": "Catégorie", "Total": "Total", "Nb": "Nb postes"
+                }), use_container_width=True, hide_index=True)
+
+                total_affiche = sum(f["montant"] for f in frais_list)
+                st.metric("💶 Total charges déductibles", f"{total_affiche:,.2f} €")
+            else:
+                st.info("Aucun frais enregistré pour cette propriété.")
+
+        # Total pour le calcul
+        total_charges_reelles = sum(f["montant"] for f in frais_list) if frais_list else 0.0
         revenu_reel = max(0, ca_reel_prop - total_charges_reelles)
         ir_reel     = _impot_tranche(revenu_reel + autres_revenus, b) * nb_parts if nb_parts >= 1 else _impot_tranche(revenu_reel + autres_revenus, b)
         csg_reel    = revenu_reel * b["csg_crds"]
