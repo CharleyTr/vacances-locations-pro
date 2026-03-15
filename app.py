@@ -237,6 +237,10 @@ try:
     from pages import fiscal
 except ImportError:
     fiscal = None
+try:
+    from pages import pricing
+except ImportError:
+    pricing = None
 
 try:
     from pages import questionnaire
@@ -263,4 +267,5 @@ elif page == "Import Airbnb":  import_airbnb.show()  if import_airbnb  else st.e
 elif page == "Modèles msgs":  templates.show()      if templates      else st.error("Uploadez pages/templates.py")
 elif page == "Export comptable": export_comptable.show() if export_comptable else st.error("Uploadez pages/export_comptable.py")
 elif page == "Fiscal LMNP":      fiscal.show()           if fiscal          else st.error("Uploadez pages/fiscal.py")
+elif page == "Revenus & Pricing": pricing.show()          if pricing         else st.error("Uploadez pages/pricing.py")
 elif page == "Questionnaire": questionnaire.show() if questionnaire else st.error("Uploadez pages/questionnaire.py")
