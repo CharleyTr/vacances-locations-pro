@@ -146,6 +146,7 @@ def show():
         with col2:
             classement = st.radio("Classement meublé tourisme",
                                    ["Non classé (50%)", "Classé (71%)"],
+                                   index=1,
                                    key="fisc_class")
         with col3:
             nb_parts = st.number_input("Quotient familial (parts)",
@@ -179,10 +180,11 @@ def show():
     # Pour LMNP le CA déclaré = recettes brutes encaissées
 
     # ── Onglets ───────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 Seuils & Alertes",
         "💶 Estimation fiscale",
         "⚖️ Micro-BIC vs Réel",
+        "🧾 Cotisations sociales",
         "📅 Projection annuelle",
     ])
 
@@ -358,7 +360,136 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
             st.plotly_chart(fig, use_container_width=True)
 
     # ════════════════════════════════════════════════════════════════════════
+    # ════════════════════════════════════════════════════════════════════════
     with tab4:
+        st.subheader("🧾 Cotisations sociales & prélèvements")
+        st.caption("Simulation selon votre statut LMNP/LMP et vos recettes.")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            statut = st.radio("Statut locatif",
+                ["LMNP (Loueur Meublé Non Professionnel)",
+                 "LMP (Loueur Meublé Professionnel)"],
+                key="fisc_statut",
+                help="LMP si recettes > 23 000€ ET > 50% revenus du foyer"
+            )
+            regime_social = st.radio("Régime social",
+                ["Pas de cotisations SSI (LMNP pur)",
+                 "Micro-entrepreneur (URSSAF)",
+                 "TNS / Régime réel SSI"],
+                key="fisc_regime_soc"
+            )
+
+        with col2:
+            st.markdown("**Récapitulatif recettes**")
+            st.metric("CA Brut total", f"{ca_total:,.0f} €")
+            abatt_m, rev_bic_m = _micro_bic(ca_total, classe, b)
+            st.metric(f"Revenu BIC net (abatt. {abatt_taux*100:.0f}%)", f"{rev_bic_m:,.0f} €")
+            is_lmp = ca_total > b["seuil_cotisations"]
+            if is_lmp:
+                st.warning(f"⚠️ Recettes > {b['seuil_cotisations']:,} € → Vérifiez si LMP s'applique")
+            else:
+                st.success(f"✅ Recettes < {b['seuil_cotisations']:,} € → Pas de SSI obligatoire")
+
+        st.divider()
+
+        # ── Calcul cotisations selon régime ──────────────────────────────
+        st.subheader("📋 Détail des cotisations")
+
+        if "Pas de cotisations" in regime_social:
+            # LMNP classique : CSG/CRDS sur revenus du patrimoine uniquement
+            csg_patrim = rev_bic_m * 0.172
+            rows_cot = [
+                ("CSG (9,9%)",                   rev_bic_m * 0.099),
+                ("CRDS (0,5%)",                  rev_bic_m * 0.005),
+                ("Prélèvement solidarité (7,5%)", rev_bic_m * 0.075),
+                ("Prélèvement libératoire",       0.0),
+            ]
+            total_cot = csg_patrim
+            st.info("**LMNP — Prélèvements sociaux sur revenus du patrimoine (17,2%)** — Pas de cotisations SSI obligatoires.")
+
+        elif "Micro-entrepreneur" in regime_social:
+            # Taux micro-entrepreneur meublé tourisme classé : 6% (2024)
+            taux_me = 0.06 if classe else 0.06
+            cot_me  = ca_total * taux_me
+            csg_me  = ca_total * 0.172
+            rows_cot = [
+                ("Cotisations sociales micro-entrepreneur (6%)", cot_me),
+                ("CSG/CRDS (inclus dans taux)",                  0.0),
+                ("CFE (Cotisation Foncière Entreprises)",         "Variable"),
+            ]
+            total_cot = cot_me
+            st.info("**Micro-entrepreneur meublé de tourisme classé** Taux global : 6% sur CA — inclut retraite, maladie, famille.")
+
+        else:
+            # TNS / SSI régime réel
+            taux_ssi = b["cotisations_ssi_taux"]
+            base_ssi = rev_bic_m
+            cot_maladie  = base_ssi * 0.013  # maladie
+            cot_retraite = base_ssi * 0.178  # retraite base + compl
+            cot_famille  = base_ssi * 0.031  # allocations familiales
+            cot_invalid  = base_ssi * 0.013  # invalidité/décès
+            cot_csg      = base_ssi * 0.097  # CSG déductible
+            cot_crds     = base_ssi * 0.005  # CRDS
+            total_cot    = base_ssi * taux_ssi
+            rows_cot = [
+                ("Maladie (1,3%)",              cot_maladie),
+                ("Retraite de base + compl. (17,8%)", cot_retraite),
+                ("Allocations familiales (3,1%)", cot_famille),
+                ("Invalidité/Décès (1,3%)",     cot_invalid),
+                ("CSG déductible (9,7%)",        cot_csg),
+                ("CRDS (0,5%)",                  cot_crds),
+            ]
+            st.info(f"**Régime TNS/SSI — Base : revenu BIC net ({rev_bic_m:,.0f} €)**")
+
+        # Tableau cotisations
+        rows_display = []
+        total_num = 0.0
+        for poste, montant in rows_cot:
+            if isinstance(montant, float):
+                rows_display.append({"Poste": poste, "Montant": f"{montant:,.0f} €"})
+                total_num += montant
+            else:
+                rows_display.append({"Poste": poste, "Montant": str(montant)})
+        rows_display.append({"Poste": "**TOTAL COTISATIONS**", "Montant": f"**{total_num:,.0f} €**"})
+        st.dataframe(pd.DataFrame(rows_display), use_container_width=True, hide_index=True)
+
+        st.divider()
+
+        # ── Synthèse globale prélèvements ─────────────────────────────────
+        st.subheader("📊 Synthèse globale des prélèvements")
+
+        abatt_m2, rev_bic_m2 = _micro_bic(ca_total, classe, b)
+        ir_final = _impot_tranche((rev_bic_m2 + autres_revenus) / nb_parts, b) * nb_parts
+        csg_ir   = ca_total * b["csg_crds"] if "Pas de cotisations" in regime_social else 0
+
+        total_prelevements = ir_final + csg_ir + total_num
+        net_final = ca_total - total_prelevements
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("💶 CA Brut",             f"{ca_total:,.0f} €")
+        c2.metric("🏛️ IR estimé",           f"{ir_final:,.0f} €")
+        c3.metric("🧾 Cotisations sociales", f"{total_num:,.0f} €")
+        c4.metric("💵 Net après tout",       f"{net_final:,.0f} €",
+                  delta=f"{net_final/ca_total*100:.1f}% du CA" if ca_total > 0 else "")
+
+        if ca_total > 0:
+            fig = go.Figure(go.Waterfall(
+                name="", orientation="v",
+                measure=["absolute", "relative", "relative", "relative", "total"],
+                x=["CA Brut", f"Abattement {abatt_taux*100:.0f}%",
+                   "IR estimé", "Cotisations", "Net final"],
+                y=[ca_total, -abatt_m2, -ir_final, -total_num, 0],
+                connector={"line": {"color": "rgb(63, 63, 63)"}},
+                increasing={"marker": {"color": "#2E7D32"}},
+                decreasing={"marker": {"color": "#C62828"}},
+                totals={"marker": {"color": "#1565C0"}},
+            ))
+            fig.update_layout(height=320, margin=dict(t=10, b=10),
+                              showlegend=False, yaxis_title="€")
+            st.plotly_chart(fig, use_container_width=True)
+
+    with tab5:
         st.subheader(f"📅 Projection annuelle {annee}")
 
         df_mois = df_an.copy()
