@@ -309,6 +309,27 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
     with tab3:
         st.subheader("⚖️ Comparaison Micro-BIC vs Régime Réel")
 
+        # ── Filtre propriété ──────────────────────────────────────────────
+        props_options = {0: "Toutes les propriétés"}
+        props_options.update({p["id"]: p["nom"] for p in props.values()})
+        prop_id_reel = st.selectbox(
+            "🏠 Propriété (foyer fiscal)",
+            options=list(props_options.keys()),
+            format_func=lambda x: props_options[x],
+            key="reel_prop",
+            help="Chaque bien est un foyer fiscal distinct — sélectionnez la propriété à analyser"
+        )
+        if prop_id_reel == 0:
+            df_reel_prop = df_an
+            prop_label_reel = "Toutes les propriétés"
+        else:
+            df_reel_prop = df_an[df_an["propriete_id"] == prop_id_reel]
+            prop_label_reel = props_options[prop_id_reel]
+
+        ca_reel_prop = float(df_reel_prop["prix_brut"].fillna(0).sum()) if "prix_brut" in df_reel_prop.columns else 0.0
+        st.caption(f"CA {annee} — **{prop_label_reel}** : **{ca_reel_prop:,.0f} €**")
+
+        st.divider()
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("**Vos charges réelles estimées**")
@@ -320,13 +341,13 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
             charges_autres   = st.number_input("Autres charges (€)", 0, 20000, 0, 100, key="reel_autres")
 
         total_charges_reelles = charges_amort + charges_travaux + charges_gestion + charges_assur + charges_copro + charges_autres
-        revenu_reel = max(0, ca_total - total_charges_reelles)
+        revenu_reel = max(0, ca_reel_prop - total_charges_reelles)
         ir_reel     = _impot_tranche(revenu_reel + autres_revenus, b) * nb_parts if nb_parts >= 1 else _impot_tranche(revenu_reel + autres_revenus, b)
         csg_reel    = revenu_reel * b["csg_crds"]
 
-        abattement_micro, revenu_micro = _micro_bic(ca_total, classe, b)
+        abattement_micro, revenu_micro = _micro_bic(ca_reel_prop, classe, b)
         ir_micro = _impot_tranche((revenu_micro + autres_revenus) / nb_parts, b) * nb_parts
-        csg_micro = ca_total * b["csg_crds"]
+        csg_micro = ca_reel_prop * b["csg_crds"]
 
         with col2:
             total_reel  = ir_reel + csg_reel
@@ -336,13 +357,13 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
             st.markdown(f"""
 |  | Micro-BIC | Réel simplifié |
 |--|-----------|----------------|
-| **Revenu brut (CA)** | **{ca_total:,.0f} €** | **{ca_total:,.0f} €** |
+| **Revenu brut (CA)** | **{ca_reel_prop:,.0f} €** | **{ca_reel_prop:,.0f} €** |
 | Abattement / Charges déduites | {abattement_micro:,.0f} € ({abatt_taux*100:.0f}%) | {total_charges_reelles:,.0f} € |
 | **Revenu imposable** | **{revenu_micro:,.0f} €** | **{revenu_reel:,.0f} €** |
 | IR estimé | {ir_micro:,.0f} € | {ir_reel:,.0f} € |
 | CSG/CRDS | {csg_micro:,.0f} € | {csg_reel:,.0f} € |
 | **Total prélèvements** | **{total_micro:,.0f} €** | **{total_reel:,.0f} €** |
-| **Net après impôt** | **{ca_total - total_micro:,.0f} €** | **{ca_total - total_reel:,.0f} €** |
+| **Net après impôt** | **{ca_reel_prop - total_micro:,.0f} €** | **{ca_reel_prop - total_reel:,.0f} €** |
 """)
             if economie > 0:
                 st.success(f"✅ Le **régime réel** vous ferait économiser **{economie:,.0f} €** cette année.")
