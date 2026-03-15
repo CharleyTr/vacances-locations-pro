@@ -382,7 +382,16 @@ def _show_month_summary(df: pd.DataFrame, annee: int, mois: int):
         return max(0, (fin - debut).days)
 
     df["nuits_mois"] = df.apply(_nuits_mois, axis=1)
-    df_mois = df[df["nuits_mois"] > 0]
+
+    # Rattacher chaque réservation à son mois d'ARRIVÉE uniquement
+    df["mois_arrivee"] = df["date_arrivee"].dt.month
+    df["annee_arrivee"] = df["date_arrivee"].dt.year
+    df_mois = df[
+        (df["mois_arrivee"] == mois) &
+        (df["annee_arrivee"] == annee)
+    ]
+    # Pour les nuits du mois, on garde le calcul réel (nuits dans le mois)
+    # mais on n'affiche la résa que dans son mois d'arrivée
 
     if df_mois.empty:
         return
