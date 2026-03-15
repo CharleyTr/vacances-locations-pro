@@ -369,9 +369,9 @@ def _show_month_summary(df: pd.DataFrame, annee: int, mois: int):
                 st.metric(f"🏠 {pnom}", f"{pct}%",
                           delta=f"{nuits} nuits | {ca:,.0f} €")
 
-        return  # Si plusieurs propriétés, on arrête là
+        # Pas de return — on continue pour afficher le tableau
 
-    # Résumé mensuel pour propriété unique
+    # Résumé mensuel (toutes propriétés ou unique)
     df = df.copy()
     df["date_arrivee"] = pd.to_datetime(df["date_arrivee"])
     df["date_depart"]  = pd.to_datetime(df["date_depart"])
