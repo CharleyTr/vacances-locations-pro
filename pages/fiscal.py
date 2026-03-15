@@ -12,13 +12,23 @@ from database.proprietes_repo import fetch_all
 
 # ─── Barèmes fiscaux 2024/2025 ───────────────────────────────────────────────
 
+# ─── Loi de finances 2024 (applicable revenus 2025+) ────────────────────────
+# Avant 2025 : classé 71% / seuil 188 700€ — non classé 50% / seuil 77 700€
+# Après 2025  : classé 50% / seuil 77 700€  — non classé 30% / seuil 15 000€
+# Source : art. 45 LFR 2024 — applicable déclarations 2025 sur revenus 2024
+#          MAIS report partiel : loi 2024 votée fin 2024, revenus 2023 non touchés
+#          Revenus 2024 : anciens taux maintenus (report voté)
+#          Revenus 2025+ : nouveaux taux applicables
+
 BAREMES = {
     2026: {
-        "micro_bic_classe_seuil":    188700,   # meublé classé + chambres hôtes
-        "micro_bic_non_classe_seuil":  77700,  # meublé non classé
-        "abattement_classe":           0.71,
-        "abattement_non_classe":       0.50,
-        "abattement_min_classe":       305,    # minimum abattement €
+        # Nouveaux taux LFR 2024 — applicables revenus 2025+
+        "micro_bic_classe_seuil":      77700,   # abaissé (= niveau non classé avant)
+        "micro_bic_non_classe_seuil":  15000,   # très fortement abaissé
+        "abattement_classe":           0.50,    # réduit de 71% → 50%
+        "abattement_non_classe":       0.30,    # réduit de 50% → 30%
+        "abattement_min_classe":       305,
+        "loi_note": "LFR 2024 — nouveaux taux (revenus 2025+)",
         "tranches_ir": [
             (0,     11497,  0.00),
             (11497, 29315,  0.11),
@@ -26,17 +36,19 @@ BAREMES = {
             (83823, 180294, 0.41),
             (180294, None,  0.45),
         ],
-        "cotisations_ssi_taux":  0.231,    # SSI (ex-RSI) si activité principale
-        "cotisations_urssaf_taux": 0.172,  # URSSAF micro-entrepreneur
-        "csg_crds":              0.172,    # CSG/CRDS sur revenus du patrimoine
-        "seuil_cotisations":     23000,    # seuil déclenchement SSI obligatoire
+        "cotisations_ssi_taux":    0.231,
+        "cotisations_urssaf_taux": 0.172,
+        "csg_crds":                0.172,
+        "seuil_cotisations":       23000,
     },
     2025: {
-        "micro_bic_classe_seuil":    188700,
-        "micro_bic_non_classe_seuil":  77700,
-        "abattement_classe":           0.71,
-        "abattement_non_classe":       0.50,
+        # Nouveaux taux LFR 2024 — applicables revenus 2025
+        "micro_bic_classe_seuil":      77700,
+        "micro_bic_non_classe_seuil":  15000,
+        "abattement_classe":           0.50,
+        "abattement_non_classe":       0.30,
         "abattement_min_classe":       305,
+        "loi_note": "LFR 2024 — nouveaux taux (revenus 2025+)",
         "tranches_ir": [
             (0,     11294,  0.00),
             (11294, 28797,  0.11),
@@ -44,17 +56,19 @@ BAREMES = {
             (82341, 177106, 0.41),
             (177106, None,  0.45),
         ],
-        "cotisations_ssi_taux":  0.231,
+        "cotisations_ssi_taux":    0.231,
         "cotisations_urssaf_taux": 0.172,
-        "csg_crds":              0.172,
-        "seuil_cotisations":     23000,
+        "csg_crds":                0.172,
+        "seuil_cotisations":       23000,
     },
     2024: {
-        "micro_bic_classe_seuil":    188700,
-        "micro_bic_non_classe_seuil":  77700,
-        "abattement_classe":           0.71,
-        "abattement_non_classe":       0.50,
-        "abattement_min_classe":       305,
+        # Anciens taux — revenus 2024 (report voté, ancienne loi maintenue)
+        "micro_bic_classe_seuil":      188700,
+        "micro_bic_non_classe_seuil":   77700,
+        "abattement_classe":            0.71,
+        "abattement_non_classe":        0.50,
+        "abattement_min_classe":        305,
+        "loi_note": "Ancienne loi — taux 2024 (71%/50%)",
         "tranches_ir": [
             (0,     11294,  0.00),
             (11294, 28797,  0.11),
@@ -62,10 +76,30 @@ BAREMES = {
             (82341, 177106, 0.41),
             (177106, None,  0.45),
         ],
-        "cotisations_ssi_taux":  0.231,
+        "cotisations_ssi_taux":    0.231,
         "cotisations_urssaf_taux": 0.172,
-        "csg_crds":              0.172,
-        "seuil_cotisations":     23000,
+        "csg_crds":                0.172,
+        "seuil_cotisations":       23000,
+    },
+    2023: {
+        # Anciens taux
+        "micro_bic_classe_seuil":      188700,
+        "micro_bic_non_classe_seuil":   77700,
+        "abattement_classe":            0.71,
+        "abattement_non_classe":        0.50,
+        "abattement_min_classe":        305,
+        "loi_note": "Ancienne loi — taux 2023 (71%/50%)",
+        "tranches_ir": [
+            (0,     10777,  0.00),
+            (10777, 27478,  0.11),
+            (27478, 78570,  0.30),
+            (78570, 168994, 0.41),
+            (168994, None,  0.45),
+        ],
+        "cotisations_ssi_taux":    0.231,
+        "cotisations_urssaf_taux": 0.172,
+        "csg_crds":                0.172,
+        "seuil_cotisations":       23000,
     },
 }
 
@@ -142,10 +176,11 @@ def show():
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             annee = st.selectbox("Année fiscale",
-                                  list(range(date.today().year, 2022, -1)), key="fisc_annee")
+                                  list(range(date.today().year, 2022, -1)), key="fisc_annee",
+                                  help="2025+ : nouveaux taux LFR 2024 (50%/30%) | 2024 et avant : anciens taux (71%/50%)")
         with col2:
             classement = st.radio("Classement meublé tourisme",
-                                   ["Non classé (50%)", "Classé (71%)"],
+                                   ["Non classé", "Classé / Gîte de France"],
                                    index=1,
                                    key="fisc_class")
         with col3:
@@ -159,9 +194,13 @@ def show():
                                               help="Salaires, pensions, autres BIC...")
 
     b = BAREMES.get(annee, BAREMES[2025])
-    classe = "Classé" in classement
+    classe = "Classé" in classement or "Gîte" in classement
     seuil_applicable = b["micro_bic_classe_seuil"] if classe else b["micro_bic_non_classe_seuil"]
     abatt_taux = b["abattement_classe"] if classe else b["abattement_non_classe"]
+
+    # Badge récapitulatif taux applicables
+    loi = b.get("loi_note","")
+    st.caption(f"📋 **{loi}** — Abattement applicable : **{abatt_taux*100:.0f}%** | Seuil : **{seuil_applicable:,.0f} €**")
 
     # ── Chargement données ────────────────────────────────────────────────
     df_all = load_reservations()
@@ -238,17 +277,39 @@ def show():
         # Tableau récap seuils
         st.subheader("📋 Récapitulatif des seuils")
         seuils_data = {
-            "Régime": ["Micro-BIC non classé", "Micro-BIC classé ⭐", "TVA (franchise en base)", "SSI obligatoire"],
-            "Seuil": ["77 700 €", "188 700 €", "91 900 €", "23 000 €"],
-            "Abattement": ["50%", "71%", "N/A", "N/A"],
+            "Régime": [
+                "Micro-BIC non classé",
+                "Micro-BIC classé / Gîte ⭐",
+                "TVA (franchise en base)",
+                "SSI obligatoire",
+            ],
+            "Seuil": [
+                f"{b['micro_bic_non_classe_seuil']:,.0f} €",
+                f"{b['micro_bic_classe_seuil']:,.0f} €",
+                "91 900 €",
+                "23 000 €",
+            ],
+            "Abattement": [
+                f"{b['abattement_non_classe']*100:.0f}%",
+                f"{b['abattement_classe']*100:.0f}%",
+                "N/A", "N/A",
+            ],
             "Votre CA": [f"{ca_total:,.0f} €"] * 4,
             "Statut": [
-                "✅ OK" if ca_total < 77700 else "⛔ Dépassé",
-                "✅ OK" if ca_total < 188700 else "⛔ Dépassé",
+                "✅ OK" if ca_total < b["micro_bic_non_classe_seuil"] else "⛔ Dépassé",
+                "✅ OK" if ca_total < b["micro_bic_classe_seuil"] else "⛔ Dépassé",
                 "✅ OK" if ca_total < 91900 else "⚠️ Vérifier",
                 "✅ OK" if ca_total < 23000 else "⚠️ Vérifier",
             ]
         }
+
+        # Badge loi applicable
+        loi_note = b.get("loi_note", "")
+        if "nouveaux" in loi_note:
+            st.warning(f"⚠️ **{loi_note}** — Abattements réduits : classé 50% (au lieu de 71%), non classé 30% (au lieu de 50%). Seuils également abaissés.")
+        else:
+            st.info(f"ℹ️ **{loi_note}** — Anciens taux en vigueur.")
+
         st.dataframe(pd.DataFrame(seuils_data), use_container_width=True, hide_index=True)
 
         # Note TVA
