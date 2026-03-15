@@ -336,11 +336,13 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
             st.markdown(f"""
 |  | Micro-BIC | Réel simplifié |
 |--|-----------|----------------|
-| Revenu imposable | {revenu_micro:,.0f} € | {revenu_reel:,.0f} € |
-| Total charges déduites | {abattement_micro:,.0f} € | {total_charges_reelles:,.0f} € |
+| **Revenu brut (CA)** | **{ca_total:,.0f} €** | **{ca_total:,.0f} €** |
+| Abattement / Charges déduites | {abattement_micro:,.0f} € ({abatt_taux*100:.0f}%) | {total_charges_reelles:,.0f} € |
+| **Revenu imposable** | **{revenu_micro:,.0f} €** | **{revenu_reel:,.0f} €** |
 | IR estimé | {ir_micro:,.0f} € | {ir_reel:,.0f} € |
 | CSG/CRDS | {csg_micro:,.0f} € | {csg_reel:,.0f} € |
 | **Total prélèvements** | **{total_micro:,.0f} €** | **{total_reel:,.0f} €** |
+| **Net après impôt** | **{ca_total - total_micro:,.0f} €** | **{ca_total - total_reel:,.0f} €** |
 """)
             if economie > 0:
                 st.success(f"✅ Le **régime réel** vous ferait économiser **{economie:,.0f} €** cette année.")
