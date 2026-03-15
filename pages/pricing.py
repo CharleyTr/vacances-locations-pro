@@ -311,6 +311,22 @@ def show():
             })
 
         df_sugg = pd.DataFrame(sugg_rows)
+
+        # Ligne TOTAL
+        def _num(s): 
+            return float(s.replace(" €","").replace(",","").replace("%","")) if s not in ("—","") else 0
+        
+        total_row = {
+            "Mois":             "**TOTAL / MOY.**",
+            "Taux occ. hist.":  f"{sum(_num(r['Taux occ. hist.']) for r in sugg_rows)/12:.0f}%",
+            "Rev. moy./nuit":   f"{sum(_num(r['Rev. moy./nuit']) for r in sugg_rows)/12:.0f} €",
+            "CA moy. mensuel":  f"{sum(_num(r['CA moy. mensuel']) for r in sugg_rows):,.0f} €",
+            "Prix suggéré":     f"{sum(_num(r['Prix suggéré']) for r in sugg_rows)/12:.0f} €",
+            "CA suggéré":       f"{sum(_num(r['CA suggéré']) for r in sugg_rows):,.0f} €",
+            "Variation":        f"{sum(_num(r['Variation']) for r in sugg_rows)/12:+.0f}%",
+            "Événements":       "",
+        }
+        df_sugg = pd.concat([df_sugg, pd.DataFrame([total_row])], ignore_index=True)
         st.dataframe(df_sugg, use_container_width=True, hide_index=True)
 
         # Graphique
