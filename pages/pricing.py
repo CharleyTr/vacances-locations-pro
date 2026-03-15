@@ -552,11 +552,26 @@ def show():
 
             # Tableau détail
             st.markdown("#### 📋 Détail mensuel")
-            df_display = proj.copy()
-            df_display["ca_confirme"]  = df_display["ca_confirme"].map("{:,.0f} €".format)
-            df_display["ca_hist_moy"]  = df_display["ca_hist_moy"].map("{:,.0f} €".format)
-            df_display["taux_occ_hist"]= df_display["taux_occ_hist"].map("{:.0f}%".format)
+
+            # Ligne TOTAL avant formatage
+            total_row = pd.DataFrame([{
+                "mois_str":           "**TOTAL**",
+                "statut":             "",
+                "ca_confirme":        proj["ca_confirme"].sum(),
+                "ca_hist_moy":        proj["ca_hist_moy"].sum(),
+                "taux_occ_confirme":  proj["taux_occ_confirme"].mean(),
+                "taux_occ_hist":      proj["taux_occ_hist"].mean(),
+                "nuits_confirmees":   proj["nuits_confirmees"].sum(),
+            }])
+            df_with_total = pd.concat([proj, total_row], ignore_index=True)
+
+            df_display = df_with_total.copy()
+            df_display["ca_confirme"]       = df_display["ca_confirme"].map("{:,.0f} €".format)
+            df_display["ca_hist_moy"]       = df_display["ca_hist_moy"].map("{:,.0f} €".format)
+            df_display["taux_occ_hist"]     = df_display["taux_occ_hist"].map("{:.0f}%".format)
             df_display["taux_occ_confirme"] = df_display["taux_occ_confirme"].map("{:.0f}%".format)
+            df_display["nuits_confirmees"]  = df_display["nuits_confirmees"].map("{:.0f}".format)
+
             st.dataframe(
                 df_display[["mois_str","statut","ca_confirme","ca_hist_moy",
                              "taux_occ_confirme","taux_occ_hist","nuits_confirmees"]].rename(columns={
