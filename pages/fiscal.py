@@ -253,7 +253,22 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
         st.subheader(f"💶 Estimation impôt {annee}")
         st.caption("Simulation indicative — consultez un expert-comptable pour votre situation réelle.")
 
-        abattement, revenu_bic = _micro_bic(ca_total, classe, b)
+        # ── Filtre propriété ──────────────────────────────────────────────
+        props_opt_t2 = {0: "Toutes les propriétés"}
+        props_opt_t2.update({p["id"]: p["nom"] for p in props.values()})
+        prop_id_t2 = st.selectbox(
+            "🏠 Propriété (foyer fiscal)",
+            options=list(props_opt_t2.keys()),
+            format_func=lambda x: props_opt_t2[x],
+            key="prop_t2",
+            help="Chaque bien est un foyer fiscal distinct"
+        )
+        df_t2 = df_an if prop_id_t2 == 0 else df_an[df_an["propriete_id"] == prop_id_t2]
+        ca_t2 = float(df_t2["prix_brut"].fillna(0).sum()) if "prix_brut" in df_t2.columns else 0.0
+        st.caption(f"CA {annee} — **{props_opt_t2[prop_id_t2]}** : **{ca_t2:,.0f} €**")
+        st.divider()
+
+        abattement, revenu_bic = _micro_bic(ca_t2, classe, b)
 
         col1, col2 = st.columns(2)
         with col1:
@@ -261,7 +276,7 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
             st.markdown(f"""
 | Étape | Montant |
 |-------|---------|
-| CA Brut (recettes) | **{ca_total:,.0f} €** |
+| CA Brut (recettes) | **{ca_t2:,.0f} €** |
 | Abattement {abatt_taux*100:.0f}% | — {abattement:,.0f} € |
 | **Revenu BIC net** | **{revenu_bic:,.0f} €** |
 | Autres revenus | + {autres_revenus:,.0f} € |
@@ -271,7 +286,7 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
         revenu_total = revenu_bic + autres_revenus
         ir_brut = _impot_tranche(revenu_total, b)
         ir_par_part = _impot_tranche(revenu_total / nb_parts, b) * nb_parts
-        csg = ca_total * b["csg_crds"]   # CSG/CRDS sur revenus patrimoine
+        csg = ca_t2 * b["csg_crds"]   # CSG/CRDS sur revenus patrimoine
 
         with col2:
             st.markdown("**Estimation fiscale**")
@@ -282,15 +297,15 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
 | IR ({nb_parts:.1f} parts) | **{ir_par_part:,.0f} €** |
 | CSG/CRDS (17,2%) | {csg:,.0f} € |
 | **Total prélèvements** | **{ir_par_part + csg:,.0f} €** |
-| Taux effectif | {(ir_par_part + csg)/ca_total*100:.1f}% du CA |
+| Taux effectif | {((ir_par_part + csg)/ca_t2*100):.1f}% du CA |
 """)
 
         st.divider()
 
         # Répartition visuelle
-        if ca_total > 0:
+        if ca_t2 > 0:
             charges = ir_par_part + csg
-            net_apres_impot = ca_total - charges
+            net_apres_impot = ca_t2 - charges
             labels = ["Net après impôt", "IR estimé", "CSG/CRDS"]
             values = [max(0, net_apres_impot), ir_par_part, csg]
             colors = ["#2E7D32", "#1565C0", "#E65100"]
@@ -388,6 +403,21 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
         st.subheader("🧾 Cotisations sociales & prélèvements")
         st.caption("Simulation selon votre statut LMNP/LMP et vos recettes.")
 
+        # ── Filtre propriété ──────────────────────────────────────────────
+        props_opt_t4 = {0: "Toutes les propriétés"}
+        props_opt_t4.update({p["id"]: p["nom"] for p in props.values()})
+        prop_id_t4 = st.selectbox(
+            "🏠 Propriété (foyer fiscal)",
+            options=list(props_opt_t4.keys()),
+            format_func=lambda x: props_opt_t4[x],
+            key="prop_t4",
+            help="Chaque bien est un foyer fiscal distinct"
+        )
+        df_t4 = df_an if prop_id_t4 == 0 else df_an[df_an["propriete_id"] == prop_id_t4]
+        ca_t4 = float(df_t4["prix_brut"].fillna(0).sum()) if "prix_brut" in df_t4.columns else 0.0
+        st.caption(f"CA {annee} — **{props_opt_t4[prop_id_t4]}** : **{ca_t4:,.0f} €**")
+        st.divider()
+
         col1, col2 = st.columns(2)
         with col1:
             statut = st.radio("Statut locatif",
@@ -405,10 +435,10 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
 
         with col2:
             st.markdown("**Récapitulatif recettes**")
-            st.metric("CA Brut total", f"{ca_total:,.0f} €")
-            abatt_m, rev_bic_m = _micro_bic(ca_total, classe, b)
+            st.metric("CA Brut total", f"{ca_t4:,.0f} €")
+            abatt_m, rev_bic_m = _micro_bic(ca_t4, classe, b)
             st.metric(f"Revenu BIC net (abatt. {abatt_taux*100:.0f}%)", f"{rev_bic_m:,.0f} €")
-            is_lmp = ca_total > b["seuil_cotisations"]
+            is_lmp = ca_t4 > b["seuil_cotisations"]
             if is_lmp:
                 st.warning(f"⚠️ Recettes > {b['seuil_cotisations']:,} € → Vérifiez si LMP s'applique")
             else:
@@ -434,8 +464,8 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
         elif "Micro-entrepreneur" in regime_social:
             # Taux micro-entrepreneur meublé tourisme classé : 6% (2024)
             taux_me = 0.06 if classe else 0.06
-            cot_me  = ca_total * taux_me
-            csg_me  = ca_total * 0.172
+            cot_me  = ca_t4 * taux_me
+            csg_me  = ca_t4 * 0.172
             rows_cot = [
                 ("Cotisations sociales micro-entrepreneur (6%)", cot_me),
                 ("CSG/CRDS (inclus dans taux)",                  0.0),
@@ -482,27 +512,27 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
         # ── Synthèse globale prélèvements ─────────────────────────────────
         st.subheader("📊 Synthèse globale des prélèvements")
 
-        abatt_m2, rev_bic_m2 = _micro_bic(ca_total, classe, b)
+        abatt_m2, rev_bic_m2 = _micro_bic(ca_t4, classe, b)
         ir_final = _impot_tranche((rev_bic_m2 + autres_revenus) / nb_parts, b) * nb_parts
         csg_ir   = ca_total * b["csg_crds"] if "Pas de cotisations" in regime_social else 0
 
         total_prelevements = ir_final + csg_ir + total_num
-        net_final = ca_total - total_prelevements
+        net_final = ca_t4 - total_prelevements
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("💶 CA Brut",             f"{ca_total:,.0f} €")
+        c1.metric("💶 CA Brut",             f"{ca_t4:,.0f} €")
         c2.metric("🏛️ IR estimé",           f"{ir_final:,.0f} €")
         c3.metric("🧾 Cotisations sociales", f"{total_num:,.0f} €")
         c4.metric("💵 Net après tout",       f"{net_final:,.0f} €",
-                  delta=f"{net_final/ca_total*100:.1f}% du CA" if ca_total > 0 else "")
+                  delta=f"{net_final/ca_t4*100:.1f}% du CA" if ca_t4 > 0 else "")
 
-        if ca_total > 0:
+        if ca_t4 > 0:
             fig = go.Figure(go.Waterfall(
                 name="", orientation="v",
                 measure=["absolute", "relative", "relative", "relative", "total"],
                 x=["CA Brut", f"Abattement {abatt_taux*100:.0f}%",
                    "IR estimé", "Cotisations", "Net final"],
-                y=[ca_total, -abatt_m2, -ir_final, -total_num, 0],
+                y=[ca_t4, -abatt_m2, -ir_final, -total_num, 0],
                 connector={"line": {"color": "rgb(63, 63, 63)"}},
                 increasing={"marker": {"color": "#2E7D32"}},
                 decreasing={"marker": {"color": "#C62828"}},
