@@ -175,6 +175,18 @@ def show():
     df_an = df_all[df_all["annee"] == annee] if "annee" in df_all.columns else df_all
     df_an = df_an[df_an["plateforme"] != "Fermeture"].copy()
 
+    # ── Filtre plateforme global ──────────────────────────────────────────
+    plateformes_dispo = sorted(df_an["plateforme"].dropna().unique().tolist())
+    plat_fisc = st.multiselect(
+        "🔀 Filtrer par plateforme",
+        options=plateformes_dispo,
+        default=[],
+        key="fisc_plat",
+        placeholder="Toutes les plateformes"
+    )
+    if plat_fisc:
+        df_an = df_an[df_an["plateforme"].isin(plat_fisc)]
+
     ca_total = float(df_an["prix_brut"].fillna(0).sum()) if "prix_brut" in df_an.columns else 0.0
     # Recettes = CA brut total (ce que le locataire a payé)
     # Pour LMNP le CA déclaré = recettes brutes encaissées
