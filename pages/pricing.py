@@ -295,13 +295,19 @@ def show():
             variation = round((prix_s - prix_base) / prix_base * 100) if prix_base > 0 else 0
             evts_noms = ", ".join([e["nom"] for e in evts_m]) if evts_m else "—"
 
+            nb_jours_m = calendar.monthrange(annee_ref_prix, m)[1]
+            ca_moy_hist  = float(stats_m["ca_net"].iloc[0]) if not stats_m.empty else 0
+            ca_suggere   = round(prix_s * nb_jours_m * taux_hist / 100)
+            sign = "+" if variation >= 0 else ""
             sugg_rows.append({
-                "Mois":          MOIS_LONG[m-1],
-                "Taux occ. hist.": f"{taux_hist:.0f}%",
-                "Rev. moy./nuit": f"{rev_nuit_hist:.0f} €",
-                "Prix suggéré":  f"{prix_s} €",
-                "Variation":     f"{'+' if variation >= 0 else ''}{variation}%",
-                "Événements":    evts_noms,
+                "Mois":              MOIS_LONG[m-1],
+                "Taux occ. hist.":   f"{taux_hist:.0f}%",
+                "Rev. moy./nuit":    f"{rev_nuit_hist:.0f} €",
+                "CA moy. mensuel":   f"{ca_moy_hist:,.0f} €",
+                "Prix suggéré":      f"{prix_s} €",
+                "CA suggéré":        f"{ca_suggere:,.0f} €",
+                "Variation":         f"{sign}{variation}%",
+                "Événements":        evts_noms,
             })
 
         df_sugg = pd.DataFrame(sugg_rows)
