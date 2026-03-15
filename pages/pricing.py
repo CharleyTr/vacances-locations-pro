@@ -157,8 +157,13 @@ def _prix_suggere(prix_base, taux_occ_hist, evenements_mois, taux_occ_actuel):
 
 def _projection_ca(df_prop, tarifs_dict, annee_proj):
     """Projette le CA pour une année basée sur historique + réservations confirmées."""
-    df_conf = df_prop[df_prop["annee"] == annee_proj].copy() if "annee" in df_prop.columns else pd.DataFrame()
-    df_hist = df_prop[df_prop["annee"] < annee_proj].copy() if "annee" in df_prop.columns else pd.DataFrame()
+    df_all = df_prop.copy()
+    df_all["date_arrivee"] = pd.to_datetime(df_all["date_arrivee"])
+    df_all["mois_num"]  = df_all["date_arrivee"].dt.month
+    df_all["annee_num"] = df_all["date_arrivee"].dt.year
+
+    df_conf = df_all[df_all["annee_num"] == annee_proj].copy()
+    df_hist = df_all[df_all["annee_num"] <  annee_proj].copy()
 
     today = date.today()
     rows = []
@@ -169,22 +174,14 @@ def _projection_ca(df_prop, tarifs_dict, annee_proj):
         passe = mois_date < date(today.year, today.month, 1)
         en_cours = mois_date.year == today.year and mois_date.month == today.month
 
-        # CA confirmé (réservations déjà enregistrées ce mois)
-        if not df_conf.empty and "mois" in df_conf.columns:
-            df_m = df_conf[df_conf["mois"] == m]
-        elif not df_conf.empty:
-            df_conf["mois_calc"] = pd.to_datetime(df_conf["date_arrivee"]).dt.month
-            df_m = df_conf[df_conf["mois_calc"] == m]
-        else:
-            df_m = pd.DataFrame()
-
-        ca_confirme  = float(df_m["prix_brut"].fillna(0).sum()) if not df_m.empty and "prix_brut" in df_m.columns else 0
-        nuits_conf   = float(df_m["nuitees"].fillna(0).sum())   if not df_m.empty and "nuitees" in df_m.columns else 0
+        # CA confirmé — réservations de ce mois dans l'année projetée
+        df_m = df_conf[df_conf["mois_num"] == m] if not df_conf.empty else pd.DataFrame()
+        ca_confirme = float(df_m["prix_brut"].fillna(0).sum()) if not df_m.empty and "prix_brut" in df_m.columns else 0
+        nuits_conf  = float(df_m["nuitees"].fillna(0).sum())   if not df_m.empty and "nuitees" in df_m.columns else 0
 
         # Moyenne historique même mois (3 dernières années)
         if not df_hist.empty:
-            df_hist["mois_h"] = pd.to_datetime(df_hist["date_arrivee"]).dt.month
-            df_hist_m = df_hist[df_hist["mois_h"] == m]
+            df_hist_m = df_hist[df_hist["mois_num"] == m]
             annees_hist = sorted(df_hist["annee"].unique())[-3:]
             ca_hist_vals = []
             for ah in annees_hist:
@@ -197,9 +194,8 @@ def _projection_ca(df_prop, tarifs_dict, annee_proj):
         # Taux occupation historique
         nuits_hist = 0
         if not df_hist.empty and "nuitees" in df_hist.columns:
-            df_hist["mois_h"] = pd.to_datetime(df_hist["date_arrivee"]).dt.month
-            nuits_hist = float(df_hist[df_hist["mois_h"] == m]["nuitees"].fillna(0).sum())
-            nb_annees_hist = max(1, len(df_hist["annee"].unique()))
+            nuits_hist = float(df_hist[df_hist["mois_num"] == m]["nuitees"].fillna(0).sum())
+            nb_annees_hist = max(1, len(df_hist["annee_num"].unique()))
             nuits_hist_moy = nuits_hist / nb_annees_hist
             taux_occ_hist = round(nuits_hist_moy / nb_jours * 100, 1)
         else:
