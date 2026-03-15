@@ -184,9 +184,36 @@ def show():
                                    index=1,
                                    key="fisc_class")
         with col3:
-            nb_parts = st.number_input("Quotient familial (parts)",
-                                        min_value=1.0, max_value=5.0, value=1.0,
-                                        step=0.5, key="fisc_parts")
+            situation = st.selectbox("Situation familiale", [
+                "Célibataire / Divorcé (1 part)",
+                "Pacsé / Concubin (1 part chacun)",
+                "Marié sans enfant (2 parts)",
+                "Marié + 1 enfant (2,5 parts)",
+                "Marié + 2 enfants (3 parts)",
+                "Marié + 3 enfants (4 parts)",
+                "Marié + 4 enfants (5 parts)",
+                "Parent isolé + 1 enfant (2 parts)",
+                "Parent isolé + 2 enfants (2,5 parts)",
+                "Personnalisé",
+            ], key="fisc_situation")
+
+            _PARTS_MAP = {
+                "Célibataire / Divorcé (1 part)":       1.0,
+                "Pacsé / Concubin (1 part chacun)":     1.0,
+                "Marié sans enfant (2 parts)":          2.0,
+                "Marié + 1 enfant (2,5 parts)":         2.5,
+                "Marié + 2 enfants (3 parts)":          3.0,
+                "Marié + 3 enfants (4 parts)":          4.0,
+                "Marié + 4 enfants (5 parts)":          5.0,
+                "Parent isolé + 1 enfant (2 parts)":    2.0,
+                "Parent isolé + 2 enfants (2,5 parts)": 2.5,
+            }
+            if situation == "Personnalisé":
+                nb_parts = st.number_input("Nombre de parts",
+                    min_value=0.5, max_value=8.0, value=1.0, step=0.5, key="fisc_parts_custom")
+            else:
+                nb_parts = _PARTS_MAP.get(situation, 1.0)
+                st.caption(f"→ **{nb_parts:.1f} part(s)** fiscale(s)")
         with col4:
             autres_revenus = st.number_input("Autres revenus imposables (€)",
                                               min_value=0, value=0, step=1000,
