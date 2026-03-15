@@ -21,6 +21,7 @@ PAGES = {
     "📝 Modèles msgs":   "Modèles msgs",
     "📊 Export comptable": "Export comptable",
     "🏛️ Fiscal LMNP":      "Fiscal LMNP",
+    "📈 Revenus & Pricing": "Revenus & Pricing",
 }
 
 
