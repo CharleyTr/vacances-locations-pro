@@ -621,8 +621,77 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
             else:
                 st.info("Aucun frais enregistré pour cette propriété.")
 
-        # ── Justificatifs dans sub_recap ─────────────────────────────────
-        # (géré dans le tab Récapitulatif ci-dessous)
+            # ── Justificatifs ─────────────────────────────────────────────
+            st.divider()
+            st.markdown("#### 📎 Justificatifs de dépenses")
+            st.caption("Scannez ou photographiez vos justificatifs et attachez-les à chaque dépense.")
+
+            if prop_id_reel == 0:
+                st.info("Sélectionnez une propriété pour gérer les justificatifs.")
+            elif not frais_list:
+                st.info("Ajoutez des frais dans l'onglet Saisie pour pouvoir attacher des justificatifs.")
+            else:
+                with st.expander("📤 Ajouter un justificatif", expanded=True):
+                    col_f, col_u = st.columns([3, 2])
+                    with col_f:
+                        frais_opts = {f["id"]: f"{f['categorie']} — {f['libelle']} ({f['montant']:.0f} €)"
+                                      for f in frais_list}
+                        frais_sel = st.selectbox("Dépense concernée",
+                                                  list(frais_opts.keys()),
+                                                  format_func=lambda x: frais_opts[x],
+                                                  key="justif_frais_sel")
+                    with col_u:
+                        uploaded = st.file_uploader(
+                            "Fichier (PDF, JPG, PNG)",
+                            type=["pdf","jpg","jpeg","png","heic","webp"],
+                            key="justif_upload"
+                        )
+                    if uploaded:
+                        if st.button("📎 Attacher le justificatif", type="primary", key="btn_attach_justif"):
+                            result = upload_justificatif(
+                                frais_id=frais_sel,
+                                propriete_id=prop_id_reel,
+                                annee=annee,
+                                nom_fichier=uploaded.name,
+                                file_bytes=uploaded.read(),
+                                mime_type=uploaded.type or "application/octet-stream",
+                            )
+                            if result:
+                                st.success(f"✅ « {uploaded.name} » attaché !")
+                                st.rerun()
+                            else:
+                                st.error("Erreur upload — vérifiez le bucket 'justificatifs' dans Supabase Storage.")
+
+                st.markdown("##### 📋 Justificatifs enregistrés")
+                from database.justificatifs_repo import get_justificatifs_prop
+                justifs_all = get_justificatifs_prop(prop_id_reel, annee)
+
+                if not justifs_all:
+                    st.caption("Aucun justificatif pour cette propriété / année.")
+                else:
+                    for j in justifs_all:
+                        frais_info = j.get("frais_deductibles") or {}
+                        frais_label = (f"{frais_info.get('categorie','?')} — "
+                                       f"{frais_info.get('libelle','?')} "
+                                       f"({float(frais_info.get('montant',0)):.0f} €)"
+                                       if frais_info else f"Frais #{j.get('frais_id','?')}")
+                        taille = j.get("taille_bytes", 0) or 0
+                        taille_str = f"{taille/1024:.0f} Ko" if taille < 1024*1024 else f"{taille/1024/1024:.1f} Mo"
+                        col1, col2, col3 = st.columns([4, 2, 1])
+                        with col1:
+                            st.markdown(
+                                f"📄 **{j['nom_fichier']}** — {frais_label}<br>"
+                                f"<small style='color:#888'>{taille_str} · {str(j.get('created_at',''))[:10]}</small>",
+                                unsafe_allow_html=True
+                            )
+                        with col2:
+                            url = get_download_url(j["storage_path"])
+                            if url:
+                                st.link_button("⬇️ Télécharger", url, use_container_width=True)
+                        with col3:
+                            if st.button("🗑️", key=f"del_justif_{j['id']}", help="Supprimer"):
+                                delete_justificatif(j["id"], j["storage_path"])
+                                st.rerun()
 
         # Total pour le calcul
         total_charges_reelles = sum(f["montant"] for f in frais_list) if frais_list else 0.0
