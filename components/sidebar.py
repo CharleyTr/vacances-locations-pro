@@ -79,12 +79,21 @@ def sidebar() -> str:
 
         st.divider()
 
+        # Pages admin uniquement (Villa Tobias)
+        PAGES_ADMIN_ONLY = {"🏠 Propriétés", "📐 Barèmes fiscaux"}
+        is_admin = st.session_state.get("is_admin", False)
+
+        pages_visibles = {
+            k: v for k, v in PAGES.items()
+            if k not in PAGES_ADMIN_ONLY or is_admin
+        }
+
         choice = st.radio(
             "Navigation",
-            list(PAGES.keys()),
+            list(pages_visibles.keys()),
             label_visibility="collapsed",
         )
         st.divider()
         st.caption("v3.0 — 2026")
 
-    return PAGES[choice]
+    return pages_visibles[choice]
