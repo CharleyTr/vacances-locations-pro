@@ -24,30 +24,29 @@ def show():
         )
         st.divider()
 
-    # ── Navigation rapide ─────────────────────────────────────────────────
-    st.markdown("""
-<div style='background:#E3F2FD;border-radius:8px;padding:14px 20px;margin-bottom:1rem'>
-<b>Navigation rapide :</b>
-<a href='#introduction' style='margin:0 8px'>Introduction</a> ·
-<a href='#modules' style='margin:0 8px'>Modules</a> ·
-<a href='#reservations' style='margin:0 8px'>Réservations</a> ·
-<a href='#calendrier' style='margin:0 8px'>Calendrier</a> ·
-<a href='#analyses' style='margin:0 8px'>Analyses</a> ·
-<a href='#messages' style='margin:0 8px'>Messages</a> ·
-<a href='#tarifs' style='margin:0 8px'>Tarifs</a> ·
-<a href='#imports' style='margin:0 8px'>Imports</a> ·
-<a href='#fiscal' style='margin:0 8px'>Fiscal</a> ·
-<a href='#pricing' style='margin:0 8px'>Pricing</a> ·
-<a href='#securite' style='margin:0 8px'>Sécurité</a> ·
-<a href='#config' style='margin:0 8px'>Config</a> ·
-<a href='#faq' style='margin:0 8px'>FAQ</a>
-</div>
-""", unsafe_allow_html=True)
+    # ── Sélecteur de section ─────────────────────────────────────────────
+    SECTIONS = [
+        "1. Introduction",
+        "2. Modules",
+        "3. Réservations",
+        "4. Calendrier",
+        "5. Analyses",
+        "6. Messages & Modèles",
+        "7. Tarifs",
+        "8. Fiscal LMNP",
+        "9. Revenus & Pricing",
+        "10. Sécurité",
+        "11. Configuration",
+        "12. FAQ",
+    ]
+    section = st.selectbox("📑 Aller à la section", SECTIONS, key="doc_section")
+    st.divider()
 
     # ─────────────────────────────────────────────────────────────────────
     # 1. INTRODUCTION
     # ─────────────────────────────────────────────────────────────────────
-    st.markdown('<h2 id="introduction">1. Introduction</h2>', unsafe_allow_html=True)
+    if section == "1. Introduction":
+        st.subheader("1. Introduction")
 
     st.markdown("""
 **Vacances-Locations Pro** est une application web de gestion locative développée avec Streamlit.
@@ -69,7 +68,8 @@ communication clients et tarification.
     # ─────────────────────────────────────────────────────────────────────
     # 2. MODULES
     # ─────────────────────────────────────────────────────────────────────
-    st.markdown('<h2 id="modules">2. Vue d\'ensemble des modules</h2>', unsafe_allow_html=True)
+    if section == "2. Modules":
+        st.subheader("2. Vue d\'ensemble des modules")
 
     modules = [
         ("📊", "Dashboard",          "Tableau de bord : KPIs, alertes, activité récente, calendrier mini"),
@@ -109,7 +109,8 @@ communication clients et tarification.
     # ─────────────────────────────────────────────────────────────────────
     # 3. RÉSERVATIONS
     # ─────────────────────────────────────────────────────────────────────
-    st.markdown('<h2 id="reservations">3. Réservations</h2>', unsafe_allow_html=True)
+    if section == "3. Réservations":
+        st.subheader("3. Réservations")
 
     with st.expander("📋 Liste & Filtres"):
         st.markdown("""
@@ -152,7 +153,8 @@ Un upsert sur le numéro de réservation évite les doublons.
     # ─────────────────────────────────────────────────────────────────────
     # 4. CALENDRIER
     # ─────────────────────────────────────────────────────────────────────
-    st.markdown('<h2 id="calendrier">4. Calendrier</h2>', unsafe_allow_html=True)
+    if section == "4. Calendrier":
+        st.subheader("4. Calendrier")
 
     with st.expander("📅 Vues disponibles"):
         st.markdown("""
@@ -187,7 +189,8 @@ Ces blocs apparaissent en gris et sont exclus des calculs de CA.
     # ─────────────────────────────────────────────────────────────────────
     # 5. ANALYSES
     # ─────────────────────────────────────────────────────────────────────
-    st.markdown('<h2 id="analyses">5. Analyses</h2>', unsafe_allow_html=True)
+    if section == "5. Analyses":
+        st.subheader("5. Analyses")
 
     with st.expander("📊 Bilan annuel"):
         st.markdown("""
@@ -218,7 +221,8 @@ Compare l'année de référence avec les 4 années précédentes, mois par mois 
     # ─────────────────────────────────────────────────────────────────────
     # 6. MESSAGES & MODÈLES
     # ─────────────────────────────────────────────────────────────────────
-    st.markdown('<h2 id="messages">6. Messages & Modèles</h2>', unsafe_allow_html=True)
+    if section == "6. Messages & Modèles":
+        st.subheader("6. Messages & Modèles")
 
     with st.expander("📱 WhatsApp & SMS"):
         st.markdown("""
@@ -259,7 +263,8 @@ Compare l'année de référence avec les 4 années précédentes, mois par mois 
     # ─────────────────────────────────────────────────────────────────────
     # 7. TARIFS
     # ─────────────────────────────────────────────────────────────────────
-    st.markdown('<h2 id="tarifs">7. Tarifs</h2>', unsafe_allow_html=True)
+    if section == "7. Tarifs":
+        st.subheader("7. Tarifs")
 
     with st.expander("💶 Configuration des saisons"):
         st.markdown("""
@@ -278,7 +283,8 @@ Dans « 📊 Visualisation tarifaire » :
     # ─────────────────────────────────────────────────────────────────────
     # 8. FISCAL LMNP
     # ─────────────────────────────────────────────────────────────────────
-    st.markdown('<h2 id="fiscal">8. Fiscal LMNP</h2>', unsafe_allow_html=True)
+    if section == "8. Fiscal LMNP":
+        st.subheader("8. Fiscal LMNP")
 
     st.warning("⚠️ Les calculs sont indicatifs — consultez un expert-comptable pour votre situation réelle.")
 
@@ -332,7 +338,8 @@ Menu 📐 Barèmes fiscaux → onglet « Ajouter / Modifier » :
     # ─────────────────────────────────────────────────────────────────────
     # 9. REVENUS & PRICING
     # ─────────────────────────────────────────────────────────────────────
-    st.markdown('<h2 id="pricing">9. Revenus & Pricing</h2>', unsafe_allow_html=True)
+    if section == "9. Revenus & Pricing":
+        st.subheader("9. Revenus & Pricing")
 
     with st.expander("💡 Pricing dynamique"):
         st.markdown("""
@@ -374,7 +381,8 @@ Pour l'année sélectionnée (12 mois complets) :
     # ─────────────────────────────────────────────────────────────────────
     # 10. SÉCURITÉ
     # ─────────────────────────────────────────────────────────────────────
-    st.markdown('<h2 id="securite">10. Sécurité & Mots de passe</h2>', unsafe_allow_html=True)
+    if section == "10. Sécurité":
+        st.subheader("10. Sécurité & Mots de passe")
 
     with st.expander("🔐 Deux niveaux de protection"):
         st.markdown("""
@@ -396,7 +404,8 @@ Protège l'accès aux données d'un bien spécifique.
     # ─────────────────────────────────────────────────────────────────────
     # 11. CONFIGURATION
     # ─────────────────────────────────────────────────────────────────────
-    st.markdown('<h2 id="config">11. Configuration Technique</h2>', unsafe_allow_html=True)
+    if section == "11. Configuration":
+        st.subheader("11. Configuration Technique")
 
     with st.expander("🔑 Secrets Streamlit Cloud"):
         secrets = [
@@ -450,7 +459,8 @@ Exécutez ces scripts dans l'ordre dans l'éditeur SQL Supabase :
     # ─────────────────────────────────────────────────────────────────────
     # 12. FAQ
     # ─────────────────────────────────────────────────────────────────────
-    st.markdown('<h2 id="faq">12. Questions Fréquentes</h2>', unsafe_allow_html=True)
+    if section == "12. FAQ":
+        st.subheader("12. Questions Fréquentes")
 
     faqs = [
         ("L'application est lente au premier chargement",
