@@ -7,7 +7,8 @@ from datetime import date, timedelta
 from database.proprietes_repo import fetch_all as _fa_props
 from services.auth_service import is_unlocked
 from services.reservation_service import load_reservations
-from services.proprietes_service import get_proprietes_dict, filter_df, get_propriete_selectionnee
+from services.proprietes_service import get_proprietes_dict
+from services.proprietes_service import get_proprietes_autorises, filter_df, get_propriete_selectionnee
 from database.checklist_repo import get_items, save_item, delete_item, get_done, set_done
 from database.supabase_client import is_connected
 
@@ -76,7 +77,7 @@ def _show_planning():
             "Cette semaine", "Ce mois", "Tous à venir", "Historique complet"
         ], key="menage_periode")
     with col2:
-        _props = get_proprietes_dict()
+        _props = get_proprietes_autorises()
         prop_filter = st.multiselect(
             "Propriété",
             options=list(_props.keys()),
@@ -103,7 +104,7 @@ def _show_planning():
     st.subheader(f"📋 {len(df_plan)} intervention(s)")
 
     for prop_id in sorted(df_plan["propriete_id"].unique()):
-        nom_prop = get_proprietes_dict().get(int(prop_id), f"Propriété {prop_id}")
+        nom_prop = get_proprietes_autorises().get(int(prop_id), f"Propriété {prop_id}")
         df_prop  = df_plan[df_plan["propriete_id"] == prop_id]
 
         with st.expander(f"🏠 {nom_prop} — {len(df_prop)} ménage(s)", expanded=True):
@@ -144,7 +145,7 @@ def _show_planning():
     export = df_plan.copy()
     export["date_menage"] = export["date_menage"].dt.strftime("%d/%m/%Y")
     export["propriete"] = export["propriete_id"].map(
-        lambda x: get_proprietes_dict().get(int(x), f"Propriété {x}")
+        lambda x: get_proprietes_autorises().get(int(x), f"Propriété {x}")
     )
     csv = export[["date_menage","propriete","nom_client","prochain_client"]]\
         .to_csv(index=False).encode("utf-8")
