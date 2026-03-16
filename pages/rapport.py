@@ -9,7 +9,8 @@ from datetime import date
 from services.reservation_service import load_reservations
 from services.analytics_service import compute_kpis
 from services.report_service import generate_report
-from services.proprietes_service import get_proprietes_dict, filter_df, get_propriete_selectionnee, get_label
+from services.proprietes_service import get_proprietes_dict
+from services.proprietes_service import get_proprietes_autorises, filter_df, get_propriete_selectionnee, get_label
 
 
 def show():
@@ -27,7 +28,7 @@ def show():
     prop_id   = get_propriete_selectionnee()
     prop_nom  = get_label(prop_id)
     df        = filter_df(df_all)
-    props     = get_proprietes_dict()
+    props     = get_proprietes_autorises()
 
     tab_export, tab_nvn, tab_prev = st.tabs([
         "📥 Export Excel",
