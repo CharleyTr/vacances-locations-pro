@@ -50,10 +50,19 @@ def filter_df(df, prop_id: int = None):
 
 
 def get_proprietes_autorises() -> dict:
-    """Retourne uniquement les propriétés déverrouillées en session."""
+    """
+    Retourne les propriétés accessibles :
+    - Admin (Villa Tobias) : toutes les propriétés
+    - Autre : uniquement la propriété déverrouillée au login
+    """
+    import streamlit as st
     from database.proprietes_repo import fetch_all
     from services.auth_service import is_unlocked
+
+    all_props = fetch_all()
+    if st.session_state.get("is_admin", False):
+        return {p["id"]: p["nom"] for p in all_props}
     return {
-        p["id"]: p["nom"] for p in fetch_all()
+        p["id"]: p["nom"] for p in all_props
         if not p.get("mot_de_passe") or is_unlocked(p["id"])
     }
