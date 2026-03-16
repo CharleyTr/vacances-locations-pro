@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from services.reservation_service import load_reservations
 from database.proprietes_repo import fetch_all
-from database.frais_repo import get_frais, save_frais, delete_frais, CATEGORIES
+from database.frais_repo import get_frais, save_frais, delete_frais, CATEGORIES, IR_RUBRIQUES
 from database.supabase_client import is_connected
 
 # ─── Barèmes fiscaux 2024/2025 ───────────────────────────────────────────────
@@ -464,18 +464,24 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
                     st.markdown("##### Frais enregistrés")
                     df_frais = pd.DataFrame(frais_list)
 
+                    df_frais["rubrique_ir"] = df_frais["categorie"].map(
+                        lambda c: IR_RUBRIQUES.get(c, "—")
+                    )
                     edited_frais = st.data_editor(
-                        df_frais[["id", "categorie", "libelle", "montant"]],
+                        df_frais[["id", "categorie", "libelle", "montant", "rubrique_ir"]],
                         use_container_width=True,
                         hide_index=True,
                         column_config={
-                            "id":        st.column_config.Column("ID", disabled=True, width="small"),
-                            "categorie": st.column_config.SelectboxColumn(
+                            "id":         st.column_config.Column("ID", disabled=True, width="small"),
+                            "categorie":  st.column_config.SelectboxColumn(
                                 "Catégorie", options=CATEGORIES, required=True
                             ),
-                            "libelle":   st.column_config.TextColumn("Libellé", required=True),
-                            "montant":   st.column_config.NumberColumn(
+                            "libelle":    st.column_config.TextColumn("Libellé", required=True),
+                            "montant":    st.column_config.NumberColumn(
                                 "Montant (€)", min_value=0, format="%.2f €"
+                            ),
+                            "rubrique_ir": st.column_config.TextColumn(
+                                "📋 Rubrique déclaration IR", disabled=True, width="large"
                             ),
                         },
                         key="frais_editor"
@@ -545,10 +551,15 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
                 recap_cat = df_recap_frais.groupby("categorie")["montant"].agg(
                     Total="sum", Nb="count"
                 ).reset_index().sort_values("Total", ascending=False)
+                recap_cat["Rubrique IR"] = recap_cat["categorie"].map(
+                    lambda c: IR_RUBRIQUES.get(c, "—")
+                )
+                recap_cat["Total"] = recap_cat["montant_sum"] if "montant_sum" in recap_cat.columns else recap_cat["Total"]
                 recap_cat["Total"] = recap_cat["Total"].map("{:,.2f} €".format)
                 st.dataframe(recap_cat.rename(columns={
-                    "categorie": "Catégorie", "Total": "Total", "Nb": "Nb postes"
-                }), use_container_width=True, hide_index=True)
+                    "categorie": "Catégorie", "Total": "Total €", "Nb": "Nb"
+                })[["Catégorie", "Nb", "Total €", "Rubrique IR"]],
+                use_container_width=True, hide_index=True)
 
                 total_affiche = sum(f["montant"] for f in frais_list)
                 st.metric("💶 Total charges déductibles", f"{total_affiche:,.2f} €")
