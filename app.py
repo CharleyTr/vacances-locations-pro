@@ -175,6 +175,72 @@ st.set_page_config(
 )
 from components.sidebar import sidebar
 
+# ── PAGE D'ACCUEIL / LOGIN GLOBAL ────────────────────────────────────────────
+import hashlib as _hashlib
+
+def _check_global_login(mdp_saisi: str) -> bool:
+    """Vérifie le mot de passe global (stocké dans les Secrets Streamlit)."""
+    import os
+    stored = st.secrets.get("APP_PASSWORD", os.environ.get("APP_PASSWORD", ""))
+    if not stored:
+        return True  # Pas de mot de passe configuré → accès libre
+    # Accepter en clair ou hashé
+    if mdp_saisi == stored:
+        return True
+    return _hashlib.sha256(mdp_saisi.strip().encode()).hexdigest() == stored
+
+if not st.session_state.get("global_logged_in", False):
+    # ── Splash / Login ────────────────────────────────────────────────────
+    st.markdown("""
+    <style>
+    [data-testid="stSidebar"],
+    [data-testid="stSidebarNav"],
+    [data-testid="collapsedControl"],
+    #MainMenu, footer { display: none !important; }
+    .main .block-container { max-width: 520px; margin: 4rem auto; padding: 2rem; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style='text-align:center; padding: 2rem 0 1.5rem 0'>
+        <div style='font-size:64px'>🏖️</div>
+        <h1 style='font-size:2rem; margin:0.5rem 0 0.2rem 0; color:#1565C0'>
+            Vacances-Locations Pro
+        </h1>
+        <p style='color:#555; font-size:1rem; margin:0'>
+            Gestion locative · Bordeaux &amp; Nice
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.form("form_global_login"):
+        mdp_input = st.text_input(
+            "Mot de passe",
+            type="password",
+            placeholder="Entrez le mot de passe d'accès...",
+        )
+        submitted = st.form_submit_button(
+            "🔓 Accéder à l'application",
+            type="primary",
+            use_container_width=True
+        )
+
+    if submitted:
+        if _check_global_login(mdp_input):
+            st.session_state["global_logged_in"] = True
+            st.rerun()
+        else:
+            st.error("❌ Mot de passe incorrect.")
+
+    st.markdown("""
+    <div style='text-align:center; margin-top:3rem; color:#9E9E9E; font-size:0.8rem'>
+        Développé par <strong>Charley Trigano</strong> — 2026<br>
+        <span style='font-size:0.75rem'>© Tous droits réservés</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.stop()
+
 
 from pages import dashboard, reservations, calendar, analytics, gaps
 
