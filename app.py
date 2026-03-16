@@ -241,6 +241,10 @@ try:
     from pages import pricing
 except ImportError:
     pricing = None
+try:
+    from pages import baremes
+except ImportError:
+    baremes = None
 
 try:
     from pages import questionnaire
@@ -268,4 +272,5 @@ elif page == "Modèles msgs":  templates.show()      if templates      else st.e
 elif page == "Export comptable": export_comptable.show() if export_comptable else st.error("Uploadez pages/export_comptable.py")
 elif page == "Fiscal LMNP":      fiscal.show()           if fiscal          else st.error("Uploadez pages/fiscal.py")
 elif page == "Revenus & Pricing": pricing.show()          if pricing         else st.error("Uploadez pages/pricing.py")
+elif page == "Barèmes fiscaux":   baremes.show()          if baremes         else st.error("Uploadez pages/baremes.py")
 elif page == "Questionnaire": questionnaire.show() if questionnaire else st.error("Uploadez pages/questionnaire.py")
