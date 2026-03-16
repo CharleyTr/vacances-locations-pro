@@ -563,6 +563,53 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
 
                 total_affiche = sum(f["montant"] for f in frais_list)
                 st.metric("💶 Total charges déductibles", f"{total_affiche:,.2f} €")
+
+                st.divider()
+                st.markdown("#### 📑 Récapitulatif par ligne de déclaration 2033-B")
+                st.caption("Montants à reporter sur votre formulaire 2033-B (régime réel simplifié LMNP)")
+
+                # Regrouper par ligne IR
+                from collections import defaultdict
+                lignes = defaultdict(float)
+                for f in frais_list:
+                    rubrique = IR_RUBRIQUES.get(f["categorie"], "Ligne 258 — Autres charges")
+                    # Extraire le numéro de ligne pour le tri
+                    lignes[rubrique] += float(f["montant"])
+
+                # Construire le tableau trié par numéro de ligne
+                lignes_rows = []
+                for rubrique, total in sorted(lignes.items(), key=lambda x: x[0]):
+                    # Extraire numéro de ligne (ex: "2033-B Ligne 236" → 236)
+                    try:
+                        num = int(rubrique.split("Ligne ")[1].split(" ")[0].split("/")[0].strip())
+                    except:
+                        num = 999
+                    lignes_rows.append({
+                        "_sort": num,
+                        "Ligne formulaire": rubrique.split(" — ")[0],
+                        "Intitulé": rubrique.split(" — ")[1] if " — " in rubrique else rubrique,
+                        "Montant à reporter": total,
+                    })
+
+                lignes_rows.sort(key=lambda x: x["_sort"])
+                df_lignes = pd.DataFrame(lignes_rows).drop(columns=["_sort"])
+                df_lignes["Montant à reporter"] = df_lignes["Montant à reporter"].map("{:,.2f} €".format)
+
+                # Ligne total
+                total_row_ir = pd.DataFrame([{
+                    "Ligne formulaire": "**TOTAL**",
+                    "Intitulé": "Total charges déductibles",
+                    "Montant à reporter": f"{total_affiche:,.2f} €",
+                }])
+                df_lignes = pd.concat([df_lignes, total_row_ir], ignore_index=True)
+
+                st.dataframe(df_lignes, use_container_width=True, hide_index=True)
+                st.info(
+                    "💡 **Ligne 250** = amortissements annuels (tableau d'amortissement obligatoire) · "
+                    "**Ligne 236** = charges d'exploitation courantes · "
+                    "**Ligne 240** = impôts et taxes (taxe foncière, CFE) · "
+                    "**Ligne 256** = intérêts d'emprunt"
+                )
             else:
                 st.info("Aucun frais enregistré pour cette propriété.")
 
