@@ -6,6 +6,15 @@ import pandas as pd
 from datetime import date, timedelta
 from services.reservation_service import load_reservations
 from services.proprietes_service import get_proprietes_dict
+from database.proprietes_repo import fetch_all as _fetch_all_props
+from services.auth_service import is_unlocked
+
+def _get_props_autorises() -> dict:
+    """Retourne uniquement les propriétés déverrouillées."""
+    return {
+        p["id"]: p["nom"] for p in _fetch_all_props()
+        if not p.get("mot_de_passe") or is_unlocked(p["id"])
+    }
 from services.import_service import import_csv_file, preview_csv
 from database.supabase_client import is_connected
 import database.reservations_repo as repo
@@ -50,6 +59,12 @@ def _show_liste():
     if df.empty:
         st.warning("Aucune réservation disponible.")
         return
+    # Restreindre aux propriétés autorisées
+    _autorises = list(_get_props_autorises().keys())
+    df = df[df["propriete_id"].isin(_autorises)]
+    if df.empty:
+        st.warning("Aucune réservation disponible pour vos propriétés.")
+        return
 
     with st.expander("🔍 Filtres", expanded=True):
         # Recherche par nom — en premier, bien visible
@@ -71,7 +86,7 @@ def _show_liste():
         with col3:
             statut_paye = st.selectbox("Paiement", ["Tous", "Payés", "En attente"], key="filt_paye")
         with col4:
-            _props = get_proprietes_dict()
+            _props = _get_props_autorises()
             prop_labels  = ["Toutes"] + list(_props.values())
             prop_choix   = st.selectbox("Propriété", prop_labels, key="filt_prop")
 
@@ -140,8 +155,8 @@ def _show_formulaire_ajout():
             st.markdown("**🏠 Séjour**")
             propriete_id = st.selectbox(
                 "Propriété *",
-                options=list(get_proprietes_dict().keys()),
-                format_func=lambda x: get_proprietes_dict()[x]
+                options=list(_get_props_autorises().keys()),
+                format_func=lambda x: _get_props_autorises()[x]
             )
             plateforme = st.selectbox("Plateforme *", PLATEFORMES)
             date_arrivee = st.date_input("Date d'arrivée *", value=date.today())
@@ -229,6 +244,8 @@ def _show_formulaire_modifier():
     if df.empty:
         st.warning("Aucune réservation disponible.")
         return
+    _autorises = list(_get_props_autorises().keys())
+    df = df[df["propriete_id"].isin(_autorises)]
 
     # Recherche par nom avant le selectbox
     search_mod = st.text_input("🔎 Rechercher un client", placeholder="Tapez un nom...", key="mod_search")
@@ -274,8 +291,8 @@ def _show_formulaire_modifier():
             st.markdown("**🏠 Séjour**")
             propriete_id = st.selectbox(
                 "Propriété *",
-                options=list(get_proprietes_dict().keys()),
-                format_func=lambda x: get_proprietes_dict()[x],
+                options=list(_get_props_autorises().keys()),
+                format_func=lambda x: _get_props_autorises()[x],
                 index=list(get_proprietes_dict().keys()).index(int(row.get("propriete_id", 1)))
                       if int(row.get("propriete_id", 1)) in get_proprietes_dict() else 0
             )
