@@ -14,6 +14,7 @@ import json
 import os
 from services.reservation_service import load_reservations
 from services.analytics_service import compute_monthly
+from services.auth_service import is_unlocked
 from database.proprietes_repo import fetch_all, fetch_dict
 from database.pricing_repo import (
     get_evenements, save_evenement, delete_evenement,
@@ -246,6 +247,10 @@ def show():
         st.warning("Aucune réservation disponible.")
         return
     df_all["propriete_id"] = df_all["propriete_id"].fillna(0).astype(int)
+    # Accès limité aux propriétés déverrouillées
+    from database.proprietes_repo import fetch_all as _fa
+    _autorises = [p["id"] for p in _fa() if not p.get("mot_de_passe") or is_unlocked(p["id"])]
+    df_all = df_all[df_all["propriete_id"].isin(_autorises)]
     df_prop = df_all[df_all["propriete_id"] == prop_id].copy()
     if "annee" not in df_prop.columns:
         df_prop["annee"] = pd.to_datetime(df_prop["date_arrivee"]).dt.year
