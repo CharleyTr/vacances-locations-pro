@@ -4,6 +4,8 @@ Page Messages - Email (Brevo) + SMS (Brevo) + WhatsApp (wa.me / Twilio)
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
+from database.proprietes_repo import fetch_all as _fa_props
+from services.auth_service import is_unlocked
 from services.reservation_service import load_reservations
 from services.messaging_service import (
     send_confirmation, send_checkin_reminder,
@@ -25,6 +27,9 @@ def show():
     st.title("📧 Messages & Notifications")
 
     df = load_reservations()
+    if not df.empty:
+        _auth = [p["id"] for p in _fa_props() if not p.get("mot_de_passe") or is_unlocked(p["id"])]
+        df = df[df["propriete_id"].isin(_auth)]
     if df.empty:
         st.info("Aucune réservation disponible.")
         return
