@@ -52,13 +52,27 @@ def sidebar() -> str:
         # key="prop_id" → Streamlit écrit DIRECTEMENT la valeur sélectionnée
         # (l'un des options_ids) dans st.session_state["prop_id"]
         # Pas de index=, pas de callback, pas de rerun — Streamlit gère tout seul
-        st.selectbox(
-            "prop_sidebar",
-            options=options_ids,
-            format_func=lambda x: options_labels[options_ids.index(x)],
-            key="prop_id",
-            label_visibility="collapsed",
-        )
+        # Non-admin : forcer la propriété déverrouillée, désactiver la sélection
+        _forced = st.session_state.get("_forced_prop_id")
+        _is_admin_sidebar = st.session_state.get("is_admin", False)
+
+        if _forced and not _is_admin_sidebar and _forced in options_ids:
+            # Afficher juste le nom sans selectbox
+            idx_forced = options_ids.index(_forced)
+            st.markdown(f"**{options_labels[idx_forced]}**")
+            # Synchroniser sans toucher au widget
+            if st.session_state.get("prop_id") != _forced:
+                st.session_state["prop_id"] = _forced
+        else:
+            st.selectbox(
+                "prop_sidebar",
+                options=options_ids if _is_admin_sidebar else
+                        [i for i in options_ids if i == 0 or
+                         st.session_state.get(f"unlocked_{i}", False)],
+                format_func=lambda x: options_labels[options_ids.index(x)],
+                key="prop_id",
+                label_visibility="collapsed",
+            )
 
         current = st.session_state.get("prop_id", 0)
         if current and current != 0:
