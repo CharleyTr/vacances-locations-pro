@@ -4,6 +4,8 @@ Page Paiements — Suivi complet des paiements, acomptes, soldes.
 import streamlit as st
 import pandas as pd
 from datetime import date
+from database.proprietes_repo import fetch_all as _fa_props
+from services.auth_service import is_unlocked
 from services.reservation_service import load_reservations
 from services.proprietes_service import get_proprietes_dict, filter_df, get_propriete_selectionnee
 from database.supabase_client import is_connected
@@ -16,6 +18,8 @@ def show():
     st.title("💳 Suivi des paiements")
 
     df_all = load_reservations()
+    _auth = [p["id"] for p in _fa_props() if not p.get("mot_de_passe") or is_unlocked(p["id"])]
+    df_all = df_all[df_all["propriete_id"].isin(_auth)]
     df = filter_df(df_all)
     if df.empty:
         st.info("Aucune réservation disponible.")
