@@ -5,6 +5,7 @@ import streamlit as st
 from database.proprietes_repo import (
     fetch_all, insert_propriete, update_propriete, delete_propriete
 )
+from services.auth_service import set_password, remove_password
 from database.supabase_client import is_connected
 
 
@@ -67,6 +68,40 @@ def show():
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erreur : {e}")
+
+    st.divider()
+
+    # ── Gestion des mots de passe ─────────────────────────────────────────
+    st.subheader("🔐 Mots de passe par propriété")
+    st.caption("Protégez l'accès à chaque appartement. Le mot de passe sera demandé à la sélection.")
+
+    props_list = fetch_all()
+    for p in props_list:
+        col1, col2, col3 = st.columns([2, 2, 1])
+        with col1:
+            st.markdown(f"**{p['nom']}**")
+            if p.get("mot_de_passe"):
+                st.caption("🔒 Mot de passe configuré")
+            else:
+                st.caption("🔓 Aucun mot de passe")
+        with col2:
+            new_mdp = st.text_input(
+                "Nouveau mot de passe",
+                type="password",
+                placeholder="Laisser vide = pas de protection",
+                key=f"mdp_{p['id']}"
+            )
+        with col3:
+            st.markdown("&nbsp;", unsafe_allow_html=True)
+            if st.button("💾 Appliquer", key=f"save_mdp_{p['id']}"):
+                if new_mdp.strip():
+                    if set_password(p["id"], new_mdp.strip()):
+                        st.success(f"✅ Mot de passe défini pour {p['nom']}")
+                        st.rerun()
+                else:
+                    if remove_password(p["id"]):
+                        st.success(f"🔓 Mot de passe supprimé pour {p['nom']}")
+                        st.rerun()
 
     st.divider()
 
