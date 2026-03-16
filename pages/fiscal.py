@@ -10,6 +10,7 @@ import plotly.express as px
 from services.reservation_service import load_reservations
 from database.proprietes_repo import fetch_all
 from database.frais_repo import get_frais, save_frais, delete_frais, CATEGORIES, IR_RUBRIQUES
+from database.baremes_repo import get_bareme, bareme_to_dict
 from database.supabase_client import is_connected
 
 # ─── Barèmes fiscaux 2024/2025 ───────────────────────────────────────────────
@@ -222,7 +223,9 @@ def show():
                                               key="fisc_autres",
                                               help="Salaires, pensions, autres BIC...")
 
-    b = BAREMES.get(annee, BAREMES[2025])
+    # Charger barème depuis DB (priorité) avec fallback sur code
+    _db_bareme = get_bareme(int(annee))
+    b = bareme_to_dict(_db_bareme) if _db_bareme else BAREMES.get(int(annee), BAREMES[2025])
     classe = "Classé" in classement or "Gîte" in classement
     seuil_applicable = b["micro_bic_classe_seuil"] if classe else b["micro_bic_non_classe_seuil"]
     abatt_taux = b["abattement_classe"] if classe else b["abattement_non_classe"]
