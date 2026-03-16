@@ -6,6 +6,7 @@ from datetime import date
 from services.reservation_service import load_reservations
 from services.export_comptable_service import generate_export
 from services.analytics_service import compute_kpis
+from services.auth_service import is_unlocked
 from database.proprietes_repo import fetch_all
 
 
@@ -43,6 +44,10 @@ def show():
         return
 
     df_all["propriete_id"] = df_all["propriete_id"].fillna(0).astype(int)
+    # Accès limité aux propriétés déverrouillées
+    from database.proprietes_repo import fetch_all as _fa
+    _autorises = [p["id"] for p in _fa() if not p.get("mot_de_passe") or is_unlocked(p["id"])]
+    df_all = df_all[df_all["propriete_id"].isin(_autorises)]
     df_prop = df_all[df_all["propriete_id"] == prop_id]
     df_an   = df_prop[df_prop["annee"] == annee] if "annee" in df_prop.columns else df_prop
     prop_nom = props_dict.get(prop_id, "Toutes les propriétés")
