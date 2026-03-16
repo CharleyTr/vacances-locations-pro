@@ -253,6 +253,18 @@ except ImportError:
 
 page = sidebar()
 
+# ── Vérification mot de passe propriété ──────────────────────────────────────
+from services.auth_service import require_auth
+from database.proprietes_repo import fetch_all as _fetch_props
+_prop_id_current = st.session_state.get("prop_id", 0)
+if _prop_id_current and _prop_id_current != 0:
+    _props_all = {p["id"]: p for p in _fetch_props()}
+    _prop_data = _props_all.get(_prop_id_current, {})
+    _mdp_hash  = _prop_data.get("mot_de_passe")
+    _prop_nom  = _prop_data.get("nom", "")
+    if not require_auth(_prop_id_current, _prop_nom, _mdp_hash):
+        st.stop()
+
 if page == "Dashboard":       dashboard.show()
 elif page == "Réservations":  reservations.show()
 elif page == "Calendrier":    calendar.show()
