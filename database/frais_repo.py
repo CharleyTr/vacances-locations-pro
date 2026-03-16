@@ -18,6 +18,23 @@ CATEGORIES = [
     "Frais divers",
 ]
 
+# Correspondance catégorie → rubrique déclaration LMNP réel simplifié
+# Formulaire 2031 + annexe 2033-B (Compte de résultat simplifié)
+IR_RUBRIQUES = {
+    "Amortissements":          "2033-B Ligne 250 — Dotations aux amortissements",
+    "Travaux & réparations":   "2033-B Ligne 236 — Autres achats et charges externes",
+    "Frais de gestion / Compta": "2033-B Ligne 236 — Autres achats et charges externes",
+    "Assurances":              "2033-B Ligne 236 — Autres achats et charges externes",
+    "Charges de copropriété":  "2033-B Ligne 236 — Autres achats et charges externes",
+    "Intérêts d'emprunt":      "2033-B Ligne 256 — Charges financières",
+    "Taxe foncière":           "2033-B Ligne 240 — Impôts et taxes",
+    "Frais de ménage":         "2033-B Ligne 236 — Autres achats et charges externes",
+    "Frais de plateforme":     "2033-B Ligne 236 — Autres achats et charges externes",
+    "Abonnements & services":  "2033-B Ligne 236 — Autres achats et charges externes",
+    "Équipements & mobilier":  "2033-B Ligne 250 — Dotations amort. (si >500€) / Ligne 236 si <500€",
+    "Frais divers":            "2033-B Ligne 258 — Autres charges",
+}
+
 def get_frais(propriete_id: int, annee: int) -> list:
     sb = get_supabase()
     if sb is None:
