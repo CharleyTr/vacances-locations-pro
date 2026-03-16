@@ -47,3 +47,13 @@ def filter_df(df, prop_id: int = None):
         return df
 
     return df[df["propriete_id"] == prop_id]
+
+
+def get_proprietes_autorises() -> dict:
+    """Retourne uniquement les propriétés déverrouillées en session."""
+    from database.proprietes_repo import fetch_all
+    from services.auth_service import is_unlocked
+    return {
+        p["id"]: p["nom"] for p in fetch_all()
+        if not p.get("mot_de_passe") or is_unlocked(p["id"])
+    }
