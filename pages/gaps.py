@@ -1,4 +1,6 @@
 import streamlit as st
+from database.proprietes_repo import fetch_all as _fa_gaps
+from services.auth_service import is_unlocked
 from services.reservation_service import load_reservations
 from services.gap_service import detect_gaps
 from services.opportunity_service import booking_opportunities
@@ -9,6 +11,8 @@ def show():
     st.title("🕳️ Créneaux libres & Opportunités")
 
     df = load_reservations()
+    _auth_gaps = [p['id'] for p in _fa_gaps() if not p.get('mot_de_passe') or is_unlocked(p['id'])]
+    df = df[df['propriete_id'].isin(_auth_gaps)] if 'propriete_id' in df.columns else df
     if df.empty:
         st.info("Aucune réservation disponible.")
         return
