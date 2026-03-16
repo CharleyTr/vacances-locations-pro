@@ -369,14 +369,19 @@ page = sidebar()
 # Les admins ont accès à tout, les autres uniquement à leur propriété
 _is_admin = st.session_state.get("is_admin", False)
 if not _is_admin:
-    # Forcer la propriété vers celle déverrouillée (empêcher le changement via sidebar)
+    # Pour les non-admins : s'assurer que prop_id est bien leur propriété
     from database.proprietes_repo import fetch_all as _fetch_props
     _props_unlocked = [p["id"] for p in _fetch_props()
                        if st.session_state.get(f"unlocked_{p['id']}", False)]
     if _props_unlocked:
-        _sid_prop = st.session_state.get("prop_id", _props_unlocked[0])
-        if _sid_prop not in _props_unlocked:
-            st.session_state["prop_id"] = _props_unlocked[0]
+        # Utiliser une clé différente pour ne pas conflicter avec le widget sidebar
+        _current = st.session_state.get("prop_id", _props_unlocked[0])
+        if _current not in _props_unlocked:
+            # Forcer via rerun après avoir stocké dans une clé intermédiaire
+            st.session_state["_forced_prop_id"] = _props_unlocked[0]
+            st.rerun()
+        elif st.session_state.get("_forced_prop_id"):
+            st.session_state.pop("_forced_prop_id", None)
 
 if page == "Dashboard":       dashboard.show()
 elif page == "Réservations":  reservations.show()
