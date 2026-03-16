@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from services.reservation_service import load_reservations
 from database.proprietes_repo import fetch_all
+from services.auth_service import is_unlocked
 from database.frais_repo import get_frais, save_frais, delete_frais, CATEGORIES, IR_RUBRIQUES
 from database.baremes_repo import get_bareme, bareme_to_dict
 from database.supabase_client import is_connected
@@ -236,7 +237,10 @@ def show():
 
     # ── Chargement données ────────────────────────────────────────────────
     df_all = load_reservations()
-    props  = {p["id"]: p for p in fetch_all()}
+    props  = {
+        p["id"]: p for p in fetch_all()
+        if not p.get("mot_de_passe") or is_unlocked(p["id"])
+    }
 
     if df_all.empty:
         st.warning("Aucune réservation disponible.")
