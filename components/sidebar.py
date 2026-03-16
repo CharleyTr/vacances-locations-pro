@@ -1,6 +1,8 @@
 import streamlit as st
 from database.supabase_client import is_connected, get_connection_error
 from services.proprietes_service import get_proprietes_dict
+from database.proprietes_repo import fetch_all
+from services.auth_service import is_unlocked, lock
 
 PAGES = {
     "📊 Dashboard":      "Dashboard",
@@ -59,7 +61,20 @@ def sidebar() -> str:
 
         current = st.session_state.get("prop_id", 0)
         if current and current != 0:
-            st.caption(f"📍 {props.get(current, '')}")
+            # Vérifier si mot de passe configuré
+            props_full = {p["id"]: p for p in fetch_all()}
+            mdp_hash = props_full.get(current, {}).get("mot_de_passe")
+            if mdp_hash:
+                if is_unlocked(current):
+                    col_cap, col_lock = st.columns([3,1])
+                    col_cap.caption(f"📍 {props.get(current, '')}")
+                    if col_lock.button("🔒", key="btn_lock", help="Verrouiller"):
+                        lock(current)
+                        st.rerun()
+                else:
+                    st.caption(f"🔐 {props.get(current, '')} — *verrouillé*")
+            else:
+                st.caption(f"📍 {props.get(current, '')}")
 
         st.divider()
 
