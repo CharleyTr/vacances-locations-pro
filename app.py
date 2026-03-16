@@ -175,71 +175,93 @@ st.set_page_config(
 )
 from components.sidebar import sidebar
 
-# ── PAGE D'ACCUEIL / LOGIN GLOBAL ────────────────────────────────────────────
+# ── PAGE D'ACCUEIL — LOGIN PAR PROPRIÉTÉ ─────────────────────────────────────
 import hashlib as _hashlib
 
-def _check_global_login(mdp_saisi: str) -> bool:
-    """Vérifie le mot de passe global (stocké dans les Secrets Streamlit)."""
-    import os
-    stored = st.secrets.get("APP_PASSWORD", os.environ.get("APP_PASSWORD", ""))
-    if not stored:
-        return True  # Pas de mot de passe configuré → accès libre
-    # Accepter en clair ou hashé
-    if mdp_saisi == stored:
-        return True
-    return _hashlib.sha256(mdp_saisi.strip().encode()).hexdigest() == stored
+def _hash_mdp(mdp: str) -> str:
+    return _hashlib.sha256(mdp.strip().encode()).hexdigest()
 
-if not st.session_state.get("global_logged_in", False):
-    # ── Splash / Login ────────────────────────────────────────────────────
+def _show_splash_login():
+    """Page de login : sélection propriété + mot de passe unique."""
+    from database.proprietes_repo import fetch_all as _fetch_props
+
     st.markdown("""
     <style>
     [data-testid="stSidebar"],
     [data-testid="stSidebarNav"],
     [data-testid="collapsedControl"],
     #MainMenu, footer { display: none !important; }
-    .main .block-container { max-width: 520px; margin: 4rem auto; padding: 2rem; }
+    .main .block-container { max-width: 480px; margin: 3rem auto; padding: 2rem; }
     </style>
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div style='text-align:center; padding: 2rem 0 1.5rem 0'>
-        <div style='font-size:64px'>🏖️</div>
-        <h1 style='font-size:2rem; margin:0.5rem 0 0.2rem 0; color:#1565C0'>
+    <div style='text-align:center; padding:1.5rem 0 1rem 0'>
+        <div style='font-size:60px'>🏖️</div>
+        <h1 style='font-size:1.9rem; margin:0.4rem 0 0.2rem 0; color:#1565C0'>
             Vacances-Locations Pro
         </h1>
-        <p style='color:#555; font-size:1rem; margin:0'>
+        <p style='color:#666; font-size:0.95rem; margin:0'>
             Gestion locative · Bordeaux &amp; Nice
         </p>
     </div>
     """, unsafe_allow_html=True)
 
-    with st.form("form_global_login"):
+    props = [p for p in _fetch_props() if p.get("actif")]
+    props_sans_mdp = [p for p in props if not p.get("mot_de_passe")]
+
+    # Si aucune propriété n'a de mot de passe → accès direct
+    if not props or all(not p.get("mot_de_passe") for p in props):
+        st.session_state["global_logged_in"] = True
+        st.rerun()
+        return
+
+    with st.form("form_prop_login"):
+        prop_options = {p["id"]: p["nom"] for p in props}
+        prop_id_sel = st.selectbox(
+            "🏠 Propriété",
+            options=list(prop_options.keys()),
+            format_func=lambda x: prop_options[x],
+        )
         mdp_input = st.text_input(
-            "Mot de passe",
+            "🔑 Mot de passe",
             type="password",
-            placeholder="Entrez le mot de passe d'accès...",
+            placeholder="Entrez le mot de passe...",
         )
         submitted = st.form_submit_button(
-            "🔓 Accéder à l'application",
+            "🔓 Accéder",
             type="primary",
             use_container_width=True
         )
 
     if submitted:
-        if _check_global_login(mdp_input):
+        prop_data = next((p for p in props if p["id"] == prop_id_sel), None)
+        stored_hash = prop_data.get("mot_de_passe") if prop_data else None
+
+        if not stored_hash:
+            # Propriété sans mot de passe → accès direct
             st.session_state["global_logged_in"] = True
+            st.session_state["prop_id"] = prop_id_sel
+            st.session_state[f"unlocked_{prop_id_sel}"] = True
+            st.rerun()
+        elif _hash_mdp(mdp_input) == stored_hash or mdp_input == stored_hash:
+            st.session_state["global_logged_in"] = True
+            st.session_state["prop_id"] = prop_id_sel
+            st.session_state[f"unlocked_{prop_id_sel}"] = True
             st.rerun()
         else:
             st.error("❌ Mot de passe incorrect.")
 
     st.markdown("""
-    <div style='text-align:center; margin-top:3rem; color:#9E9E9E; font-size:0.8rem'>
+    <div style='text-align:center; margin-top:2.5rem; color:#AAAAAA; font-size:0.78rem'>
         Développé par <strong>Charley Trigano</strong> — 2026<br>
-        <span style='font-size:0.75rem'>© Tous droits réservés</span>
+        <span style='font-size:0.72rem'>© Tous droits réservés</span>
     </div>
     """, unsafe_allow_html=True)
-
     st.stop()
+
+if not st.session_state.get("global_logged_in", False):
+    _show_splash_login()
 
 
 from pages import dashboard, reservations, calendar, analytics, gaps
@@ -323,7 +345,7 @@ except ImportError:
 
 page = sidebar()
 
-# ── Vérification mot de passe propriété ──────────────────────────────────────
+# ── Vérification mot de passe propriété (changement depuis la sidebar) ───────
 from services.auth_service import require_auth
 from database.proprietes_repo import fetch_all as _fetch_props
 _prop_id_current = st.session_state.get("prop_id", 0)
@@ -332,8 +354,11 @@ if _prop_id_current and _prop_id_current != 0:
     _prop_data = _props_all.get(_prop_id_current, {})
     _mdp_hash  = _prop_data.get("mot_de_passe")
     _prop_nom  = _prop_data.get("nom", "")
-    if not require_auth(_prop_id_current, _prop_nom, _mdp_hash):
-        st.stop()
+    # Vérifier seulement si la propriété vient d'être changée dans la sidebar
+    # (pas si elle a été déverrouillée au login)
+    if _mdp_hash and not st.session_state.get(f"unlocked_{_prop_id_current}", False):
+        if not require_auth(_prop_id_current, _prop_nom, _mdp_hash):
+            st.stop()
 
 if page == "Dashboard":       dashboard.show()
 elif page == "Réservations":  reservations.show()
