@@ -4,6 +4,8 @@ Page Menage - Planning des interventions + Checklist par propriete.
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
+from database.proprietes_repo import fetch_all as _fa_props
+from services.auth_service import is_unlocked
 from services.reservation_service import load_reservations
 from services.proprietes_service import get_proprietes_dict, filter_df, get_propriete_selectionnee
 from database.checklist_repo import get_items, save_item, delete_item, get_done, set_done
@@ -40,6 +42,8 @@ def show():
 
 def _show_planning():
     df_all = load_reservations()
+    _auth = [p["id"] for p in _fa_props() if not p.get("mot_de_passe") or is_unlocked(p["id"])]
+    df_all = df_all[df_all["propriete_id"].isin(_auth)]
     df = filter_df(df_all)
     if df.empty:
         st.info("Aucune réservation disponible.")
