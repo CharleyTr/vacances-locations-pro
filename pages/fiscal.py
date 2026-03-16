@@ -514,6 +514,43 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
 
                 st.divider()
 
+                # ── Upload justificatif rapide en face de chaque frais ────────
+                st.markdown("##### 📎 Attacher un justificatif")
+                col_jf, col_ju = st.columns([3, 2])
+                with col_jf:
+                    frais_opts_s = {f["id"]: f"{f['categorie']} — {f['libelle']} ({f['montant']:.0f} €)"
+                                    for f in frais_list}
+                    justif_frais_id = st.selectbox(
+                        "Dépense concernée",
+                        list(frais_opts_s.keys()),
+                        format_func=lambda x: frais_opts_s[x],
+                        key="justif_frais_quick"
+                    )
+                with col_ju:
+                    justif_file = st.file_uploader(
+                        "📸 Photo ou scan (PDF, JPG, PNG)",
+                        type=["pdf","jpg","jpeg","png","heic","webp"],
+                        key="justif_upload_quick",
+                        label_visibility="visible"
+                    )
+                if justif_file:
+                    if st.button("📎 Attacher ce justificatif", type="primary", key="btn_justif_quick"):
+                        result = upload_justificatif(
+                            frais_id=justif_frais_id,
+                            propriete_id=prop_id_reel,
+                            annee=annee,
+                            nom_fichier=justif_file.name,
+                            file_bytes=justif_file.read(),
+                            mime_type=justif_file.type or "application/octet-stream",
+                        )
+                        if result:
+                            st.success(f"✅ Justificatif « {justif_file.name} » enregistré !")
+                            st.rerun()
+                        else:
+                            st.error("❌ Erreur — vérifiez que le bucket 'justificatifs' est créé dans Supabase Storage.")
+
+                st.divider()
+
                 # Formulaire ajout nouveau frais
                 st.markdown("##### ➕ Ajouter un frais")
                 with st.form("form_add_frais", clear_on_submit=True):
