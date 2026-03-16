@@ -182,8 +182,14 @@ def _hash_mdp(mdp: str) -> str:
     return _hashlib.sha256(mdp.strip().encode()).hexdigest()
 
 def _show_splash_login():
-    """Page de login : sélection propriété + mot de passe unique."""
+    """
+    Login par code PIN numérique uniquement.
+    - Chaque propriété a un code PIN (mot de passe numérique)
+    - Villa Tobias = administrateur (accès total à toutes les propriétés)
+    - Aucune liste de propriétés affichée → confidentialité totale
+    """
     from database.proprietes_repo import fetch_all as _fetch_props
+    import os
 
     st.markdown("""
     <style>
@@ -191,42 +197,40 @@ def _show_splash_login():
     [data-testid="stSidebarNav"],
     [data-testid="collapsedControl"],
     #MainMenu, footer { display: none !important; }
-    .main .block-container { max-width: 480px; margin: 3rem auto; padding: 2rem; }
+    .main .block-container { max-width: 420px; margin: 3rem auto; padding: 2rem; }
     </style>
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div style='text-align:center; padding:1.5rem 0 1rem 0'>
-        <div style='font-size:60px'>🏖️</div>
-        <h1 style='font-size:1.9rem; margin:0.4rem 0 0.2rem 0; color:#1565C0'>
+    <div style='text-align:center; padding:1.5rem 0 1.5rem 0'>
+        <div style='font-size:64px'>🏖️</div>
+        <h1 style='font-size:2rem; margin:0.5rem 0 0.2rem 0; color:#1565C0'>
             Vacances-Locations Pro
         </h1>
-        <p style='color:#666; font-size:0.95rem; margin:0'>
-            Gestion locative · Bordeaux &amp; Nice
+        <p style='color:#666; font-size:0.9rem; margin:0'>
+            Gestion locative
         </p>
     </div>
     """, unsafe_allow_html=True)
 
     props = [p for p in _fetch_props() if p.get("actif")]
-    props_sans_mdp = [p for p in props if not p.get("mot_de_passe")]
 
-    # Si aucune propriété n'a de mot de passe → accès direct
+    # Si aucune propriété n'a de mot de passe → accès direct admin
     if not props or all(not p.get("mot_de_passe") for p in props):
         st.session_state["global_logged_in"] = True
+        st.session_state["is_admin"] = True
         st.rerun()
         return
 
-    with st.form("form_prop_login"):
-        prop_options = {p["id"]: p["nom"] for p in props}
-        prop_id_sel = st.selectbox(
-            "🏠 Propriété",
-            options=list(prop_options.keys()),
-            format_func=lambda x: prop_options[x],
-        )
-        mdp_input = st.text_input(
-            "🔑 Mot de passe",
+    # ID admin = propriété marquée admin dans les secrets, ou Villa Tobias par défaut
+    admin_prop_id = int(st.secrets.get("ADMIN_PROP_ID", os.environ.get("ADMIN_PROP_ID", 2)))
+
+    with st.form("form_pin_login"):
+        pin_input = st.text_input(
+            "🔑 Code d'accès",
             type="password",
-            placeholder="Entrez le mot de passe...",
+            placeholder="Entrez votre code...",
+            max_chars=20,
         )
         submitted = st.form_submit_button(
             "🔓 Accéder",
@@ -234,23 +238,39 @@ def _show_splash_login():
             use_container_width=True
         )
 
-    if submitted:
-        prop_data = next((p for p in props if p["id"] == prop_id_sel), None)
-        stored_hash = prop_data.get("mot_de_passe") if prop_data else None
+    if submitted and pin_input:
+        # Chercher quelle propriété correspond à ce PIN
+        prop_trouvee = None
+        for p in props:
+            stored = p.get("mot_de_passe", "")
+            if not stored:
+                continue
+            if _hash_mdp(pin_input) == stored or pin_input == stored:
+                prop_trouvee = p
+                break
 
-        if not stored_hash:
-            # Propriété sans mot de passe → accès direct
+        if prop_trouvee:
+            pid = prop_trouvee["id"]
+            is_admin = (pid == admin_prop_id)
+
             st.session_state["global_logged_in"] = True
-            st.session_state["prop_id"] = prop_id_sel
-            st.session_state[f"unlocked_{prop_id_sel}"] = True
-            st.rerun()
-        elif _hash_mdp(mdp_input) == stored_hash or mdp_input == stored_hash:
-            st.session_state["global_logged_in"] = True
-            st.session_state["prop_id"] = prop_id_sel
-            st.session_state[f"unlocked_{prop_id_sel}"] = True
+            st.session_state["is_admin"] = is_admin
+            st.session_state["prop_id"] = 0 if is_admin else pid  # admin = toutes
+            # Déverrouiller : admin = tout, sinon juste sa propriété
+            if is_admin:
+                for p in props:
+                    st.session_state[f"unlocked_{p['id']}"] = True
+            else:
+                st.session_state[f"unlocked_{pid}"] = True
             st.rerun()
         else:
-            st.error("❌ Mot de passe incorrect.")
+            st.error("❌ Code incorrect.")
+
+    st.markdown("""
+    <div style='text-align:center; margin-top:2.5rem; color:#BBBBBB; font-size:0.75rem'>
+        Développé par <strong>Charley Trigano</strong> — 2026
+    </div>
+    """, unsafe_allow_html=True)
 
     st.markdown("""
     <div style='text-align:center; margin-top:2.5rem; color:#AAAAAA; font-size:0.78rem'>
@@ -345,20 +365,18 @@ except ImportError:
 
 page = sidebar()
 
-# ── Vérification mot de passe propriété (changement depuis la sidebar) ───────
-from services.auth_service import require_auth
-from database.proprietes_repo import fetch_all as _fetch_props
-_prop_id_current = st.session_state.get("prop_id", 0)
-if _prop_id_current and _prop_id_current != 0:
-    _props_all = {p["id"]: p for p in _fetch_props()}
-    _prop_data = _props_all.get(_prop_id_current, {})
-    _mdp_hash  = _prop_data.get("mot_de_passe")
-    _prop_nom  = _prop_data.get("nom", "")
-    # Vérifier seulement si la propriété vient d'être changée dans la sidebar
-    # (pas si elle a été déverrouillée au login)
-    if _mdp_hash and not st.session_state.get(f"unlocked_{_prop_id_current}", False):
-        if not require_auth(_prop_id_current, _prop_nom, _mdp_hash):
-            st.stop()
+# ── Vérification propriété depuis sidebar (si changement) ────────────────────
+# Les admins ont accès à tout, les autres uniquement à leur propriété
+_is_admin = st.session_state.get("is_admin", False)
+if not _is_admin:
+    # Forcer la propriété vers celle déverrouillée (empêcher le changement via sidebar)
+    from database.proprietes_repo import fetch_all as _fetch_props
+    _props_unlocked = [p["id"] for p in _fetch_props()
+                       if st.session_state.get(f"unlocked_{p['id']}", False)]
+    if _props_unlocked:
+        _sid_prop = st.session_state.get("prop_id", _props_unlocked[0])
+        if _sid_prop not in _props_unlocked:
+            st.session_state["prop_id"] = _props_unlocked[0]
 
 if page == "Dashboard":       dashboard.show()
 elif page == "Réservations":  reservations.show()
