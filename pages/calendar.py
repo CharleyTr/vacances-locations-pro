@@ -7,6 +7,8 @@ import pandas as pd
 import plotly.express as px
 import json
 from datetime import date, timedelta
+from database.proprietes_repo import fetch_all as _fa_props
+from services.auth_service import is_unlocked
 from services.reservation_service import load_reservations
 from services.proprietes_service import get_proprietes_dict, get_propriete_selectionnee, filter_df
 from services.conflict_service import detect_conflicts
@@ -29,6 +31,8 @@ def show():
     st.title("📅 Calendrier des réservations")
 
     df_all = load_reservations()
+    _auth = [p["id"] for p in _fa_props() if not p.get("mot_de_passe") or is_unlocked(p["id"])]
+    df_all = df_all[df_all["propriete_id"].isin(_auth)]
     if df_all.empty:
         st.info("Aucune réservation à afficher.")
         return
