@@ -11,6 +11,7 @@ from services.reservation_service import load_reservations
 from database.proprietes_repo import fetch_all
 from services.auth_service import is_unlocked
 from database.frais_repo import get_frais, save_frais, delete_frais, CATEGORIES, IR_RUBRIQUES
+from database.justificatifs_repo import upload_justificatif, get_justificatifs, get_download_url, delete_justificatif
 from database.baremes_repo import get_bareme, bareme_to_dict
 from database.supabase_client import is_connected
 
@@ -619,6 +620,9 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
                 )
             else:
                 st.info("Aucun frais enregistré pour cette propriété.")
+
+        # ── Justificatifs dans sub_recap ─────────────────────────────────
+        # (géré dans le tab Récapitulatif ci-dessous)
 
         # Total pour le calcul
         total_charges_reelles = sum(f["montant"] for f in frais_list) if frais_list else 0.0
