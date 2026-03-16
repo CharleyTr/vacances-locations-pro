@@ -10,6 +10,7 @@ from integrations.ical_sync import load_ical, ical_to_dataframe
 from integrations.gcal_export import reservations_to_ics
 from services.reservation_service import load_reservations
 from services.proprietes_service import get_proprietes_dict
+from services.proprietes_service import get_proprietes_autorises
 from database.supabase_client import is_connected
 
 
@@ -45,7 +46,7 @@ def _show_export():
         return
 
     df_all["propriete_id"] = df_all["propriete_id"].fillna(0).astype(int)
-    props = get_proprietes_dict()  # {1: "Le Turenne...", 2: "Villa Tobias..."}
+    props = get_proprietes_autorises()
 
     if not props:
         st.warning("Aucune propriété configurée.")
