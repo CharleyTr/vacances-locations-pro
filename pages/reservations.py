@@ -289,12 +289,15 @@ def _show_formulaire_modifier():
 
         with col2:
             st.markdown("**🏠 Séjour**")
+            _props_auth = _get_props_autorises()
+            _prop_ids = list(_props_auth.keys())
+            _current_pid = int(row.get("propriete_id", _prop_ids[0] if _prop_ids else 1))
+            _idx = _prop_ids.index(_current_pid) if _current_pid in _prop_ids else 0
             propriete_id = st.selectbox(
                 "Propriété *",
-                options=list(_get_props_autorises().keys()),
-                format_func=lambda x: _get_props_autorises()[x],
-                index=list(get_proprietes_dict().keys()).index(int(row.get("propriete_id", 1)))
-                      if int(row.get("propriete_id", 1)) in get_proprietes_dict() else 0
+                options=_prop_ids,
+                format_func=lambda x: _props_auth[x],
+                index=_idx,
             )
             plat_idx = PLATEFORMES.index(row["plateforme"]) if row.get("plateforme") in PLATEFORMES else 0
             plateforme   = st.selectbox("Plateforme *", PLATEFORMES, index=plat_idx)
