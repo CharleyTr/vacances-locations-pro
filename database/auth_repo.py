@@ -47,18 +47,49 @@ def get_proprietes_for_user(user_id: str, role: str = "admin") -> list:
 
 def invite_user(email: str, propriete_ids: list, role: str = "gestionnaire") -> bool:
     """
-    Invite un nouvel utilisateur et lui donne accès aux propriétés spécifiées.
+    Invite un nouvel utilisateur via l'API Admin Supabase (service_role key).
     Supabase envoie automatiquement un email d'invitation.
     """
+    import requests, os
+    import streamlit as st
+
     sb = get_supabase()
     if sb is None: return False
+
+    # Récupérer l'URL et la service_role key
     try:
-        # Inviter via Supabase Auth Admin API
-        r = sb.auth.admin.invite_user_by_email(email)
-        user_id = r.user.id if r.user else None
+        supabase_url = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL",""))
+        service_key  = st.secrets.get("SUPABASE_SERVICE_KEY",
+                       os.environ.get("SUPABASE_SERVICE_KEY",""))
+    except:
+        supabase_url = os.environ.get("SUPABASE_URL","")
+        service_key  = os.environ.get("SUPABASE_SERVICE_KEY","")
+
+    if not service_key:
+        print("invite_user: SUPABASE_SERVICE_KEY manquant dans les secrets")
+        return False
+
+    try:
+        # Appel API Admin Supabase pour inviter l'utilisateur
+        r = requests.post(
+            f"{supabase_url}/auth/v1/invite",
+            headers={
+                "apikey": service_key,
+                "Authorization": f"Bearer {service_key}",
+                "Content-Type": "application/json",
+            },
+            json={"email": email},
+            timeout=15,
+        )
+        if r.status_code not in (200, 201):
+            print(f"invite_user API error: {r.status_code} — {r.text}")
+            return False
+
+        user_data = r.json()
+        user_id = user_data.get("id")
         if not user_id: return False
 
-        # Créer le profil
+        # Créer le profil dans notre table
         sb.table("profiles").upsert({
             "id": user_id, "email": email, "role": role
         }).execute()
