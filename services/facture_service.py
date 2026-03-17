@@ -18,7 +18,7 @@ IDENTITES = {
         "nom":       "Le Turenne",
         "sous_titre":"Studio & appartement — Bordeaux",
         "adresse":   "Bordeaux, France",
-        "siret":     "XXX XXX XXX XXXXX",
+        "siret":     "",
         "couleur1":  HexColor("#722F37"),   # bordeaux
         "couleur2":  HexColor("#F5E6D3"),   # crème
         "couleur3":  HexColor("#A0522D"),   # sienna
@@ -29,7 +29,7 @@ IDENTITES = {
         "nom":       "Villa Tobias",
         "sous_titre":"Villa & studios — Nice, Côte d'Azur",
         "adresse":   "Nice, Alpes-Maritimes, France",
-        "siret":     "XXX XXX XXX XXXXX",
+        "siret":     "",
         "couleur1":  HexColor("#006994"),   # bleu méditerranée
         "couleur2":  HexColor("#E8F4F8"),   # bleu ciel clair
         "couleur3":  HexColor("#00A693"),   # turquoise
@@ -40,7 +40,7 @@ IDENTITES = {
         "nom":       "Appartement Demo",
         "sous_titre":"Location saisonnière — Paris",
         "adresse":   "Paris, France",
-        "siret":     "XXX XXX XXX XXXXX",
+        "siret":     "",
         "couleur1":  HexColor("#1A1A2E"),   # bleu nuit parisien
         "couleur2":  HexColor("#F0F4FF"),   # bleu pâle
         "couleur3":  HexColor("#C0A060"),   # or parisien
@@ -176,7 +176,7 @@ def generate_facture(
     _cp     = p.get("code_postal","") or ""
     _ville  = p.get("ville","") or ident.get("adresse","")
     _tel    = p.get("telephone","") or ""
-    _siret  = p.get("siret","") or ident.get("siret","") or ""
+    _siret  = (p.get("siret","") or "").strip()  # SIRET uniquement si renseigné en DB
     _prop_nom = p.get("nom","") or prop_nom or ident["nom"]
     # Adresse formatée
     _adresse_ligne1 = _rue if _rue else ""
