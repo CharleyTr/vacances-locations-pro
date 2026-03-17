@@ -183,10 +183,9 @@ def _hash_mdp(mdp: str) -> str:
 
 def _show_splash_login():
     """
-    Login par code PIN numérique uniquement.
-    - Chaque propriété a un code PIN (mot de passe numérique)
-    - Villa Tobias = administrateur (accès total à toutes les propriétés)
-    - Aucune liste de propriétés affichée → confidentialité totale
+    Login hybride : supporte les deux modes simultanément.
+    Mode A — Email/mot de passe Supabase Auth (nouveaux utilisateurs)
+    Mode B — Code PIN propriété (mode actuel, rétrocompatible)
     """
     from database.proprietes_repo import fetch_all as _fetch_props
     import os
@@ -225,46 +224,83 @@ def _show_splash_login():
     # ID admin = propriété marquée admin dans les secrets, ou Villa Tobias par défaut
     admin_prop_id = int(st.secrets.get("ADMIN_PROP_ID", os.environ.get("ADMIN_PROP_ID", 2)))
 
-    with st.form("form_pin_login"):
-        pin_input = st.text_input(
-            "🔑 Code d'accès",
-            type="password",
-            placeholder="Entrez votre code...",
-            max_chars=20,
-        )
-        submitted = st.form_submit_button(
-            "🔓 Accéder",
-            type="primary",
-            use_container_width=True
-        )
+    # ── Choisir le mode de connexion ─────────────────────────────────
+    mode = st.radio("Mode de connexion", ["🔑 Code d'accès", "📧 Email / Mot de passe"],
+                    horizontal=True, key="login_mode", label_visibility="collapsed")
 
-    if submitted and pin_input:
-        # Chercher quelle propriété correspond à ce PIN
-        prop_trouvee = None
-        for p in props:
-            stored = p.get("mot_de_passe", "")
-            if not stored:
-                continue
-            if _hash_mdp(pin_input) == stored or pin_input == stored:
-                prop_trouvee = p
-                break
+    if mode == "📧 Email / Mot de passe":
+        # ── Mode Supabase Auth ────────────────────────────────────────
+        with st.form("form_email_login"):
+            email_input = st.text_input("📧 Email", placeholder="votre@email.fr")
+            pwd_input   = st.text_input("🔑 Mot de passe", type="password")
+            submitted_email = st.form_submit_button("🔓 Se connecter", type="primary",
+                                                     use_container_width=True)
 
-        if prop_trouvee:
-            pid = prop_trouvee["id"]
-            is_admin = (pid == admin_prop_id)
+        if submitted_email:
+            from database.auth_repo import sign_in_with_email, get_profile, get_proprietes_for_user
+            result = sign_in_with_email(email_input, pwd_input)
+            if result and result.get("user"):
+                user = result["user"]
+                profile = get_profile(str(user.id))
+                role = profile.get("role","proprietaire") if profile else "proprietaire"
+                is_admin = (role == "admin")
 
-            st.session_state["global_logged_in"] = True
-            st.session_state["is_admin"] = is_admin
-            st.session_state["prop_id"] = 0 if is_admin else pid  # admin = toutes
-            # Déverrouiller : admin = tout, sinon juste sa propriété
-            if is_admin:
-                for p in props:
-                    st.session_state[f"unlocked_{p['id']}"] = True
+                # Récupérer les propriétés accessibles
+                props_user = get_proprietes_for_user(str(user.id), role)
+                prop_ids = [p["id"] for p in props_user]
+
+                st.session_state["global_logged_in"] = True
+                st.session_state["is_admin"] = is_admin
+                st.session_state["auth_user_id"] = str(user.id)
+                st.session_state["auth_user_email"] = user.email
+                st.session_state["prop_id"] = 0 if is_admin else (prop_ids[0] if prop_ids else 0)
+                for pid in prop_ids:
+                    st.session_state[f"unlocked_{pid}"] = True
+                if is_admin:
+                    for p in props:
+                        st.session_state[f"unlocked_{p['id']}"] = True
+                st.rerun()
             else:
-                st.session_state[f"unlocked_{pid}"] = True
-            st.rerun()
-        else:
-            st.error("❌ Code incorrect.")
+                st.error("❌ Email ou mot de passe incorrect.")
+
+    else:
+        # ── Mode PIN (rétrocompatible) ────────────────────────────────
+        with st.form("form_pin_login"):
+            pin_input = st.text_input(
+                "🔑 Code d'accès",
+                type="password",
+                placeholder="Entrez votre code...",
+                max_chars=20,
+            )
+            submitted = st.form_submit_button(
+                "🔓 Accéder",
+                type="primary",
+                use_container_width=True
+            )
+
+        if submitted and pin_input:
+            prop_trouvee = None
+            for p in props:
+                stored = p.get("mot_de_passe", "")
+                if not stored: continue
+                if _hash_mdp(pin_input) == stored or pin_input == stored:
+                    prop_trouvee = p
+                    break
+
+            if prop_trouvee:
+                pid = prop_trouvee["id"]
+                is_admin = (pid == admin_prop_id)
+                st.session_state["global_logged_in"] = True
+                st.session_state["is_admin"] = is_admin
+                st.session_state["prop_id"] = 0 if is_admin else pid
+                if is_admin:
+                    for p in props:
+                        st.session_state[f"unlocked_{p['id']}"] = True
+                else:
+                    st.session_state[f"unlocked_{pid}"] = True
+                st.rerun()
+            else:
+                st.error("❌ Code incorrect.")
 
     st.markdown("""
     <div style='text-align:center; margin-top:2.5rem; color:#BBBBBB; font-size:0.75rem'>
