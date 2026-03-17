@@ -105,4 +105,4 @@ Le propriétaire choisira son mot de passe à la première connexion.
                     st.info(f"Il recevra un email pour créer son mot de passe et accéder à : "
                             f"{', '.join(next((p['nom'] for p in props_list if p['id']==pid), str(pid)) for pid in inv_props)}")
                 else:
-                    st.error("Erreur lors de l'invitation. Vérifiez que le script SQL 015 a été exécuté.")
+                    st.error("Erreur lors de l'invitation. Vérifiez que **SUPABASE_SERVICE_KEY** est ajouté dans les Secrets Streamlit Cloud.")
