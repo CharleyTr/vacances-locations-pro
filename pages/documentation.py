@@ -8,7 +8,29 @@ import os
 
 def show():
     st.title("📖 Documentation")
-    st.caption("Guide utilisateur complet — Vacances-Locations Pro v3.0")
+    st.caption("Guide utilisateur complet — Vacances-Locations Pro v3.2")
+
+    st.markdown("""
+    <style>
+    div[data-testid="stButton"] button {
+        text-align:left !important;
+        background:#F8FBFF !important;
+        border-left:4px solid #1565C0 !important;
+        border-top:none !important;
+        border-right:none !important;
+        border-bottom:1px solid #E3F2FD !important;
+        border-radius:0 6px 6px 0 !important;
+        color:#333 !important;
+        padding:8px 14px !important;
+        margin-bottom:2px !important;
+        font-size:14px !important;
+    }
+    div[data-testid="stButton"] button:hover {
+        background:#E3F2FD !important;
+        border-left:4px solid #0D47A1 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     # ── Bouton téléchargement Word ────────────────────────────────────────
     doc_path = os.path.join(os.path.dirname(__file__), "..", "static", "README_VacancesLocationsPro.docx")
@@ -94,15 +116,44 @@ communication clients et tarification.
         ("📐", "Barèmes fiscaux",     "Mise à jour annuelle des paramètres IR/micro-BIC depuis les textes officiels"),
     ]
 
+    # Mapping module → section du sélecteur
+    MODULE_TO_SECTION = {
+        "Dashboard":         "1. Introduction",
+        "Réservations":      "3. Réservations",
+        "Calendrier":        "4. Calendrier",
+        "Analyses":          "5. Analyses",
+        "Paiements":         "3. Réservations",
+        "Ménage":            "3. Réservations",
+        "Messages":          "6. Messages & Modèles",
+        "Sync iCal":         "11. Configuration",
+        "Créneaux":          "3. Réservations",
+        "Propriétés":        "10. Sécurité & Mots de passe",
+        "Rapports":          "3. Réservations",
+        "Tarifs":            "7. Tarifs",
+        "Livre d'or":        "3. Réservations",
+        "Import Booking":    "3. Réservations",
+        "Import Airbnb":     "3. Réservations",
+        "Modèles msgs":      "6. Messages & Modèles",
+        "Export comptable":  "11. Configuration",
+        "Fiscal LMNP":       "8. Fiscal LMNP",
+        "Revenus & Pricing": "9. Revenus & Pricing",
+        "Barèmes fiscaux":   "8. Fiscal LMNP",
+        "Factures":          "3. Réservations",
+        "Documentation":     "1. Introduction",
+    }
+
     for icon, name, desc in modules:
-        st.markdown(
-            f"<div style='display:flex;align-items:center;padding:6px 12px;border-left:4px solid #1565C0;"
-            f"background:#F8FBFF;margin-bottom:4px;border-radius:0 6px 6px 0'>"
-            f"<span style='font-size:20px;width:36px'>{icon}</span>"
-            f"<span style='font-weight:bold;width:200px;color:#1565C0'>{name}</span>"
-            f"<span style='color:#444;font-size:14px'>{desc}</span></div>",
-            unsafe_allow_html=True
-        )
+        section_cible = MODULE_TO_SECTION.get(name, "1. Introduction")
+        col_mod, _ = st.columns([1, 0.001])
+        with col_mod:
+            clicked = st.button(
+                f"{icon}  **{name}** — {desc}",
+                key=f"mod_btn_{name}",
+                use_container_width=True,
+            )
+            if clicked:
+                st.session_state["doc_section"] = section_cible
+                st.rerun()
 
     st.divider()
 
