@@ -114,6 +114,7 @@ def show():
                 signataire=signataire,
                 prop_nom=prop_nom,
                 numero_facture=num_facture,
+                prop_data=prop_data,
             )
 
         nom_client_safe = row.get("nom_client","client").replace(" ","_")
