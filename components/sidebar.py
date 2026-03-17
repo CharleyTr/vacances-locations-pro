@@ -109,6 +109,20 @@ def sidebar() -> str:
             label_visibility="collapsed",
         )
         st.divider()
-        st.caption("v3.0 — 2026")
+        # ── Bouton installation PWA ───────────────────────────────────────
+        st.markdown("""
+<div style='margin-bottom:8px'>
+  <button id='pwa-install-btn' onclick='installPWA()'
+    style='display:none;width:100%;padding:8px 12px;background:#1565C0;color:white;
+           border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold'>
+    📲 Installer l'application
+  </button>
+</div>
+<p style='font-size:11px;color:#888;margin:0 0 4px 0'>
+  📱 iPhone : Safari → <strong>Partager</strong> → <em>Sur l'écran d'accueil</em><br>
+  🤖 Android : Menu → <em>Ajouter à l'écran</em>
+</p>
+""", unsafe_allow_html=True)
+        st.caption("v3.2 — 2026")
 
     return pages_visibles[choice]
