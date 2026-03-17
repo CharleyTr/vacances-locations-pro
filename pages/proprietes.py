@@ -27,7 +27,13 @@ def show():
                 col1, col2 = st.columns(2)
                 with col1:
                     nom     = st.text_input("Nom *", value=prop.get("nom", ""))
-                    adresse = st.text_input("Adresse", value=prop.get("adresse", "") or "")
+                    rue     = st.text_input("Rue", value=prop.get("rue", "") or "", placeholder="Ex: 12 rue de la Paix")
+                    col_cp, col_ville = st.columns([2, 3])
+                    with col_cp:
+                        code_postal = st.text_input("Code postal", value=prop.get("code_postal", "") or "", placeholder="75001")
+                    with col_ville:
+                        ville = st.text_input("Ville", value=prop.get("ville", "") or "", placeholder="Paris")
+                    telephone_prop = st.text_input("Téléphone", value=prop.get("telephone", "") or "", placeholder="+33 6 12 34 56 78")
                 with col2:
                     ical_url = st.text_input(
                         "URL iCal (optionnel)",
@@ -38,6 +44,11 @@ def show():
                         "✍️ Signataire des messages",
                         value=prop.get("signataire", "") or "",
                         placeholder="Ex: Christophe & Marie"
+                    )
+                    siret = st.text_input(
+                        "SIRET (optionnel)",
+                        value=prop.get("siret", "") or "",
+                        placeholder="XXX XXX XXX XXXXX"
                     )
                     actif = st.checkbox("Propriété active", value=prop.get("actif", True))
 
@@ -51,7 +62,11 @@ def show():
                 try:
                     update_propriete(prop["id"], {
                         "nom":        nom.strip(),
-                        "adresse":    adresse or None,
+                        "rue":        rue.strip() or None,
+                        "code_postal":code_postal.strip() or None,
+                        "ville":      ville.strip() or None,
+                        "telephone":  telephone_prop.strip() or None,
+                        "siret":      siret.strip() or None,
                         "ical_url":   ical_url or None,
                         "signataire": signataire.strip() or None,
                         "actif":      actif,
@@ -112,7 +127,13 @@ def show():
         col1, col2 = st.columns(2)
         with col1:
             new_nom     = st.text_input("Nom *", placeholder="Ex: Appartement Paris 11")
-            new_adresse = st.text_input("Adresse", placeholder="Ex: 15 rue de la Paix, Paris")
+            new_rue     = st.text_input("Rue", placeholder="Ex: 15 rue de la Paix")
+            col_cp2, col_ville2 = st.columns([2, 3])
+            with col_cp2:
+                new_cp  = st.text_input("Code postal", placeholder="75011")
+            with col_ville2:
+                new_ville = st.text_input("Ville", placeholder="Paris")
+            new_tel = st.text_input("Téléphone", placeholder="+33 6 12 34 56 78")
         with col2:
             new_ical = st.text_input(
                 "URL iCal (optionnel)",
@@ -122,6 +143,7 @@ def show():
                 "✍️ Signataire des messages",
                 placeholder="Ex: Christophe & Marie"
             )
+            new_siret = st.text_input("SIRET (optionnel)", placeholder="XXX XXX XXX XXXXX")
 
         submitted = st.form_submit_button("✅ Créer la propriété", type="primary", use_container_width=True)
 
@@ -132,7 +154,11 @@ def show():
             try:
                 result = insert_propriete({
                     "nom":        new_nom.strip(),
-                    "adresse":    new_adresse or None,
+                    "rue":        new_rue.strip() or None,
+                    "code_postal":new_cp.strip() or None,
+                    "ville":      new_ville.strip() or None,
+                    "telephone":  new_tel.strip() or None,
+                    "siret":      new_siret.strip() or None,
                     "ical_url":   new_ical or None,
                     "signataire": new_signataire.strip() or None,
                     "actif":      True,
