@@ -61,7 +61,11 @@ def show():
         "11. Configuration",
         "12. FAQ",
     ]
-    section = st.selectbox("📑 Aller à la section", SECTIONS, key="doc_section")
+    # Lire la navigation par bouton
+    _nav = st.session_state.pop("_doc_nav", None)
+    _default_idx = SECTIONS.index(_nav) if _nav and _nav in SECTIONS else 0
+    section = st.selectbox("📑 Aller à la section", SECTIONS,
+                            index=_default_idx, key="doc_section")
     st.divider()
 
     # ─────────────────────────────────────────────────────────────────────
@@ -152,7 +156,7 @@ communication clients et tarification.
                 use_container_width=True,
             )
             if clicked:
-                st.session_state["doc_section"] = section_cible
+                st.session_state["_doc_nav"] = section_cible
                 st.rerun()
 
     st.divider()
