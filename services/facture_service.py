@@ -155,11 +155,13 @@ def generate_facture(
     prop_nom: str = "",
     numero_facture: str = "",
     lignes_supplementaires: list = None,
+    prop_data: dict = None,  # fiche propriété complète (rue, cp, ville, tel, siret)
 ) -> bytes:
     """
     Génère une facture PDF et retourne les bytes.
     reservation: dict avec nom_client, date_arrivee, date_depart, nuitees,
                  prix_brut, menage, taxes_sejour, numero_reservation, email
+    prop_data: dict optionnel avec rue, code_postal, ville, telephone, siret
     """
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
@@ -167,6 +169,18 @@ def generate_facture(
     col1  = ident["couleur1"]
     col2  = ident["couleur2"]
     col3  = ident["couleur3"]
+
+    # Champs adresse depuis prop_data ou fallback ident
+    p = prop_data or {}
+    _rue    = p.get("rue","") or ""
+    _cp     = p.get("code_postal","") or ""
+    _ville  = p.get("ville","") or ident.get("adresse","")
+    _tel    = p.get("telephone","") or ""
+    _siret  = p.get("siret","") or ident.get("siret","") or ""
+    _prop_nom = p.get("nom","") or prop_nom or ident["nom"]
+    # Adresse formatée
+    _adresse_ligne1 = _rue if _rue else ""
+    _adresse_ligne2 = f"{_cp} {_ville}".strip() if (_cp or _ville) else ident.get("adresse","")
 
     def _fmt_date(v):
         if not v: return ""
@@ -197,13 +211,20 @@ def generate_facture(
     c.setFont("Helvetica-Oblique", 9)
     c.drawString(55*mm, H-33*mm, ident["slogan"])
 
-    # Adresse + SIRET (droite)
+    # Adresse + coordonnées (droite) — uniquement si renseignés
     c.setFont("Helvetica", 8)
-    c.drawRightString(W-15*mm, H-14*mm, ident["adresse"])
-    if ident.get("siret"):
-        c.drawRightString(W-15*mm, H-21*mm, f"SIRET : {ident['siret']}")
+    y_info = H - 14*mm
+    if _adresse_ligne1:
+        c.drawRightString(W-15*mm, y_info, _adresse_ligne1)
+        y_info -= 7*mm
+    if _adresse_ligne2:
+        c.drawRightString(W-15*mm, y_info, _adresse_ligne2)
+        y_info -= 7*mm
+    if _tel:
+        c.drawRightString(W-15*mm, y_info, f"Tél : {_tel}")
+        y_info -= 7*mm
     if signataire:
-        c.drawRightString(W-15*mm, H-28*mm, signataire)
+        c.drawRightString(W-15*mm, y_info, signataire)
 
     # ── Titre FACTURE ─────────────────────────────────────────────────────
     c.setFillColor(col3)
@@ -338,9 +359,10 @@ def generate_facture(
     c.setFillColor(HexColor("#555555"))
     c.setFont("Helvetica", 8)
     c.drawString(18*mm, y_mentions-6*mm, "Loueur Meublé Non Professionnel (LMNP) — TVA non applicable, art. 293B du CGI")
-    c.drawString(18*mm, y_mentions-12*mm, f"Location meublée de courte durée — {ident['adresse']}")
-    if ident.get("siret"):
-        c.drawString(18*mm, y_mentions-18*mm, f"SIRET : {ident['siret']} — Régime micro-BIC")
+    _adresse_complete = ", ".join(filter(None, [_adresse_ligne1, _adresse_ligne2]))
+    c.drawString(18*mm, y_mentions-12*mm, f"Location meublée de courte durée — {_adresse_complete or 'France'}")
+    if _siret:
+        c.drawString(18*mm, y_mentions-18*mm, f"SIRET : {_siret} — Régime micro-BIC")
 
     # ── Pied de page ──────────────────────────────────────────────────────
     c.setFillColor(col1)
