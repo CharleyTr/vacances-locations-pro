@@ -146,18 +146,36 @@ communication clients et tarification.
         "Documentation":     "1. Introduction",
     }
 
-    for icon, name, desc in modules:
-        section_cible = MODULE_TO_SECTION.get(name, "1. Introduction")
-        col_mod, _ = st.columns([1, 0.001])
-        with col_mod:
-            clicked = st.button(
-                f"{icon}  **{name}** — {desc}",
-                key=f"mod_btn_{name}",
-                use_container_width=True,
-            )
-            if clicked:
-                st.session_state["_doc_nav"] = section_cible
-                st.rerun()
+    # Affichage cliquable avec liens via radio masqué
+    mod_labels = [f"{icon}  {name} — {desc}" for icon, name, desc in modules]
+    mod_sections = [MODULE_TO_SECTION.get(name, "1. Introduction") for _, name, _ in modules]
+
+    for i, (icon, name, desc) in enumerate(modules):
+        st.markdown(
+            "<div style='display:flex;align-items:center;padding:7px 14px;"
+            "border-left:4px solid #1565C0;background:#F8FBFF;"
+            "margin-bottom:3px;border-radius:0 6px 6px 0'>"
+            f"<span style='font-size:19px;width:32px'>{icon}</span>"
+            f"<span style='font-weight:bold;width:210px;color:#1565C0'>{name}</span>"
+            f"<span style='color:#444;font-size:13px'>{desc}</span>"
+            "</div>",
+            unsafe_allow_html=True
+        )
+
+    # Sélecteur de navigation rapide séparé
+    st.markdown("**🔗 Aller directement à une section :**")
+    nav_choice = st.selectbox(
+        "Navigation modules",
+        ["— Sélectionnez un module —"] + [f"{icon} {name}" for icon, name, _ in modules],
+        key="doc_module_nav",
+        label_visibility="collapsed"
+    )
+    if nav_choice and nav_choice != "— Sélectionnez un module —":
+        nom_choisi = nav_choice.split(" ", 1)[1] if " " in nav_choice else nav_choice
+        section_trouvee = MODULE_TO_SECTION.get(nom_choisi.strip())
+        if section_trouvee and section_trouvee in SECTIONS:
+            st.session_state["_doc_nav"] = section_trouvee
+            st.rerun()
 
     st.divider()
 
