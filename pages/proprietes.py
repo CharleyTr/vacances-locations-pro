@@ -152,7 +152,9 @@ def show():
             st.error("Le nom est obligatoire.")
         else:
             try:
-                result = insert_propriete({
+                import streamlit as _st2
+                _owner_id = _st2.session_state.get("auth_user_id") or None
+                _data_prop = {
                     "nom":        new_nom.strip(),
                     "rue":        new_rue.strip() or None,
                     "code_postal":new_cp.strip() or None,
@@ -162,7 +164,10 @@ def show():
                     "ical_url":   new_ical or None,
                     "signataire": new_signataire.strip() or None,
                     "actif":      True,
-                })
+                }
+                if _owner_id:
+                    _data_prop["owner_id"] = _owner_id
+                result = insert_propriete(_data_prop)
                 st.success(f"✅ Propriété '{new_nom}' créée ! (ID: {result.get('id', '?')})")
                 st.rerun()
             except Exception as e:
