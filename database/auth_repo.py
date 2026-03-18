@@ -61,13 +61,21 @@ def invite_user(email: str, propriete_ids: list, role: str = "gestionnaire") -> 
         supabase_url = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL",""))
         service_key  = st.secrets.get("SUPABASE_SERVICE_KEY",
                        os.environ.get("SUPABASE_SERVICE_KEY",""))
-    except:
+    except Exception as se:
         supabase_url = os.environ.get("SUPABASE_URL","")
         service_key  = os.environ.get("SUPABASE_SERVICE_KEY","")
+        print(f"invite_user secrets error: {se}")
 
     if not service_key:
-        print("invite_user: SUPABASE_SERVICE_KEY manquant dans les secrets")
+        msg = "SUPABASE_SERVICE_KEY manquant — ajoutez-le dans Streamlit Cloud Secrets"
+        print(f"invite_user: {msg}")
+        try: _st.session_state["_invite_error"] = msg
+        except: pass
         return False
+    
+    # Masquer la clé dans les logs
+    key_preview = service_key[:20] + "..." if len(service_key) > 20 else "???"
+    print(f"invite_user: URL={supabase_url[:40]}, key={key_preview}")
 
     try:
         # Appel API Admin Supabase pour inviter l'utilisateur
@@ -83,6 +91,10 @@ def invite_user(email: str, propriete_ids: list, role: str = "gestionnaire") -> 
         )
         if r.status_code not in (200, 201):
             print(f"invite_user API error: {r.status_code} — {r.text}")
+            # Stocker l'erreur pour l'afficher dans l'UI
+            import streamlit as _st
+            try: _st.session_state["_invite_error"] = f"API {r.status_code}: {r.text[:200]}"
+            except: pass
             return False
 
         user_data = r.json()
@@ -103,6 +115,9 @@ def invite_user(email: str, propriete_ids: list, role: str = "gestionnaire") -> 
         return True
     except Exception as e:
         print(f"invite_user error: {e}")
+        import streamlit as _st
+        try: _st.session_state["_invite_error"] = str(e)
+        except: pass
         return False
 
 
