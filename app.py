@@ -262,6 +262,32 @@ def _show_splash_login():
                 st.rerun()
             else:
                 st.error("❌ Email ou mot de passe incorrect.")
+                # Bouton réinitialisation
+                if st.button("🔑 Mot de passe oublié ?", key="btn_forgot"):
+                    st.session_state["show_reset"] = True
+
+        if st.session_state.get("show_reset"):
+            with st.form("form_reset_pwd"):
+                reset_email = st.text_input("📧 Votre email", key="reset_email_input")
+                send_reset  = st.form_submit_button("📧 Envoyer le lien de réinitialisation",
+                                                     use_container_width=True)
+            if send_reset and reset_email:
+                import requests as _req, os as _os
+                _surl = st.secrets.get("SUPABASE_URL", _os.environ.get("SUPABASE_URL",""))
+                _skey = st.secrets.get("SUPABASE_KEY", _os.environ.get("SUPABASE_KEY",""))
+                _app  = st.secrets.get("APP_URL", _os.environ.get("APP_URL",""))
+                try:
+                    r = _req.post(
+                        f"{_surl}/auth/v1/recover",
+                        headers={"apikey": _skey, "Content-Type": "application/json"},
+                        json={"email": reset_email,
+                              "redirect_to": _app + "/?sb_type=recovery"},
+                        timeout=10
+                    )
+                    st.success("✅ Si cet email existe, vous recevrez un lien de réinitialisation.")
+                    st.session_state.pop("show_reset", None)
+                except Exception as e:
+                    st.error(f"❌ Erreur : {e}")
 
     else:
         # ── Mode PIN (rétrocompatible) ────────────────────────────────
