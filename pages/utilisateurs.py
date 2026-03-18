@@ -70,7 +70,20 @@ def show():
 Supabase enverra automatiquement un **email d'invitation** avec un lien de connexion.
 Le propriétaire choisira son mot de passe à la première connexion.
         """)
-        st.info("⚠️ Cette fonctionnalité est disponible dès que la migration Auth est complète (script 015 + 016 exécutés).")
+        # Vérifier si la migration est complète
+    from database.supabase_client import get_supabase
+    _sb = get_supabase()
+    _migration_ok = False
+    if _sb:
+        try:
+            r = _sb.table("profiles").select("id").limit(1).execute()
+            _migration_ok = True
+        except: pass
+
+    if _migration_ok:
+        st.success("✅ Migration Auth complète — l'invitation par email est opérationnelle.")
+    else:
+        st.warning("⚠️ Scripts SQL 015 + 016 à exécuter dans Supabase pour activer les invitations.")
 
         props_list = fetch_all()
         with st.form("form_invite", clear_on_submit=True):
@@ -105,4 +118,31 @@ Le propriétaire choisira son mot de passe à la première connexion.
                     st.info(f"Il recevra un email pour créer son mot de passe et accéder à : "
                             f"{', '.join(next((p['nom'] for p in props_list if p['id']==pid), str(pid)) for pid in inv_props)}")
                 else:
-                    st.error("Erreur lors de l'invitation. Vérifiez que **SUPABASE_SERVICE_KEY** est ajouté dans les Secrets Streamlit Cloud.")
+                    err_detail = st.session_state.pop("_invite_error", "")
+                    st.error("❌ Erreur lors de l'invitation.")
+                    # Diagnostic détaillé
+                    import os
+                    has_service_key = bool(
+                        st.secrets.get("SUPABASE_SERVICE_KEY","") or
+                        os.environ.get("SUPABASE_SERVICE_KEY","")
+                    )
+                    has_url = bool(
+                        st.secrets.get("SUPABASE_URL","") or
+                        os.environ.get("SUPABASE_URL","")
+                    )
+                    col_d1, col_d2 = st.columns(2)
+                    col_d1.metric("SUPABASE_URL", "✅ OK" if has_url else "❌ Manquant")
+                    col_d2.metric("SUPABASE_SERVICE_KEY", "✅ OK" if has_service_key else "❌ Manquant")
+                    if not has_service_key:
+                        st.warning("""
+**SUPABASE_SERVICE_KEY manquant.** Pour l'ajouter :
+1. Supabase → Project Settings → API → **service_role** key → Copy
+2. Streamlit Cloud → Settings → Secrets → ajouter :
+```
+SUPABASE_SERVICE_KEY = "eyJ..."
+```
+3. Manage app → **Reboot**
+""")
+                    if err_detail:
+                        with st.expander("Détail technique"):
+                            st.code(err_detail, language="text")
