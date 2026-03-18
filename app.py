@@ -332,8 +332,18 @@ def _show_splash_login():
                         st.session_state[f"unlocked_{p['id']}"] = True
                 else:
                     st.session_state[f"unlocked_{pid}"] = True
+                try:
+                    from database.journal_repo import log_connexion as _log_pin
+                    _log_pin(mode="pin", statut="succes",
+                             propriete_id=pid, propriete_nom=prop_trouvee.get("nom",""),
+                             detail="admin" if is_admin else "proprietaire")
+                except: pass
                 st.rerun()
             else:
+                try:
+                    from database.journal_repo import log_connexion as _log_pin
+                    _log_pin(mode="pin", statut="echec", detail="Code PIN incorrect")
+                except: pass
                 st.error("❌ Code incorrect.")
 
     st.markdown("""
@@ -432,6 +442,10 @@ try:
 except ImportError:
     factures = None
 try:
+    from pages import journal
+except ImportError:
+    journal = None
+try:
     from pages import utilisateurs
 except ImportError:
     utilisateurs = None
@@ -484,4 +498,5 @@ elif page == "Barèmes fiscaux":   baremes.show()          if baremes         el
 elif page == "Documentation":     documentation.show()    if documentation   else st.error("Uploadez pages/documentation.py")
 elif page == "Factures":          factures.show()         if factures         else st.error("Uploadez pages/factures.py")
 elif page == "Utilisateurs":      utilisateurs.show()     if utilisateurs     else st.error("Uploadez pages/utilisateurs.py")
+elif page == "Journal":           journal.show()          if journal          else st.error("Uploadez pages/journal.py")
 elif page == "Questionnaire": questionnaire.show() if questionnaire else st.error("Uploadez pages/questionnaire.py")
