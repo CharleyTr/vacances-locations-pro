@@ -85,27 +85,27 @@ Le propriétaire choisira son mot de passe à la première connexion.
     else:
         st.warning("⚠️ Scripts SQL 015 + 016 à exécuter dans Supabase pour activer les invitations.")
 
-        props_list = fetch_all()
-        with st.form("form_invite", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                inv_email = st.text_input("Email *", placeholder="proprietaire@email.fr")
-                inv_nom   = st.text_input("Nom (optionnel)", placeholder="Jean Dupont")
-            with col2:
-                inv_role  = st.selectbox("Rôle", ["proprietaire", "gestionnaire", "lecteur"],
-                                          format_func=lambda x: {
-                                              "proprietaire": "🏠 Propriétaire (lecture + écriture)",
-                                              "gestionnaire": "🔧 Gestionnaire (tout sauf admin)",
-                                              "lecteur":      "👁️ Lecteur (consultation uniquement)",
-                                          }[x])
-                inv_props = st.multiselect(
-                    "Propriétés accessibles *",
-                    options=[p["id"] for p in props_list],
-                    format_func=lambda x: next((p["nom"] for p in props_list if p["id"]==x), str(x))
-                )
+    props_list = fetch_all()
+    with st.form("form_invite", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            inv_email = st.text_input("Email *", placeholder="proprietaire@email.fr")
+            inv_nom   = st.text_input("Nom (optionnel)", placeholder="Jean Dupont")
+        with col2:
+            inv_role  = st.selectbox("Rôle", ["proprietaire", "gestionnaire", "lecteur"],
+                                      format_func=lambda x: {
+                                          "proprietaire": "🏠 Propriétaire (lecture + écriture)",
+                                          "gestionnaire": "🔧 Gestionnaire (tout sauf admin)",
+                                          "lecteur":      "👁️ Lecteur (consultation uniquement)",
+                                      }[x])
+            inv_props = st.multiselect(
+                "Propriétés accessibles *",
+                options=[p["id"] for p in props_list],
+                format_func=lambda x: next((p["nom"] for p in props_list if p["id"]==x), str(x))
+            )
 
-            submitted = st.form_submit_button("📧 Envoyer l'invitation", type="primary",
-                                               use_container_width=True)
+        submitted = st.form_submit_button("📧 Envoyer l'invitation", type="primary",
+                                           use_container_width=True)
 
         if submitted:
             if not inv_email or not inv_props:
