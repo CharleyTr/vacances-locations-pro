@@ -127,13 +127,16 @@ def sidebar() -> str:
         # Infos utilisateur connecté
         auth_email = st.session_state.get("auth_user_email")
         if auth_email:
-            st.caption(f"👤 {auth_email}")
+            st.markdown(
+                f"<div style='font-size:11px;color:var(--text-color);opacity:0.6;"
+                f"padding:2px 0;overflow:hidden;text-overflow:ellipsis'>"
+                f"👤 {auth_email}</div>",
+                unsafe_allow_html=True
+            )
             if st.button("🚪 Déconnexion", key="btn_logout", use_container_width=True):
-                from database.auth_repo import sign_out
-                sign_out()
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
+                from services.auth_service import logout
+                logout()
                 st.rerun()
-        st.caption("v3.2 — 2026")
+        st.caption("v3.2 — 2026 · © Charley Trigano")
 
     return pages_visibles[choice]
