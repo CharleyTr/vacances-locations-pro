@@ -277,17 +277,25 @@ def _show_splash_login():
                 _skey = st.secrets.get("SUPABASE_KEY", _os.environ.get("SUPABASE_KEY",""))
                 _app  = st.secrets.get("APP_URL", _os.environ.get("APP_URL",""))
                 try:
+                    # redirect_to doit pointer vers la page HTML intermédiaire GitHub Pages
+                    _github_redirect = st.secrets.get("AUTH_REDIRECT_URL",
+                                       _os.environ.get("AUTH_REDIRECT_URL",
+                                       "https://charleytr.github.io/vlp-auth/"))
                     r = _req.post(
                         f"{_surl}/auth/v1/recover",
                         headers={"apikey": _skey, "Content-Type": "application/json"},
                         json={"email": reset_email,
-                              "redirect_to": _app + "/?sb_type=recovery"},
+                              "redirect_to": _github_redirect},
                         timeout=10
                     )
-                    st.success("✅ Si cet email existe, vous recevrez un lien de réinitialisation.")
+                    if r.status_code in (200, 201):
+                        st.success("✅ Email envoyé ! Vérifiez votre boîte de réception.")
+                    else:
+                        err = r.json().get("message","Erreur inconnue")
+                        st.error(f"❌ {r.status_code} — {err}")
                     st.session_state.pop("show_reset", None)
                 except Exception as e:
-                    st.error(f"❌ Erreur : {e}")
+                    st.error(f"❌ Erreur réseau : {e}")
 
     else:
         # ── Mode PIN (rétrocompatible) ────────────────────────────────
