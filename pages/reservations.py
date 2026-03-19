@@ -141,6 +141,25 @@ def _show_formulaire_ajout():
         st.error("⛔ Connexion Supabase requise pour ajouter une réservation.")
         return
 
+    # ── Détection pays hors formulaire (fonctionne en temps réel) ───────
+    _col_tel, _col_pays = st.columns(2)
+    with _col_tel:
+        _tel_pre = st.text_input("📞 Téléphone", placeholder="+33 6 00 00 00 00",
+                                  key="res_tel_pre")
+    with _col_pays:
+        _pays_auto = ""
+        if _tel_pre and (_tel_pre.startswith("+") or _tel_pre.startswith("00")):
+            try:
+                from services.indicatifs_service import detect_pays
+                _res = detect_pays(_tel_pre)
+                if _res:
+                    _pays_auto = f"{_res[2]} {_res[0]}"
+            except: pass
+        _pays_pre = st.text_input("🌍 Pays (auto)", value=_pays_auto,
+                                   placeholder="Détecté automatiquement",
+                                   key="res_pays_pre")
+    st.divider()
+
     with st.form("form_ajout", clear_on_submit=True):
         col1, col2 = st.columns(2)
 
@@ -148,20 +167,19 @@ def _show_formulaire_ajout():
             st.markdown("**👤 Client**")
             nom_client  = st.text_input("Nom du client *", placeholder="Ex: DUPONT Jean")
             email       = st.text_input("Email", placeholder="jean@email.com")
-            telephone   = st.text_input("Téléphone", placeholder="+33 6 00 00 00 00",
-                                       key="res_tel_input")
-            # Auto-détection du pays depuis l'indicatif
-            _pays_auto = ""
-            _tel_val = st.session_state.get("res_tel_input", "")
-            if _tel_val and (_tel_val.startswith("+") or _tel_val.startswith("00")):
-                try:
-                    from services.indicatifs_service import detect_pays
-                    _res = detect_pays(_tel_val)
-                    if _res:
-                        _pays_auto = _res[0]
-                except: pass
-            pays = st.text_input("Pays", value=_pays_auto,
-                                  placeholder="France (auto depuis tél.)")
+            telephone   = st.text_input("Téléphone",
+                                        value=st.session_state.get("res_tel_pre",""),
+                                        placeholder="+33 6 00 00 00 00")
+            # Pays détecté automatiquement
+            _pays_val = st.session_state.get("res_pays_pre","")
+            if _pays_val and "🇫🇷" in _pays_val or any(c for c in _pays_val if ord(c)>127):
+                # Enlever l'emoji pour la valeur stockée
+                import re as _re
+                _pays_val_clean = _re.sub(r'[^-À-ɏ ]+', '', _pays_val).strip()
+            else:
+                _pays_val_clean = _pays_val
+            pays = st.text_input("Pays", value=_pays_val_clean,
+                                  placeholder="France")
 
         with col2:
             st.markdown("**🏠 Séjour**")
