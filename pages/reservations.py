@@ -148,8 +148,20 @@ def _show_formulaire_ajout():
             st.markdown("**👤 Client**")
             nom_client  = st.text_input("Nom du client *", placeholder="Ex: DUPONT Jean")
             email       = st.text_input("Email", placeholder="jean@email.com")
-            telephone   = st.text_input("Téléphone", placeholder="+33 6 00 00 00 00")
-            pays        = st.text_input("Pays", placeholder="France")
+            telephone   = st.text_input("Téléphone", placeholder="+33 6 00 00 00 00",
+                                       key="res_tel_input")
+            # Auto-détection du pays depuis l'indicatif
+            _pays_auto = ""
+            _tel_val = st.session_state.get("res_tel_input", "")
+            if _tel_val and (_tel_val.startswith("+") or _tel_val.startswith("00")):
+                try:
+                    from services.indicatifs_service import detect_pays
+                    _res = detect_pays(_tel_val)
+                    if _res:
+                        _pays_auto = _res[0]
+                except: pass
+            pays = st.text_input("Pays", value=_pays_auto,
+                                  placeholder="France (auto depuis tél.)")
 
         with col2:
             st.markdown("**🏠 Séjour**")
