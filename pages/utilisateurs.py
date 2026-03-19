@@ -153,42 +153,60 @@ Le propriétaire choisira son mot de passe à la première connexion.
             if not inv_email or not inv_props:
                 st.error("Email et au moins une propriété sont obligatoires.")
             else:
-                with st.spinner("Envoi de l'invitation..."):
-                    ok = invite_user(inv_email, inv_props, inv_role)
-                if ok:
-                    _exists_ok = st.session_state.pop("_invite_error","") == "EXISTS_OK"
-                    if _exists_ok:
-                        st.success(f"✅ Accès configuré pour **{inv_email}** (compte existant) !")
-                    else:
+                import os, requests as _req
+                _surl = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL",""))
+                _skey = st.secrets.get("SUPABASE_SERVICE_KEY", os.environ.get("SUPABASE_SERVICE_KEY",""))
+                _anon = st.secrets.get("SUPABASE_KEY", os.environ.get("SUPABASE_KEY",""))
+                from database.supabase_client import get_supabase
+                _sb = get_supabase()
+
+                with st.spinner("Traitement en cours..."):
+                    user_id = None
+
+                    # Étape 1 : Essayer d'inviter
+                    r = _req.post(
+                        f"{_surl}/auth/v1/invite",
+                        headers={"apikey": _skey, "Authorization": f"Bearer {_skey}",
+                                 "Content-Type": "application/json"},
+                        json={"email": inv_email}, timeout=15,
+                    )
+
+                    if r.status_code in (200, 201):
+                        user_id = r.json().get("id")
                         st.success(f"✅ Invitation envoyée à **{inv_email}** !")
-                    st.info(f"Il recevra un email pour créer son mot de passe et accéder à : "
-                            f"{', '.join(next((p['nom'] for p in props_list if p['id']==pid), str(pid)) for pid in inv_props)}")
-                else:
-                    err_detail = st.session_state.pop("_invite_error", "")
-                    st.error("❌ Erreur lors de l'invitation.")
-                    # Diagnostic détaillé
-                    import os
-                    has_service_key = bool(
-                        st.secrets.get("SUPABASE_SERVICE_KEY","") or
-                        os.environ.get("SUPABASE_SERVICE_KEY","")
-                    )
-                    has_url = bool(
-                        st.secrets.get("SUPABASE_URL","") or
-                        os.environ.get("SUPABASE_URL","")
-                    )
-                    col_d1, col_d2 = st.columns(2)
-                    col_d1.metric("SUPABASE_URL", "✅ OK" if has_url else "❌ Manquant")
-                    col_d2.metric("SUPABASE_SERVICE_KEY", "✅ OK" if has_service_key else "❌ Manquant")
-                    if not has_service_key:
-                        st.warning("""
-**SUPABASE_SERVICE_KEY manquant.** Pour l'ajouter :
-1. Supabase → Project Settings → API → **service_role** key → Copy
-2. Streamlit Cloud → Settings → Secrets → ajouter :
-```
-SUPABASE_SERVICE_KEY = "eyJ..."
-```
-3. Manage app → **Reboot**
-""")
-                    if err_detail:
-                        with st.expander("Détail technique"):
-                            st.code(err_detail, language="text")
+                    elif "email_exists" in r.text:
+                        # Utilisateur déjà existant — récupérer son UUID
+                        r2 = _req.get(
+                            f"{_surl}/auth/v1/admin/users",
+                            headers={"apikey": _skey, "Authorization": f"Bearer {_skey}"},
+                            timeout=10,
+                        )
+                        if r2.status_code == 200:
+                            users = r2.json().get("users", [])
+                            existing = next((u for u in users
+                                             if u.get("email","").lower() == inv_email.lower()), None)
+                            if existing:
+                                user_id = existing["id"]
+                                st.success(f"✅ Accès configuré pour **{inv_email}** (compte existant).")
+                            else:
+                                st.error("Utilisateur introuvable dans la liste Auth.")
+                        else:
+                            st.error(f"Erreur récupération users: {r2.status_code}")
+                    else:
+                        st.error(f"❌ Erreur invitation: {r.status_code} — {r.text[:150]}")
+
+                    # Étape 2 : Créer profil + accès si user_id trouvé
+                    if user_id and _sb:
+                        _sb.table("profiles").upsert({
+                            "id": user_id, "email": inv_email, "role": inv_role,
+                            "nom": inv_nom or inv_email.split("@")[0]
+                        }).execute()
+                        for pid in inv_props:
+                            _sb.table("propriete_access").upsert({
+                                "user_id": user_id, "propriete_id": pid, "role": inv_role
+                            }, on_conflict="user_id,propriete_id").execute()
+                        prop_noms = ', '.join(
+                            next((p['nom'] for p in props_list if p['id']==pid), str(pid))
+                            for pid in inv_props
+                        )
+                        st.info(f"Propriétés assignées : {prop_noms}")
