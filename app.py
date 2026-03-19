@@ -324,9 +324,17 @@ def _show_splash_login():
             if prop_trouvee:
                 pid = prop_trouvee["id"]
                 is_admin = (pid == admin_prop_id)
+
+                # Détecter si c'est le code gestionnaire
+                stored_gest = prop_trouvee.get("mot_de_passe_gestionnaire","") or ""
+                is_gestionnaire = (not is_admin and stored_gest and
+                                   (_hash_mdp(pin_input) == stored_gest or pin_input == stored_gest))
+                user_role = "admin" if is_admin else ("gestionnaire" if is_gestionnaire else "proprietaire")
+
                 st.session_state["global_logged_in"] = True
-                st.session_state["is_admin"] = is_admin
-                st.session_state["prop_id"] = 0 if is_admin else pid
+                st.session_state["is_admin"]   = is_admin
+                st.session_state["user_role"]  = user_role
+                st.session_state["prop_id"]    = 0 if is_admin else pid
                 if is_admin:
                     for p in props:
                         st.session_state[f"unlocked_{p['id']}"] = True
@@ -336,7 +344,7 @@ def _show_splash_login():
                     from database.journal_repo import log_connexion as _log_pin
                     _log_pin(mode="pin", statut="succes",
                              propriete_id=pid, propriete_nom=prop_trouvee.get("nom",""),
-                             detail="admin" if is_admin else "proprietaire")
+                             detail=user_role)
                 except: pass
                 st.rerun()
             else:
