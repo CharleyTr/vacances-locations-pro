@@ -157,7 +157,7 @@ def _show_stats_pays(df):
         fig_pie.update_layout(showlegend=False, margin=dict(t=0,b=0,l=0,r=0), height=320)
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    with col_g:
+    with col_t:
         st.subheader("💶 CA net par pays")
         fig_bar = px.bar(
             agg.head(10).sort_values("ca_net"),
