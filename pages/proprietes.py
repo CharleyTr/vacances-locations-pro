@@ -5,7 +5,6 @@ import streamlit as st
 from database.proprietes_repo import (
     fetch_all, insert_propriete, update_propriete, delete_propriete
 )
-from services.auth_service import set_password, remove_password
 from database.supabase_client import is_connected
 
 
