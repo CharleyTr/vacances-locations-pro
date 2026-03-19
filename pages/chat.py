@@ -3,7 +3,9 @@ Page Chat interne — messagerie en temps réel entre utilisateurs.
 """
 import streamlit as st
 from datetime import datetime, timezone
-from database.chat_repo import get_messages, send_message, mark_read, delete_message
+from database.chat_repo import (get_messages, send_message, mark_read, delete_message,
+    upload_fichier, get_download_url, send_message_with_file
+)
 from services.proprietes_service import get_proprietes_autorises
 
 
@@ -106,6 +108,11 @@ def show():
             prop_id = msg.get("propriete_id")
             prop_label = f" · {props.get(prop_id,'?')}" if prop_id and not prop_filter else ""
 
+            fichier_path = msg.get("fichier_path","")
+            fichier_nom  = msg.get("fichier_nom","")
+            fichier_type = msg.get("fichier_type","")
+            fichier_mime = msg.get("fichier_mime","")
+
             if is_mine:
                 st.markdown(f"""
                 <div class="msg-mine">
@@ -123,10 +130,29 @@ def show():
                   </div>
                 </div>""", unsafe_allow_html=True)
 
+            # Afficher la pièce jointe sous la bulle
+            if fichier_path:
+                url = get_download_url(fichier_path)
+                if url:
+                    if fichier_type == "image":
+                        try:
+                            st.image(url, caption=fichier_nom, width=300)
+                        except:
+                            st.link_button(f"🖼️ {fichier_nom}", url)
+                    else:
+                        ext = fichier_nom.rsplit(".",1)[-1].upper() if "." in fichier_nom else "?"
+                        st.markdown(
+                            f"<a href='{url}' target='_blank' style='display:inline-block;"
+                            f"padding:6px 12px;background:#E3F2FD;border-radius:8px;"
+                            f"color:#1565C0;text-decoration:none;font-size:13px'>"
+                            f"📎 {fichier_nom} <span style='opacity:0.6;font-size:11px'>({ext})</span></a>",
+                            unsafe_allow_html=True
+                        )
+
             # Bouton suppression admin
             if is_admin and st.button("🗑️", key=f"del_msg_{msg['id']}",
                                        help="Supprimer ce message"):
-                delete_message(msg["id"])
+                delete_message(msg["id"], fichier_path)
                 st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
@@ -141,27 +167,46 @@ def show():
 
     # ── Formulaire d'envoi ────────────────────────────────────────────────
     with st.form("form_chat_send", clear_on_submit=True):
-        col_msg, col_btn = st.columns([5, 1])
-        with col_msg:
-            texte = st.text_input(
-                "Message",
-                placeholder=f"Écrivez un message... (canal : {canaux[canal_choix]})",
-                label_visibility="collapsed",
-                key="chat_input"
+        texte = st.text_input(
+            "Message",
+            placeholder=f"Écrivez un message... (canal : {canaux[canal_choix]})",
+            label_visibility="collapsed",
+            key="chat_input"
+        )
+        col_f, col_btn = st.columns([3, 1])
+        with col_f:
+            fichier = st.file_uploader(
+                "📎 Joindre un fichier (optionnel)",
+                type=["jpg","jpeg","png","gif","webp","pdf","docx","xlsx","txt","csv"],
+                key="chat_file",
+                label_visibility="visible"
             )
         with col_btn:
+            st.markdown("<div style='margin-top:28px'></div>", unsafe_allow_html=True)
             envoyer = st.form_submit_button("📤 Envoyer", type="primary",
                                              use_container_width=True)
 
-    if envoyer and texte.strip():
-        result = send_message(
+    if envoyer and (texte.strip() or fichier):
+        # Upload fichier si présent
+        f_path = f_nom = f_type = f_mime = ""
+        if fichier:
+            f_mime = fichier.type or "application/octet-stream"
+            f_nom  = fichier.name
+            f_type = "image" if f_mime.startswith("image/") else "document"
+            f_path = upload_fichier(fichier.read(), f_nom, f_mime, user_email) or ""
+
+        result = send_message_with_file(
             contenu=texte.strip(),
             user_email=user_email,
             user_nom=user_nom,
             propriete_id=prop_filter,
+            fichier_nom=f_nom,
+            fichier_path=f_path,
+            fichier_type=f_type,
+            fichier_mime=f_mime,
         )
         if result:
             st.session_state["chat_refresh"] += 1
             st.rerun()
         else:
-            st.error("❌ Erreur lors de l'envoi. Vérifiez la connexion Supabase.")
+            st.error("❌ Erreur lors de l'envoi.")
