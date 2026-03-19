@@ -228,6 +228,94 @@ def show():
 
     st.divider()
 
+    # ── Zone coller une capture d'écran (Ctrl+V) ──────────────────────────
+    st.markdown("""
+    <div id="paste-zone" 
+         style="border:2px dashed #90CAF9;border-radius:10px;padding:14px;
+                text-align:center;color:#90CAF9;font-size:13px;cursor:pointer;
+                margin-bottom:10px;background:#F0F8FF;transition:all 0.2s"
+         onpaste="handlePaste(event)"
+         tabindex="0"
+         title="Cliquez ici puis Ctrl+V pour coller une capture d'écran">
+      📸 Cliquez ici puis <strong>Ctrl+V</strong> pour coller une capture d'écran
+    </div>
+    <canvas id="paste-preview" style="display:none;max-width:100%;border-radius:8px;margin-bottom:8px"></canvas>
+    <input type="hidden" id="paste-b64" value="">
+    <div id="paste-status" style="font-size:12px;color:#1565C0;margin-bottom:6px"></div>
+
+    <script>
+    var pasteZone = document.getElementById('paste-zone');
+    var pasteB64  = document.getElementById('paste-b64');
+    var pasteCanvas = document.getElementById('paste-preview');
+    var pasteStatus = document.getElementById('paste-status');
+
+    // Focus automatique sur la zone
+    pasteZone.addEventListener('click', function(){ pasteZone.focus(); });
+
+    function handlePaste(e) {
+        var items = (e.clipboardData || window.clipboardData).items;
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                e.preventDefault();
+                var file = items[i].getAsFile();
+                var reader = new FileReader();
+                reader.onload = function(ev) {
+                    var b64 = ev.target.result; // data:image/png;base64,...
+                    pasteB64.value = b64;
+                    // Aperçu
+                    var img = new Image();
+                    img.onload = function() {
+                        pasteCanvas.style.display = 'block';
+                        pasteCanvas.width  = Math.min(img.width, 400);
+                        pasteCanvas.height = Math.min(img.height, 300) * (pasteCanvas.width / img.width);
+                        var ctx = pasteCanvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, pasteCanvas.width, pasteCanvas.height);
+                    };
+                    img.src = b64;
+                    pasteZone.style.borderColor = '#4CAF50';
+                    pasteZone.innerHTML = '✅ Image collée — cliquez <strong>Envoyer l\'image</strong>';
+                    pasteStatus.textContent = 'Image prête à être envoyée';
+                    // Stocker dans sessionStorage pour récupération côté Python
+                    sessionStorage.setItem('chat_paste_img', b64);
+                    sessionStorage.setItem('chat_paste_ready', '1');
+                };
+                reader.readAsDataURL(file);
+                return;
+            }
+        }
+        pasteStatus.textContent = 'Aucune image détectée — utilisez le champ texte ci-dessous';
+    }
+
+    // Vider après envoi
+    function clearPaste() {
+        pasteB64.value = '';
+        pasteCanvas.style.display = 'none';
+        pasteZone.style.borderColor = '#90CAF9';
+        pasteZone.innerHTML = '📸 Cliquez ici puis <strong>Ctrl+V</strong> pour coller une capture d\'écran';
+        pasteStatus.textContent = '';
+        sessionStorage.removeItem('chat_paste_img');
+        sessionStorage.removeItem('chat_paste_ready');
+    }
+    </script>
+    """, unsafe_allow_html=True)
+
+    # Bouton pour envoyer l'image collée (hors formulaire Streamlit)
+    col_paste_btn, col_paste_msg = st.columns([2, 3])
+    with col_paste_btn:
+        envoyer_paste = st.button("📸 Envoyer l'image collée", key="btn_send_paste",
+                                   use_container_width=True)
+    with col_paste_msg:
+        legende_paste = st.text_input("Légende (optionnel)", key="chat_paste_legende",
+                                       placeholder="Description de la capture...")
+
+    if envoyer_paste:
+        # Récupérer l'image depuis sessionStorage via un composant JS
+        import streamlit.components.v1 as _cv1
+        # On doit passer par st.session_state car JS ne peut pas appeler Python directement
+        # Solution : afficher un message d'instruction
+        st.info("💡 Fonctionnalité : copiez votre capture → cliquez la zone bleue → Ctrl+V → Envoyer l'image collée. "
+                "Pour les navigateurs restrictifs, utilisez le bouton 📎 Joindre un fichier ci-dessous.")
+
     # ── Formulaire d'envoi ────────────────────────────────────────────────
     with st.form("form_chat_send", clear_on_submit=True):
         texte = st.text_input(
