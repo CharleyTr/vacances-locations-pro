@@ -118,7 +118,21 @@ def show():
             )
         with col3:
             st.markdown("&nbsp;", unsafe_allow_html=True)
-            if st.button("💾 Appliquer", key=f"save_mdp_{p['id']}"):
+            col_del1, col_del2 = st.columns(2)
+            with col_del1:
+                if st.button("🗑️ Supprimer code propriétaire", key=f"del_mdp_{p['id']}",
+                             help="Supprime le code propriétaire"):
+                    update_propriete(p["id"], {"mot_de_passe": None})
+                    st.success("✅ Code propriétaire supprimé")
+                    st.rerun()
+            with col_del2:
+                if st.button("🗑️ Supprimer code gestionnaire", key=f"del_gest_{p['id']}",
+                             help="Supprime le code gestionnaire"):
+                    update_propriete(p["id"], {"mot_de_passe_gestionnaire": None})
+                    st.success("✅ Code gestionnaire supprimé")
+                    st.rerun()
+
+            if st.button("💾 Appliquer les nouveaux codes", key=f"save_mdp_{p['id']}"):
                 import hashlib as _hl
                 updates = {}
                 if new_mdp.strip():
@@ -130,7 +144,7 @@ def show():
                     st.success(f"✅ Codes mis à jour pour {p['nom']}")
                     st.rerun()
                 else:
-                    st.warning("Saisissez au moins un code.")
+                    st.warning("Saisissez au moins un code dans les champs ci-dessus.")
 
     st.divider()
 
