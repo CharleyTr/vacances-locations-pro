@@ -450,6 +450,10 @@ try:
 except ImportError:
     chat = None
 try:
+    from pages import mon_profil
+except ImportError:
+    mon_profil = None
+try:
     from pages import utilisateurs
 except ImportError:
     utilisateurs = None
@@ -503,5 +507,6 @@ elif page == "Documentation":     documentation.show()    if documentation   els
 elif page == "Factures":          factures.show()         if factures         else st.error("Uploadez pages/factures.py")
 elif page == "Utilisateurs":      utilisateurs.show()     if utilisateurs     else st.error("Uploadez pages/utilisateurs.py")
 elif page == "Journal":           journal.show()          if journal          else st.error("Uploadez pages/journal.py")
-elif page == "Chat":              chat.show()             if chat             else st.error("Uploadez pages/chat.py")
+elif page == "Chat":              chat.show()
+elif page == "Mon profil":        mon_profil.show()       if mon_profil       else st.error("Uploadez pages/mon_profil.py")             if chat             else st.error("Uploadez pages/chat.py")
 elif page == "Questionnaire": questionnaire.show() if questionnaire else st.error("Uploadez pages/questionnaire.py")
