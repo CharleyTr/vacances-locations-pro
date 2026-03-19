@@ -156,7 +156,11 @@ Le propriétaire choisira son mot de passe à la première connexion.
                 with st.spinner("Envoi de l'invitation..."):
                     ok = invite_user(inv_email, inv_props, inv_role)
                 if ok:
-                    st.success(f"✅ Invitation envoyée à **{inv_email}** !")
+                    _exists_ok = st.session_state.pop("_invite_error","") == "EXISTS_OK"
+                    if _exists_ok:
+                        st.success(f"✅ Accès configuré pour **{inv_email}** (compte existant) !")
+                    else:
+                        st.success(f"✅ Invitation envoyée à **{inv_email}** !")
                     st.info(f"Il recevra un email pour créer son mot de passe et accéder à : "
                             f"{', '.join(next((p['nom'] for p in props_list if p['id']==pid), str(pid)) for pid in inv_props)}")
                 else:
