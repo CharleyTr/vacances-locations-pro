@@ -104,6 +104,86 @@ def _show_comparatif(df_all, annee_ref):
 # Page principale
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _show_stats_pays(df):
+    """Statistiques par pays d'origine des voyageurs."""
+    import plotly.express as px
+
+    # Filtrer les réservations réelles (pas fermetures)
+    df_pays = df[
+        (df["plateforme"] != "Fermeture") &
+        df["pays"].notna() &
+        (df["pays"].str.strip() != "")
+    ].copy()
+
+    if df_pays.empty:
+        st.info("Aucune donnée pays disponible. Assurez-vous que le pays est renseigné dans les réservations.")
+        st.caption("💡 Le pays est auto-détecté depuis l'indicatif téléphonique lors de l'enregistrement.")
+        return
+
+    # ── KPIs ─────────────────────────────────────────────────────────────
+    nb_pays = df_pays["pays"].nunique()
+    top_pays = df_pays["pays"].value_counts().index[0] if len(df_pays) > 0 else "—"
+    pct_top  = df_pays["pays"].value_counts().iloc[0] / len(df_pays) * 100 if len(df_pays) > 0 else 0
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("🌍 Pays représentés", nb_pays)
+    c2.metric("🏆 1er marché",       top_pays)
+    c3.metric("📊 Part du 1er",      f"{pct_top:.0f}%")
+    c4.metric("📋 Réservations",     len(df_pays))
+
+    st.divider()
+
+    # ── Agrégation par pays ───────────────────────────────────────────────
+    agg = df_pays.groupby("pays").agg(
+        reservations  = ("id",         "count"),
+        nuits         = ("nuitees",    "sum"),
+        ca_net        = ("prix_net",   "sum"),
+        ca_brut       = ("prix_brut",  "sum"),
+    ).reset_index().sort_values("reservations", ascending=False)
+
+    agg["ca_moyen"] = (agg["ca_net"] / agg["reservations"]).round(0)
+    agg["nuits_moy"] = (agg["nuits"] / agg["reservations"]).round(1)
+
+    col_g, col_t = st.columns([1, 1])
+
+    with col_g:
+        st.subheader("🥧 Répartition des séjours")
+        fig_pie = px.pie(
+            agg.head(10), values="reservations", names="pays",
+            color_discrete_sequence=px.colors.qualitative.Set3,
+            hole=0.4,
+        )
+        fig_pie.update_traces(textposition="inside", textinfo="percent+label")
+        fig_pie.update_layout(showlegend=False, margin=dict(t=0,b=0,l=0,r=0), height=320)
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+    with col_g:
+        st.subheader("💶 CA net par pays")
+        fig_bar = px.bar(
+            agg.head(10).sort_values("ca_net"),
+            x="ca_net", y="pays", orientation="h",
+            color="ca_net",
+            color_continuous_scale="Blues",
+            labels={"ca_net": "CA net (€)", "pays": ""},
+        )
+        fig_bar.update_layout(coloraxis_showscale=False,
+                               margin=dict(t=0,b=0,l=0,r=0), height=320)
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    st.subheader("📋 Détail par pays")
+    agg_display = agg.copy()
+    agg_display.columns = ["Pays", "Réservations", "Nuits", "CA net (€)", "CA brut (€)", "CA moyen (€)", "Nuits moy."]
+    agg_display["CA net (€)"]   = agg_display["CA net (€)"].apply(lambda x: f"{x:,.0f} €")
+    agg_display["CA brut (€)"]  = agg_display["CA brut (€)"].apply(lambda x: f"{x:,.0f} €")
+    agg_display["CA moyen (€)"] = agg_display["CA moyen (€)"].apply(lambda x: f"{x:,.0f} €")
+
+    st.dataframe(agg_display, use_container_width=True, hide_index=True)
+
+    # Export
+    csv = agg_display.to_csv(index=False).encode("utf-8")
+    st.download_button("⬇️ Exporter CSV", csv, "stats_pays.csv", "text/csv")
+
+
 def show():
     st.title("📈 Analyses financières")
 
@@ -153,13 +233,17 @@ def show():
         ]
 
     # ── Onglets ───────────────────────────────────────────────────────────────
-    tab_bilan, tab_compar = st.tabs(["📊 Bilan annuel", "📅 Comparaison pluriannuelle"])
+    tab_bilan, tab_compar, tab_pays = st.tabs(["📊 Bilan annuel", "📅 Comparaison pluriannuelle", "🌍 Par pays"])
 
     # ── TAB 2 : Comparaison pluriannuelle ─────────────────────────────────────
     with tab_compar:
         _show_comparatif(df, int(annee))
 
     # ── TAB 1 : Bilan annuel ──────────────────────────────────────────────────
+    # ── TAB PAYS ─────────────────────────────────────────────────────────
+    with tab_pays:
+        _show_stats_pays(df)
+
     with tab_bilan:
         df_an = df[df["annee"] == annee]
         if df_an.empty:
