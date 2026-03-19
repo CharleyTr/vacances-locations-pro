@@ -102,11 +102,22 @@ def sidebar() -> str:
         PAGES_ADMIN_ONLY = {"🏠 Propriétés", "📐 Barèmes fiscaux", "👥 Utilisateurs", "📋 Journal", "👤 Mon profil"}
         is_admin = st.session_state.get("is_admin", False)
 
-        _has_auth = bool(st.session_state.get("auth_user_id"))
-        pages_visibles = {
-            k: v for k, v in PAGES.items()
-            if (k not in PAGES_ADMIN_ONLY or is_admin)
+        _user_role = st.session_state.get("user_role", "proprietaire")
+        # Pages visibles uniquement pour gestionnaire
+        PAGES_GESTIONNAIRE = {
+            "📊 Dashboard", "📋 Réservations", "📅 Calendrier",
+            "🧹 Ménage", "📧 Messages", "💬 Chat", "👤 Mon profil", "📖 Documentation"
         }
+
+        if is_admin:
+            pages_visibles = dict(PAGES)
+        elif _user_role == "gestionnaire":
+            pages_visibles = {k: v for k, v in PAGES.items()
+                              if k in PAGES_GESTIONNAIRE}
+        else:
+            # Propriétaire : tout sauf pages admin
+            pages_visibles = {k: v for k, v in PAGES.items()
+                              if k not in PAGES_ADMIN_ONLY}
 
         choice = st.radio(
             "Navigation",
