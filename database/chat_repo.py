@@ -39,13 +39,17 @@ def send_message(contenu: str, user_email: str, user_nom: str = "",
 
 
 def count_unread(user_email: str) -> int:
-    """Nombre de messages non lus pour cet utilisateur."""
+    """Nombre de messages non lus pour cet utilisateur (hors ses propres messages)."""
     sb = get_supabase()
     if sb is None:
         return 0
     try:
-        rows = sb.table(TABLE).select("lu_par").execute().data or []
-        return sum(1 for r in rows if user_email not in (r.get("lu_par") or []))
+        rows = sb.table(TABLE).select("lu_par,user_email").execute().data or []
+        return sum(
+            1 for r in rows
+            if r.get("user_email") != user_email          # pas ses propres messages
+            and user_email not in (r.get("lu_par") or []) # pas encore lus
+        )
     except:
         return 0
 
