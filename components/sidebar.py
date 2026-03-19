@@ -27,6 +27,7 @@ PAGES = {
     "📐 Barèmes fiscaux":    "Barèmes fiscaux",
     "👥 Utilisateurs":       "Utilisateurs",
     "📋 Journal":            "Journal",
+    "💬 Chat":               "Chat",
     "🧾 Factures":           "Factures",
     "📖 Documentation":      "Documentation",
 }
