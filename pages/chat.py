@@ -89,6 +89,24 @@ def show():
     else:
         # Afficher les messages dans un conteneur scrollable
         st.markdown("""
+        <script>
+        function copyMsg(id) {
+            var el = document.getElementById('msg-' + id);
+            if (!el) return;
+            var text = el.innerText || el.textContent;
+            navigator.clipboard.writeText(text).then(function() {
+                var spans = document.querySelectorAll('[onclick="copyMsg(\''+id+'\')"]');
+                spans.forEach(function(s){ s.textContent='✅'; setTimeout(function(){ s.textContent='📋'; }, 1500); });
+            }).catch(function() {
+                // Fallback pour navigateurs sans clipboard API
+                var ta = document.createElement('textarea');
+                ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+                document.body.appendChild(ta); ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            });
+        }
+        </script>
         <style>
         .chat-container { max-height: 450px; overflow-y: auto; padding: 1rem 0; }
         .msg-mine   { display:flex; justify-content:flex-end; margin:6px 0; }
@@ -113,20 +131,29 @@ def show():
             fichier_type = msg.get("fichier_type","")
             fichier_mime = msg.get("fichier_mime","")
 
+            msg_id_str = str(msg.get("id",""))
             if is_mine:
                 st.markdown(f"""
                 <div class="msg-mine">
                   <div>
-                    <div class="bubble-mine">{contenu}</div>
-                    <div class="msg-meta" style="text-align:right">{temps}{prop_label}</div>
+                    <div class="bubble-mine" id="msg-{msg_id_str}">{contenu}</div>
+                    <div class="msg-meta" style="text-align:right">
+                      <span onclick="copyMsg('{msg_id_str}')" title="Copier"
+                        style="cursor:pointer;margin-right:6px;opacity:0.6">📋</span>
+                      {temps}{prop_label}
+                    </div>
                   </div>
                 </div>""", unsafe_allow_html=True)
             else:
                 st.markdown(f"""
                 <div class="msg-other">
                   <div>
-                    <div class="bubble-other"><strong>{nom}</strong><br>{contenu}</div>
-                    <div class="msg-meta">{temps}{prop_label}</div>
+                    <div class="bubble-other" id="msg-{msg_id_str}"><strong>{nom}</strong><br>{contenu}</div>
+                    <div class="msg-meta">
+                      <span onclick="copyMsg('{msg_id_str}')" title="Copier"
+                        style="cursor:pointer;margin-right:6px;opacity:0.6">📋</span>
+                      {temps}{prop_label}
+                    </div>
                   </div>
                 </div>""", unsafe_allow_html=True)
 
