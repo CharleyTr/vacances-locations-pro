@@ -28,6 +28,7 @@ PAGES = {
     "👥 Utilisateurs":       "Utilisateurs",
     "📋 Journal":            "Journal",
     "💬 Chat":               "Chat",
+    "👤 Mon profil":         "Mon profil",
     "🧾 Factures":           "Factures",
     "📖 Documentation":      "Documentation",
 }
@@ -101,9 +102,11 @@ def sidebar() -> str:
         PAGES_ADMIN_ONLY = {"🏠 Propriétés", "📐 Barèmes fiscaux", "👥 Utilisateurs", "📋 Journal"}
         is_admin = st.session_state.get("is_admin", False)
 
+        _has_auth = bool(st.session_state.get("auth_user_id"))
         pages_visibles = {
             k: v for k, v in PAGES.items()
-            if k not in PAGES_ADMIN_ONLY or is_admin
+            if (k not in PAGES_ADMIN_ONLY or is_admin)
+            and (k != "👤 Mon profil" or _has_auth)
         }
 
         choice = st.radio(
