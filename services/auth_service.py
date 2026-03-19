@@ -1,89 +1,230 @@
 """
-Module d'authentification par propriété.
-Mot de passe stocké hashé (SHA-256) dans la table proprietes.
+Repository pour la gestion des utilisateurs via Supabase Auth.
+Coexiste avec le système PIN actuel pendant la migration.
 """
-import hashlib
-import streamlit as st
-from database.proprietes_repo import fetch_all, update_propriete
+from database.supabase_client import get_supabase
 
 
-def _hash(mdp: str) -> str:
-    return hashlib.sha256(mdp.strip().encode()).hexdigest()
-
-
-def check_password(prop_id: int, mdp_saisi: str, mdp_hash_stored: str) -> bool:
-    """Vérifie si le mot de passe saisi correspond au hash stocké."""
-    return _hash(mdp_saisi) == mdp_hash_stored
-
-
-def set_password(prop_id: int, nouveau_mdp: str) -> bool:
-    """Enregistre un nouveau mot de passe hashé pour la propriété."""
+def get_profile(user_id: str) -> dict | None:
+    """Retourne le profil d'un utilisateur."""
+    sb = get_supabase()
+    if sb is None: return None
     try:
-        update_propriete(prop_id, {"mot_de_passe": _hash(nouveau_mdp)})
-        return True
-    except Exception as e:
-        print(f"set_password error: {e}")
-        return False
+        r = sb.table("profiles").select("*").eq("id", user_id).single().execute()
+        return r.data
+    except: return None
 
 
-def remove_password(prop_id: int) -> bool:
-    """Supprime le mot de passe d'une propriété (accès libre)."""
+def get_all_profiles() -> list:
+    """Retourne tous les profils (admin uniquement)."""
+    sb = get_supabase()
+    if sb is None: return []
     try:
-        update_propriete(prop_id, {"mot_de_passe": None})
-        return True
-    except Exception as e:
-        print(f"remove_password error: {e}")
+        return sb.table("profiles").select("*").order("created_at").execute().data or []
+    except: return []
+
+
+def get_proprietes_for_user(user_id: str, role: str = "admin") -> list:
+    """
+    Retourne les proprietes accessibles pour un utilisateur.
+    Admin → toutes. Autres → via propriete_access.
+    """
+    sb = get_supabase()
+    if sb is None: return []
+    try:
+        if role == "admin":
+            return sb.table("proprietes").select("*").eq("actif", True).order("id").execute().data or []
+        else:
+            # Joindre propriete_access et proprietes
+            access = sb.table("propriete_access").select("propriete_id")\
+                       .eq("user_id", user_id).execute().data or []
+            prop_ids = [a["propriete_id"] for a in access]
+            if not prop_ids: return []
+            return sb.table("proprietes").select("*")\
+                     .in_("id", prop_ids).eq("actif", True).execute().data or []
+    except: return []
+
+
+def invite_user(email: str, propriete_ids: list, role: str = "gestionnaire") -> bool:
+    """
+    Invite un nouvel utilisateur via l'API Admin Supabase (service_role key).
+    Supabase envoie automatiquement un email d'invitation.
+    """
+    import requests, os
+    import streamlit as st
+
+    sb = get_supabase()
+    if sb is None: return False
+
+    # Récupérer l'URL et la service_role key
+    try:
+        supabase_url = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL",""))
+        service_key  = st.secrets.get("SUPABASE_SERVICE_KEY",
+                       os.environ.get("SUPABASE_SERVICE_KEY",""))
+    except Exception as se:
+        supabase_url = os.environ.get("SUPABASE_URL","")
+        service_key  = os.environ.get("SUPABASE_SERVICE_KEY","")
+        print(f"invite_user secrets error: {se}")
+
+    if not service_key:
+        msg = "SUPABASE_SERVICE_KEY manquant — ajoutez-le dans Streamlit Cloud Secrets"
+        print(f"invite_user: {msg}")
+        try: _st.session_state["_invite_error"] = msg
+        except: pass
         return False
+    
+    # Masquer la clé dans les logs
+    key_preview = service_key[:20] + "..." if len(service_key) > 20 else "???"
+    print(f"invite_user: URL={supabase_url[:40]}, key={key_preview}")
 
-
-def is_unlocked(prop_id: int) -> bool:
-    """Retourne True si la propriété est déverrouillée en session."""
-    if prop_id == 0:
-        return True
-    return st.session_state.get(f"unlocked_{prop_id}", False)
-
-
-def unlock(prop_id: int):
-    st.session_state[f"unlocked_{prop_id}"] = True
-
-
-def lock(prop_id: int):
-    st.session_state.pop(f"unlocked_{prop_id}", None)
-
-
-def require_auth(prop_id: int, prop_nom: str, mdp_hash: str) -> bool:
-    """
-    Affiche le formulaire de connexion si nécessaire.
-    Retourne True si l'accès est autorisé, False si le formulaire est affiché.
-    """
-    if not mdp_hash:          # Pas de mot de passe configuré
-        return True
-    if is_unlocked(prop_id):  # Déjà authentifié en session
-        return True
-
-    # Afficher le formulaire
-    st.markdown("---")
-    col = st.columns([1, 2, 1])[1]
-    with col:
-        st.markdown(
-            f"<div style='text-align:center;padding:2rem 1rem'>"
-            f"<div style='font-size:48px'>🔐</div>"
-            f"<h3>{prop_nom}</h3>"
-            f"<p style='color:#666'>Cette propriété est protégée par un mot de passe.</p>"
-            f"</div>",
-            unsafe_allow_html=True
+    try:
+        # Appel API Admin Supabase pour inviter l'utilisateur
+        r = requests.post(
+            f"{supabase_url}/auth/v1/invite",
+            headers={
+                "apikey": service_key,
+                "Authorization": f"Bearer {service_key}",
+                "Content-Type": "application/json",
+            },
+            json={"email": email},
+            timeout=15,
         )
-        with st.form(f"form_auth_{prop_id}"):
-            mdp_input = st.text_input("Mot de passe", type="password",
-                                       placeholder="Entrez le mot de passe...")
-            submitted = st.form_submit_button("🔓 Accéder", type="primary",
-                                               use_container_width=True)
+        user_id = None
 
-        if submitted:
-            if check_password(prop_id, mdp_input, mdp_hash):
-                unlock(prop_id)
-                st.success("✅ Accès autorisé !")
-                st.rerun()
-            else:
-                st.error("❌ Mot de passe incorrect.")
-    return False
+        if r.status_code in (200, 201):
+            user_id = r.json().get("id")
+        elif r.status_code == 422 and "email_exists" in r.text:
+            # Utilisateur existant — récupérer son UUID
+            try:
+                r2 = requests.get(
+                    f"{supabase_url}/auth/v1/admin/users",
+                    headers={"apikey": service_key,
+                             "Authorization": f"Bearer {service_key}"},
+                    timeout=10,
+                )
+                if r2.status_code == 200:
+                    users = r2.json().get("users", [])
+                    existing = next((u for u in users
+                                     if u.get("email","").lower() == email.lower()), None)
+                    if existing:
+                        user_id = existing.get("id")
+                        import streamlit as _st
+                        try: _st.session_state["_invite_error"] = "EXISTS_OK"
+                        except: pass
+            except Exception as e2:
+                print(f"récupération UUID error: {e2}")
+        else:
+            print(f"invite_user API error: {r.status_code} — {r.text}")
+            import streamlit as _st
+            try: _st.session_state["_invite_error"] = f"API {r.status_code}: {r.text[:200]}"
+            except: pass
+            return False
+
+        if not user_id: return False
+
+        # Créer le profil dans notre table
+        sb.table("profiles").upsert({
+            "id": user_id, "email": email, "role": role
+        }).execute()
+
+        # Donner accès aux propriétés
+        for pid in propriete_ids:
+            sb.table("propriete_access").upsert({
+                "user_id": user_id, "propriete_id": pid, "role": role
+            }, on_conflict="user_id,propriete_id").execute()
+
+        return True
+    except Exception as e:
+        print(f"invite_user error: {e}")
+        import streamlit as _st
+        try: _st.session_state["_invite_error"] = str(e)
+        except: pass
+        return False
+
+
+def revoke_access(user_id: str, propriete_id: int) -> bool:
+    """Supprime l'accès d'un utilisateur à une propriété."""
+    sb = get_supabase()
+    if sb is None: return False
+    try:
+        sb.table("propriete_access").delete()\
+          .eq("user_id", user_id).eq("propriete_id", propriete_id).execute()
+        return True
+    except: return False
+
+
+def sign_in_with_email(email: str, password: str) -> dict | None:
+    """Connexion via email/mot de passe Supabase Auth."""
+    sb = get_supabase()
+    if sb is None: return None
+    try:
+        r = sb.auth.sign_in_with_password({"email": email, "password": password})
+        return {"user": r.user, "session": r.session} if r.user else None
+    except Exception as e:
+        print(f"sign_in error: {e}")
+        return None
+
+
+def sign_in_with_code(email: str, code: str) -> dict | None:
+    """
+    Connexion via email + code d'accès personnel (défini par le propriétaire).
+    Ne nécessite pas le mot de passe Supabase Auth.
+    """
+    import hashlib
+    sb = get_supabase()
+    if sb is None: return None
+    try:
+        # Chercher le profil par email
+        rows = sb.table("profiles").select("id,email,role,code_acces")                 .eq("email", email.strip().lower()).execute().data or []
+        if not rows:
+            return None
+        profile = rows[0]
+        stored = profile.get("code_acces", "") or ""
+        if not stored:
+            return None
+        # Vérifier le code (en clair ou hashé)
+        code_hash = hashlib.sha256(code.strip().encode()).hexdigest()
+        if code != stored and code_hash != stored:
+            return None
+        # Code OK → retourner les infos du profil
+        return {"user_id": profile["id"], "email": profile["email"],
+                "role": profile["role"]}
+    except Exception as e:
+        print(f"sign_in_with_code error: {e}")
+        return None
+
+
+def set_code_acces(user_id: str, nouveau_code: str, hint: str = "") -> bool:
+    """Définit ou modifie le code d'accès personnel d'un utilisateur."""
+    import hashlib
+    sb = get_supabase()
+    if sb is None: return False
+    try:
+        code_hash = hashlib.sha256(nouveau_code.strip().encode()).hexdigest()
+        sb.table("profiles").update({
+            "code_acces":      code_hash,
+            "code_acces_hint": hint or None,
+        }).eq("id", user_id).execute()
+        return True
+    except Exception as e:
+        print(f"set_code_acces error: {e}")
+        return False
+
+
+def get_profile_by_email(email: str) -> dict | None:
+    """Retourne le profil par email."""
+    sb = get_supabase()
+    if sb is None: return None
+    try:
+        rows = sb.table("profiles").select("*")                 .eq("email", email.strip().lower()).execute().data or []
+        return rows[0] if rows else None
+    except: return None
+
+
+def sign_out() -> bool:
+    sb = get_supabase()
+    if sb is None: return False
+    try:
+        sb.auth.sign_out()
+        return True
+    except: return False
