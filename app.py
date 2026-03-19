@@ -508,5 +508,5 @@ elif page == "Factures":          factures.show()         if factures         el
 elif page == "Utilisateurs":      utilisateurs.show()     if utilisateurs     else st.error("Uploadez pages/utilisateurs.py")
 elif page == "Journal":           journal.show()          if journal          else st.error("Uploadez pages/journal.py")
 elif page == "Chat":              chat.show()
-elif page == "Mon profil":        mon_profil.show()       if mon_profil       else st.error("Uploadez pages/mon_profil.py")             if chat             else st.error("Uploadez pages/chat.py")
+elif page == "Mon profil":        mon_profil.show()       if mon_profil       else st.error("Uploadez pages/mon_profil.py")
 elif page == "Questionnaire": questionnaire.show() if questionnaire else st.error("Uploadez pages/questionnaire.py")
