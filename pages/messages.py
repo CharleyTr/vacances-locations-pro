@@ -135,9 +135,18 @@ def _show_whatsapp(df: pd.DataFrame):
     else:
         tpl_obj = next((t for t in tpls_wa if t["id"] == tpl_id_wa), None)
         if tpl_obj:
+            # Générer le lien questionnaire
+            import os as _os
+            _app_url = st.secrets.get("APP_URL", _os.environ.get("APP_URL",""))
+            _res_id  = str(row.get("res_id", row.get("id", "")))
+            import hashlib as _hl
+            _token = _hl.md5(f"{_res_id}{_app_url}".encode()).hexdigest()[:16]
+            _lien_q = f"{_app_url}/?questionnaire={_token}&res={_res_id}" if _app_url and _res_id else ""
+
             message = apply_template(tpl_obj["contenu"], row,
                                      propriete_nom=prop_nom, ville=ville,
-                                     signataire=signataire)
+                                     signataire=signataire,
+                                     lien_questionnaire=_lien_q)
             st.text_area("Aperçu du message", value=message, height=180, disabled=True, key="wa_preview")
         else:
             message = ""
