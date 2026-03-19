@@ -28,6 +28,16 @@ def show():
     # ── TAB 1 : Liste des utilisateurs ───────────────────────────────────
     with tab1:
         profiles = get_all_profiles()
+        # Enrichir avec code_acces
+        try:
+            from database.supabase_client import get_supabase as _gsb
+            _sb2 = _gsb()
+            if _sb2:
+                _codes = {r["id"]: r.get("code_acces") 
+                          for r in (_sb2.table("profiles").select("id,code_acces").execute().data or [])}
+                for p in profiles:
+                    p["code_acces"] = _codes.get(p["id"])
+        except: pass
         props_all = {p["id"]: p["nom"] for p in fetch_all()}
 
         if not profiles:
@@ -62,6 +72,38 @@ def show():
                                     else:
                                         st.caption("Aucune propriété assignée")
                                 except: pass
+
+            # ── Définir / modifier le code d'accès ───────────────────────
+            if p["role"] != "admin":
+                st.markdown("**🔑 Code d'accès**")
+                has_code = bool(p.get("code_acces"))
+                st.caption(
+                    "✅ Code configuré — l'utilisateur peut le modifier dans Mon profil"
+                    if has_code else
+                    "❌ Aucun code — définissez-en un pour que l'utilisateur puisse se connecter"
+                )
+                with st.form(f"form_code_{p['id']}", clear_on_submit=True):
+                    new_code = st.text_input(
+                        "Nouveau code",
+                        type="password",
+                        placeholder="Ex: 1234, prénom2026...",
+                        key=f"code_input_{p['id']}"
+                    )
+                    set_btn = st.form_submit_button(
+                        "💾 Définir ce code",
+                        type="primary",
+                        use_container_width=True
+                    )
+                if set_btn:
+                    if not new_code or len(new_code) < 4:
+                        st.error("❌ Le code doit contenir au moins 4 caractères.")
+                    else:
+                        from database.auth_repo import set_code_acces
+                        if set_code_acces(p["id"], new_code.strip()):
+                            st.success(f"✅ Code défini pour {p.get('email','')} — communiquez-le lui.")
+                            st.rerun()
+                        else:
+                            st.error("❌ Erreur lors de la sauvegarde.")
 
     # ── TAB 2 : Inviter un propriétaire ──────────────────────────────────
     with tab2:
