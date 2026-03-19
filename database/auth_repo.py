@@ -144,6 +144,62 @@ def sign_in_with_email(email: str, password: str) -> dict | None:
         return None
 
 
+def sign_in_with_code(email: str, code: str) -> dict | None:
+    """
+    Connexion via email + code d'accès personnel (défini par le propriétaire).
+    Ne nécessite pas le mot de passe Supabase Auth.
+    """
+    import hashlib
+    sb = get_supabase()
+    if sb is None: return None
+    try:
+        # Chercher le profil par email
+        rows = sb.table("profiles").select("id,email,role,code_acces")                 .eq("email", email.strip().lower()).execute().data or []
+        if not rows:
+            return None
+        profile = rows[0]
+        stored = profile.get("code_acces", "") or ""
+        if not stored:
+            return None
+        # Vérifier le code (en clair ou hashé)
+        code_hash = hashlib.sha256(code.strip().encode()).hexdigest()
+        if code != stored and code_hash != stored:
+            return None
+        # Code OK → retourner les infos du profil
+        return {"user_id": profile["id"], "email": profile["email"],
+                "role": profile["role"]}
+    except Exception as e:
+        print(f"sign_in_with_code error: {e}")
+        return None
+
+
+def set_code_acces(user_id: str, nouveau_code: str, hint: str = "") -> bool:
+    """Définit ou modifie le code d'accès personnel d'un utilisateur."""
+    import hashlib
+    sb = get_supabase()
+    if sb is None: return False
+    try:
+        code_hash = hashlib.sha256(nouveau_code.strip().encode()).hexdigest()
+        sb.table("profiles").update({
+            "code_acces":      code_hash,
+            "code_acces_hint": hint or None,
+        }).eq("id", user_id).execute()
+        return True
+    except Exception as e:
+        print(f"set_code_acces error: {e}")
+        return False
+
+
+def get_profile_by_email(email: str) -> dict | None:
+    """Retourne le profil par email."""
+    sb = get_supabase()
+    if sb is None: return None
+    try:
+        rows = sb.table("profiles").select("*")                 .eq("email", email.strip().lower()).execute().data or []
+        return rows[0] if rows else None
+    except: return None
+
+
 def sign_out() -> bool:
     sb = get_supabase()
     if sb is None: return False
