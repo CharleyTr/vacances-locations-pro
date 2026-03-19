@@ -72,13 +72,20 @@ def show():
         st.session_state["chat_refresh"] = 0
     refresh_count = st.session_state["chat_refresh"]
 
-    col_r, col_t = st.columns([1, 4])
+    col_r, col_t, col_p = st.columns([1, 3, 2])
     with col_r:
         if st.button("🔄 Actualiser", key="btn_refresh_chat"):
             st.session_state["chat_refresh"] += 1
             st.rerun()
     with col_t:
         st.caption("💡 Cliquez 🔄 pour voir les nouveaux messages")
+    with col_p:
+        st.markdown(
+            "<a href='https://CharleyTr.github.io/vlp-auth/chat-paste.html' target='_blank' "
+            "style='background:#1565C0;color:white;padding:6px 12px;border-radius:6px;"
+            "text-decoration:none;font-size:13px;font-weight:bold'>📋 Coller une capture</a>",
+            unsafe_allow_html=True
+        )
 
     # ── Messages ──────────────────────────────────────────────────────────
     messages = get_messages(limit=100, propriete_id=prop_filter)
