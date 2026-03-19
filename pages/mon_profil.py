@@ -1,163 +1,81 @@
+"""
+Page Mon Profil — chaque utilisateur peut modifier son code d'accès.
+"""
 import streamlit as st
-from database.supabase_client import is_connected, get_connection_error
-from services.proprietes_service import get_proprietes_dict
-from database.proprietes_repo import fetch_all
-from services.auth_service import is_unlocked, lock
-
-PAGES = {
-    "📊 Dashboard":      "Dashboard",
-    "📋 Réservations":   "Réservations",
-    "📅 Calendrier":     "Calendrier",
-    "📈 Analyses":       "Analyses",
-    "💳 Paiements":      "Paiements",
-    "🧹 Ménage":         "Ménage",
-    "📧 Messages":       "Messages",
-    "🔄 Sync iCal":      "iCal",
-    "🕳️ Créneaux":      "Créneaux",
-    "🏠 Propriétés":     "Propriétés",
-    "📊 Rapports":       "Rapports",
-    "💶 Tarifs":         "Tarifs",
-    "⭐ Livre d'or":     "Livre d'or",
-    "📥 Import Booking": "Import Booking",
-    "📥 Import Airbnb":  "Import Airbnb",
-    "📝 Modèles msgs":   "Modèles msgs",
-    "📊 Export comptable": "Export comptable",
-    "🏛️ Fiscal LMNP":      "Fiscal LMNP",
-    "📈 Revenus & Pricing": "Revenus & Pricing",
-    "📐 Barèmes fiscaux":    "Barèmes fiscaux",
-    "👥 Utilisateurs":       "Utilisateurs",
-    "📋 Journal":            "Journal",
-    "💬 Chat":               "Chat",
-    "👤 Mon profil":         "Mon profil",
-    "🧾 Factures":           "Factures",
-    "📖 Documentation":      "Documentation",
-}
+import hashlib
+from database.auth_repo import set_code_acces, get_profile
 
 
-def sidebar() -> str:
-    with st.sidebar:
-        st.title("🏖️ Vacances-Locations")
-        st.caption("PRO — Gestion locative")
+def show():
+    st.title("👤 Mon profil")
 
-        if is_connected():
-            st.success("🟢 Supabase connecté", icon="✅")
+    user_id    = st.session_state.get("auth_user_id", "")
+    user_email = st.session_state.get("auth_user_email", "")
+
+    if not user_id or not user_email:
+        st.warning("Cette page est réservée aux utilisateurs connectés via email.")
+        return
+
+    profile = get_profile(user_id) or {}
+    has_code = bool(profile.get("code_acces"))
+
+    st.markdown(f"""
+    <div style='background:#E3F2FD;border-radius:10px;padding:14px 20px;margin-bottom:1.5rem'>
+        <strong>📧 {user_email}</strong><br>
+        <span style='color:#666;font-size:13px'>
+            Rôle : {profile.get('role','proprietaire').capitalize()} · 
+            Code d'accès : {'✅ Configuré' if has_code else '❌ Non configuré'}
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.subheader("🔑 Définir / Modifier mon code d'accès")
+    st.caption("Ce code vous permet de vous connecter avec votre email + ce code. "
+               "Choisissez un code facile à retenir (chiffres, lettres, ou les deux).")
+
+    with st.form("form_code_acces"):
+        if has_code:
+            ancien = st.text_input("Code actuel (vérification)", type="password",
+                                    placeholder="Entrez votre code actuel")
         else:
-            err = get_connection_error()
-            st.error("🔴 Supabase non connecté")
-            if err:
-                st.caption(f"⚠️ {err}")
+            ancien = None
+            st.info("Vous n'avez pas encore de code — définissez-en un maintenant.")
 
-        st.divider()
-        st.markdown("**🏠 Propriété active**")
+        nouveau    = st.text_input("Nouveau code *", type="password",
+                                    placeholder="Ex: 1234, moncode2026...")
+        confirmer  = st.text_input("Confirmer le nouveau code *", type="password",
+                                    placeholder="Répétez le code")
+        hint       = st.text_input("Indice mémo (optionnel)",
+                                    placeholder="Ex: année de naissance, prénom chat...")
 
-        props = get_proprietes_dict()  # {1: "Le Turenne...", 2: "Villa Tobias..."}
-        options_ids    = [0] + list(props.keys())
-        options_labels = ["🏠 Toutes"] + list(props.values())
+        ok = st.form_submit_button("💾 Enregistrer le code", type="primary",
+                                    use_container_width=True)
 
-        # key="prop_id" → Streamlit écrit DIRECTEMENT la valeur sélectionnée
-        # (l'un des options_ids) dans st.session_state["prop_id"]
-        # Pas de index=, pas de callback, pas de rerun — Streamlit gère tout seul
-        # Non-admin : forcer la propriété déverrouillée, désactiver la sélection
-        _forced = st.session_state.get("_forced_prop_id")
-        _is_admin_sidebar = st.session_state.get("is_admin", False)
-
-        if _forced and not _is_admin_sidebar and _forced in options_ids:
-            # Afficher juste le nom sans selectbox
-            idx_forced = options_ids.index(_forced)
-            st.markdown(f"**{options_labels[idx_forced]}**")
-            # Synchroniser sans toucher au widget
-            if st.session_state.get("prop_id") != _forced:
-                st.session_state["prop_id"] = _forced
-        else:
-            st.selectbox(
-                "prop_sidebar",
-                options=options_ids if _is_admin_sidebar else
-                        [i for i in options_ids if i == 0 or
-                         st.session_state.get(f"unlocked_{i}", False)],
-                format_func=lambda x: options_labels[options_ids.index(x)],
-                key="prop_id",
-                label_visibility="collapsed",
-            )
-
-        current = st.session_state.get("prop_id", 0)
-        if current and current != 0:
-            # Vérifier si mot de passe configuré
-            props_full = {p["id"]: p for p in fetch_all()}
-            mdp_hash = props_full.get(current, {}).get("mot_de_passe")
-            if mdp_hash:
-                if is_unlocked(current):
-                    col_cap, col_lock = st.columns([3,1])
-                    col_cap.caption(f"📍 {props.get(current, '')}")
-                    if col_lock.button("🔒", key="btn_lock", help="Verrouiller"):
-                        lock(current)
-                        st.rerun()
-                else:
-                    st.caption(f"🔐 {props.get(current, '')} — *verrouillé*")
+    if ok:
+        if not nouveau:
+            st.error("❌ Le nouveau code est obligatoire.")
+        elif len(nouveau) < 4:
+            st.error("❌ Le code doit contenir au moins 4 caractères.")
+        elif nouveau != confirmer:
+            st.error("❌ Les codes ne correspondent pas.")
+        elif has_code and ancien:
+            # Vérifier l'ancien code
+            stored = profile.get("code_acces","")
+            ancien_hash = hashlib.sha256(ancien.strip().encode()).hexdigest()
+            if ancien.strip() != stored and ancien_hash != stored:
+                st.error("❌ Code actuel incorrect.")
             else:
-                st.caption(f"📍 {props.get(current, '')}")
-
-        st.divider()
-
-        # Pages admin uniquement (Villa Tobias)
-        PAGES_ADMIN_ONLY = {"🏠 Propriétés", "📐 Barèmes fiscaux", "👥 Utilisateurs", "📋 Journal"}
-        is_admin = st.session_state.get("is_admin", False)
-
-        _has_auth = bool(st.session_state.get("auth_user_id"))
-        pages_visibles = {
-            k: v for k, v in PAGES.items()
-            if (k not in PAGES_ADMIN_ONLY or is_admin)
-        }
-
-        choice = st.radio(
-            "Navigation",
-            list(pages_visibles.keys()),
-            label_visibility="collapsed",
-        )
-        # ── Badge non-lus Chat ───────────────────────────────────────────
-        try:
-            from database.chat_repo import count_unread
-            _email = st.session_state.get("auth_user_email", "")
-            if not _email:
-                _pid = st.session_state.get("prop_id", 0)
-                _email = f"pin_{_pid}@local"
-            _unread = count_unread(_email)
-            if _unread > 0:
-                st.markdown(
-                    f"<div style='background:#E53935;color:white;border-radius:12px;"
-                    f"padding:4px 12px;font-size:12px;font-weight:bold;text-align:center;"
-                    f"margin-bottom:6px'>💬 {_unread} nouveau(x) message(s)</div>",
-                    unsafe_allow_html=True
-                )
-        except: pass
-
-        st.divider()
-        # ── Bouton installation PWA ───────────────────────────────────────
-        st.markdown("""
-<div style='margin-bottom:8px'>
-  <button id='pwa-install-btn' onclick='installPWA()'
-    style='display:none;width:100%;padding:8px 12px;background:#1565C0;color:white;
-           border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold'>
-    📲 Installer l'application
-  </button>
-</div>
-<p style='font-size:11px;color:#888;margin:0 0 4px 0'>
-  📱 iPhone : Safari → <strong>Partager</strong> → <em>Sur l'écran d'accueil</em><br>
-  🤖 Android : Menu → <em>Ajouter à l'écran</em>
-</p>
-""", unsafe_allow_html=True)
-        # Infos utilisateur connecté
-        auth_email = st.session_state.get("auth_user_email")
-        if auth_email:
-            st.markdown(
-                f"<div style='font-size:11px;color:var(--text-color);opacity:0.6;"
-                f"padding:2px 0;overflow:hidden;text-overflow:ellipsis'>"
-                f"👤 {auth_email}</div>",
-                unsafe_allow_html=True
-            )
-            if st.button("🚪 Déconnexion", key="btn_logout", use_container_width=True):
-                from services.auth_service import logout
-                logout()
+                if set_code_acces(user_id, nouveau.strip(), hint.strip()):
+                    st.success("✅ Code d'accès mis à jour !")
+                else:
+                    st.error("❌ Erreur lors de la sauvegarde.")
+        elif not has_code:
+            if set_code_acces(user_id, nouveau.strip(), hint.strip()):
+                st.success("✅ Code d'accès créé ! Vous pouvez maintenant vous connecter "
+                           f"avec **{user_email}** + votre code.")
                 st.rerun()
-        st.caption("v3.2 — 2026 · © Charley Trigano")
-
-    return pages_visibles[choice]
+            else:
+                st.error("❌ Erreur lors de la sauvegarde.")
+        else:
+            # has_code mais ancien non fourni
+            st.error("❌ Entrez votre code actuel pour le modifier.")
