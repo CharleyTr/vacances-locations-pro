@@ -228,6 +228,49 @@ def show():
 
     st.divider()
 
+    # ── Coller depuis le presse-papier (Ctrl+C sur une image → bouton) ────
+    try:
+        from streamlit_paste_button import paste_image_button
+        paste_result = paste_image_button(
+            label="📋 Coller une image (Ctrl+C → clic ici)",
+            background_color="#E3F2FD",
+            hover_background_color="#BBDEFB",
+            key="chat_paste_btn"
+        )
+        if paste_result.image_data is not None:
+            import io
+            buf = io.BytesIO()
+            paste_result.image_data.save(buf, format="PNG")
+            img_bytes = buf.getvalue()
+            with st.form("form_paste_img", clear_on_submit=True):
+                legende = st.text_input("Légende (optionnel)", key="paste_legende",
+                                         placeholder="Description de l'image...")
+                envoyer_img = st.form_submit_button("📤 Envoyer l'image",
+                                                     type="primary",
+                                                     use_container_width=True)
+            if envoyer_img:
+                f_path = upload_fichier(img_bytes, "capture.png", "image/png", user_email)
+                if f_path:
+                    result = send_message_with_file(
+                        contenu=legende.strip() or "📸 Capture d'écran",
+                        user_email=user_email,
+                        user_nom=user_nom,
+                        propriete_id=prop_filter,
+                        fichier_nom="capture.png",
+                        fichier_path=f_path,
+                        fichier_type="image",
+                        fichier_mime="image/png",
+                    )
+                    if result:
+                        st.session_state["chat_refresh"] += 1
+                        st.rerun()
+    except ImportError:
+        st.caption("💡 Pour coller des captures : ajoutez `streamlit-paste-button` dans requirements.txt")
+    except Exception as e:
+        pass
+
+    st.divider()
+
     # ── Formulaire d'envoi ────────────────────────────────────────────────
     with st.form("form_chat_send", clear_on_submit=True):
         texte = st.text_input(
@@ -236,20 +279,13 @@ def show():
             label_visibility="collapsed",
             key="chat_input"
         )
-        st.markdown("""
-        <div style='background:#E3F2FD;border-radius:8px;padding:8px 12px;
-                    font-size:12px;color:#1565C0;margin-bottom:4px'>
-          📎 <strong>Joindre une image ou un fichier</strong> — 
-          glissez-déposez ou cliquez pour parcourir •
-          <strong>Capture d'écran :</strong> sauvegardez-la d'abord (Win+Shift+S → Enregistrer)
-        </div>""", unsafe_allow_html=True)
         col_f, col_btn = st.columns([3, 1])
         with col_f:
             fichier = st.file_uploader(
-                "Fichier",
+                "📎 Image ou document",
                 type=["jpg","jpeg","png","gif","webp","pdf","docx","xlsx","txt","csv"],
                 key="chat_file",
-                label_visibility="collapsed"
+                label_visibility="visible"
             )
         with col_btn:
             st.markdown("<div style='margin-top:28px'></div>", unsafe_allow_html=True)
