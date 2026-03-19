@@ -116,21 +116,31 @@ def show():
         # Afficher les messages dans un conteneur scrollable
         st.markdown("""
         <script>
-        function copyMsg(id) {
+        function copyMsg(id, btn) {
             var el = document.getElementById('msg-' + id);
             if (!el) return;
-            var text = el.innerText || el.textContent;
-            navigator.clipboard.writeText(text).then(function() {
-                var spans = document.querySelectorAll('[onclick="copyMsg(\''+id+'\')"]');
-                spans.forEach(function(s){ s.textContent='✅'; setTimeout(function(){ s.textContent='📋'; }, 1500); });
-            }).catch(function() {
-                // Fallback pour navigateurs sans clipboard API
-                var ta = document.createElement('textarea');
-                ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
-                document.body.appendChild(ta); ta.select();
-                document.execCommand('copy');
-                document.body.removeChild(ta);
-            });
+            // Copier tout sauf les spans enfants (tooltips)
+            var clone = el.cloneNode(true);
+            var tips = clone.querySelectorAll('.tooltip');
+            tips.forEach(function(t){ t.remove(); });
+            var text = (clone.innerText || clone.textContent || '').trim();
+            // Méthode 1 : execCommand (fonctionne dans iframes)
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.cssText = 'position:fixed;top:0;left:0;width:2px;height:2px;opacity:0;border:none;padding:0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            var ok = false;
+            try { ok = document.execCommand('copy'); } catch(e) {}
+            document.body.removeChild(ta);
+            // Feedback visuel
+            if (btn) {
+                var orig = btn.textContent;
+                btn.textContent = ok ? '✅' : '⚠️';
+                setTimeout(function(){ btn.textContent = orig; }, 1800);
+            }
         }
         </script>
         <style>
@@ -164,8 +174,8 @@ def show():
                   <div>
                     <div class="bubble-mine" id="msg-{msg_id_str}">{contenu}</div>
                     <div class="msg-meta" style="text-align:right">
-                      <span onclick="copyMsg('{msg_id_str}')" title="Copier"
-                        style="cursor:pointer;margin-right:6px;opacity:0.6">📋</span>
+                      <span onclick="copyMsg('{msg_id_str}', this)" title="Copier le message"
+                        style="cursor:pointer;margin-right:6px;opacity:0.7;user-select:none">📋</span>
                       {temps}{prop_label}
                     </div>
                   </div>
@@ -176,8 +186,8 @@ def show():
                   <div>
                     <div class="bubble-other" id="msg-{msg_id_str}"><strong>{nom}</strong><br>{contenu}</div>
                     <div class="msg-meta">
-                      <span onclick="copyMsg('{msg_id_str}')" title="Copier"
-                        style="cursor:pointer;margin-right:6px;opacity:0.6">📋</span>
+                      <span onclick="copyMsg('{msg_id_str}', this)" title="Copier le message"
+                        style="cursor:pointer;margin-right:6px;opacity:0.7;user-select:none">📋</span>
                       {temps}{prop_label}
                     </div>
                   </div>
