@@ -226,13 +226,15 @@ def _show_splash_login():
 
     # ── Choisir le mode de connexion ─────────────────────────────────
     mode = st.radio("Mode de connexion", ["🔑 Code d'accès", "📧 Email / Mot de passe"],
-                    horizontal=True, key="login_mode", label_visibility="collapsed")
+                    horizontal=True, key="login_mode", label_visibility="collapsed",
+                    index=0)
 
     if mode == "📧 Email / Mot de passe":
         # ── Mode Supabase Auth ────────────────────────────────────────
+        st.caption("Connectez-vous avec votre email + le code que vous avez reçu (ou votre mot de passe Supabase).")
         with st.form("form_email_login"):
             email_input = st.text_input("📧 Email", placeholder="votre@email.fr")
-            pwd_input   = st.text_input("🔑 Mot de passe", type="password")
+            pwd_input   = st.text_input("🔑 Code d'accès personnel", type="password", placeholder="Votre code ou mot de passe...")
             submitted_email = st.form_submit_button("🔓 Se connecter", type="primary",
                                                      use_container_width=True)
 
