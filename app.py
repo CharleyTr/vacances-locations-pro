@@ -391,9 +391,10 @@ try:
 except ImportError:
     ical_sync = None
 try:
-    from pages import proprietes
+    from pages import proprietes as _page_proprietes
 except ImportError:
-    proprietes = None
+    _page_proprietes = None
+proprietes = _page_proprietes
 
 try:
     from pages import rapport
@@ -500,7 +501,7 @@ elif page == "Paiements":     paiements.show() if paiements else st.error("Uploa
 elif page == "Ménage":        menage.show()    if menage    else st.error("Uploadez pages/menage.py")
 elif page == "Messages":      messages.show() if messages  else st.error("Uploadez pages/messages.py")
 elif page == "iCal":          ical_sync.show() if ical_sync else st.error("Uploadez pages/ical_sync.py")
-elif page == "Propriétés":    proprietes.show() if proprietes else st.error("Uploadez pages/proprietes.py")
+elif page == "Propriétés":    _page_proprietes.show() if _page_proprietes else st.error("Uploadez pages/proprietes.py")
 elif page == "Rapports":      rapport.show()    if rapport    else st.error("Uploadez pages/rapport.py")
 elif page == "Tarifs":        tarifs.show()     if tarifs     else st.error("Uploadez pages/tarifs.py")
 elif page == "Livre d'or":    avis.show()       if avis       else st.error("Uploadez pages/avis.py")
