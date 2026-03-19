@@ -96,9 +96,13 @@ def show():
         with col1:
             st.markdown(f"**{p['nom']}**")
             if p.get("mot_de_passe"):
-                st.caption("🔒 Mot de passe configuré")
+                st.caption("🔒 Code propriétaire configuré")
             else:
-                st.caption("🔓 Aucun mot de passe")
+                st.caption("🔓 Aucun code propriétaire")
+            if p.get("mot_de_passe_gestionnaire"):
+                st.caption("🔑 Code gestionnaire configuré")
+            else:
+                st.caption("🔑 Aucun code gestionnaire")
         with col2:
             new_mdp = st.text_input(
                 "Nouveau mot de passe",
