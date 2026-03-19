@@ -316,22 +316,26 @@ def _show_splash_login():
 
         if submitted and pin_input:
             prop_trouvee = None
+            is_code_gest = False
             for p in props:
-                stored = p.get("mot_de_passe", "")
-                if not stored: continue
-                if _hash_mdp(pin_input) == stored or pin_input == stored:
+                # Vérifier code propriétaire
+                stored = p.get("mot_de_passe", "") or ""
+                if stored and (_hash_mdp(pin_input) == stored or pin_input == stored):
                     prop_trouvee = p
+                    is_code_gest = False
+                    break
+                # Vérifier code gestionnaire
+                stored_g = p.get("mot_de_passe_gestionnaire", "") or ""
+                if stored_g and (_hash_mdp(pin_input) == stored_g or pin_input == stored_g):
+                    prop_trouvee = p
+                    is_code_gest = True
                     break
 
             if prop_trouvee:
                 pid = prop_trouvee["id"]
                 is_admin = (pid == admin_prop_id)
 
-                # Détecter si c'est le code gestionnaire
-                stored_gest = prop_trouvee.get("mot_de_passe_gestionnaire","") or ""
-                is_gestionnaire = (not is_admin and stored_gest and
-                                   (_hash_mdp(pin_input) == stored_gest or pin_input == stored_gest))
-                user_role = "admin" if is_admin else ("gestionnaire" if is_gestionnaire else "proprietaire")
+                user_role = "admin" if is_admin else ("gestionnaire" if is_code_gest else "proprietaire")
 
                 st.session_state["global_logged_in"] = True
                 st.session_state["is_admin"]   = is_admin
