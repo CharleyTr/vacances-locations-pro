@@ -333,7 +333,8 @@ def _show_splash_login():
 
             if prop_trouvee:
                 pid = prop_trouvee["id"]
-                is_admin = (pid == admin_prop_id)
+                # Admin UNIQUEMENT si code propriétaire de Villa Tobias (jamais le code gestionnaire)
+                is_admin = (pid == admin_prop_id and not is_code_gest)
 
                 user_role = "admin" if is_admin else ("gestionnaire" if is_code_gest else "proprietaire")
 
