@@ -132,6 +132,7 @@ def _show_google_calendar(df: pd.DataFrame, annee: int, mois: int):
                 {
                     "client":     r.get("nom_client", "-"),
                     "plateforme": r.get("plateforme", "-"),
+                    "numero":     r.get("numero_reservation", ""),
                     "arrivee":    str(r["date_arrivee"].date()),
                     "depart":     str(r["date_depart"].date()),
                     "nuitees":    int(r.get("nuitees", 0) or 0),
@@ -211,15 +212,33 @@ PLATEAU.forEach(day => {{
     const bg    = couleur(r.plateforme);
     const cls   = isArr ? 'arrive' : (isDep ? 'depart' : '');
     const paye  = r.paye ? '✅' : '⏳';
-    html += `
-      <div class='cal-resa ${{cls}}' style='background:${{bg}}' title=''>
-        ${{r.plateforme}} - ${{r.client}}
+    // Construire l'URL de la réservation selon la plateforme
+    let url = '';
+    const num = r.numero || '';
+    if (r.plateforme === 'Airbnb' && num) {{
+      url = 'https://www.airbnb.fr/hosting/reservations/details/' + num;
+    }} else if (r.plateforme === 'Booking' && num) {{
+      url = 'https://admin.booking.com/hotel/hoteladmin/extranet_ng/manage/booking.html?res_id=' + num;
+    }} else if (r.plateforme === 'Abritel' && num) {{
+      url = 'https://www.abritel.fr/';
+    }}
+    const linkIcon = url ? ' 🔗' : '';
+    // Utiliser <a> avec target="_blank" — fonctionne dans l'iframe Streamlit
+    const inner = `
+        ${{r.plateforme}} - ${{r.client}}${{linkIcon}}
         <div class='tooltip'>
           <b>${{r.client}}</b><br>
           ${{r.arrivee}} → ${{r.depart}}<br>
           ${{r.nuitees}} nuits | ${{r.prix_net.toFixed(0)}} € net ${{paye}}
-        </div>
-      </div>`;
+          ${{url ? '<br><span style=\"color:#90CAF9\">🔗 Ouvrir sur la plateforme</span>' : ''}}
+        </div>`;
+    if (url) {{
+      html += `<a href="${{url}}" target="_blank" style="text-decoration:none">
+        <div class='cal-resa ${{cls}}' style='background:${{bg}};cursor:pointer'>${{inner}}</div>
+      </a>`;
+    }} else {{
+      html += `<div class='cal-resa ${{cls}}' style='background:${{bg}}'>${{inner}}</div>`;
+    }}
   }});
 
   cell.innerHTML = html;
