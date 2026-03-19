@@ -229,7 +229,10 @@ def _show_formulaire_ajout():
             "nom_client":        nom_client.strip(),
             "email":             email or None,
             "telephone":         telephone or None,
-            "pays":              pays or None,
+            "pays":              (pays.strip() if pays.strip() else (
+                __import__('services.indicatifs_service', fromlist=['get_pays_from_tel'])
+                .get_pays_from_tel(telephone) if telephone else ""
+            )) or None,
             "propriete_id":      propriete_id,
             "plateforme":        plateforme,
             "date_arrivee":      str(date_arrivee),
@@ -379,7 +382,10 @@ def _show_formulaire_modifier():
             "nom_client":        nom_client.strip(),
             "email":             email or None,
             "telephone":         telephone or None,
-            "pays":              pays or None,
+            "pays":              (pays.strip() if pays.strip() else (
+                __import__('services.indicatifs_service', fromlist=['get_pays_from_tel'])
+                .get_pays_from_tel(telephone) if telephone else ""
+            )) or None,
             "propriete_id":      propriete_id,
             "plateforme":        plateforme,
             "date_arrivee":      str(date_arrivee),
