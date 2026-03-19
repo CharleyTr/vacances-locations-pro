@@ -111,6 +111,23 @@ def sidebar() -> str:
             list(pages_visibles.keys()),
             label_visibility="collapsed",
         )
+        # ── Badge non-lus Chat ───────────────────────────────────────────
+        try:
+            from database.chat_repo import count_unread
+            _email = st.session_state.get("auth_user_email", "")
+            if not _email:
+                _pid = st.session_state.get("prop_id", 0)
+                _email = f"pin_{_pid}@local"
+            _unread = count_unread(_email)
+            if _unread > 0:
+                st.markdown(
+                    f"<div style='background:#E53935;color:white;border-radius:12px;"
+                    f"padding:4px 12px;font-size:12px;font-weight:bold;text-align:center;"
+                    f"margin-bottom:6px'>💬 {_unread} nouveau(x) message(s)</div>",
+                    unsafe_allow_html=True
+                )
+        except: pass
+
         st.divider()
         # ── Bouton installation PWA ───────────────────────────────────────
         st.markdown("""
