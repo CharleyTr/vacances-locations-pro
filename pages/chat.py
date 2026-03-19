@@ -44,6 +44,10 @@ def show():
     user_email, user_nom = _get_user_info()
     is_admin = st.session_state.get("is_admin", False)
 
+    # Détecter les nouveaux messages depuis la dernière visite
+    _last_seen_key = f"chat_last_seen_{user_email}"
+    _last_seen_count = st.session_state.get(_last_seen_key, 0)
+
     # Marquer les messages comme lus
     mark_read(user_email)
 
@@ -78,6 +82,28 @@ def show():
 
     # ── Messages ──────────────────────────────────────────────────────────
     messages = get_messages(limit=100, propriete_id=prop_filter)
+
+    # Alerte nouveaux messages
+    _new_msgs = [m for m in messages
+                 if user_email not in (m.get("lu_par") or [])
+                 and m.get("user_email") != user_email]
+    if _new_msgs:
+        _nb_new = len(_new_msgs)
+        _derniers = [m.get("user_nom") or m.get("user_email","?").split("@")[0]
+                     for m in _new_msgs[-3:]]
+        _noms = ", ".join(set(_derniers))
+        st.markdown(f"""
+        <div style='background:#E53935;color:white;border-radius:10px;
+                    padding:12px 18px;margin-bottom:12px;font-weight:bold;
+                    display:flex;align-items:center;gap:10px'>
+            <span style='font-size:20px'>🔔</span>
+            <span>{_nb_new} nouveau(x) message(s) de <strong>{_noms}</strong></span>
+        </div>
+        <audio autoplay>
+          <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJiVlIBwaWp0kZCOf2deaYyMi4BxaXF9io+Le3FxdImQjYJ3cXSCjJCKgXZzeImTkIt/dnaAi5OTjIJ4d3+Mk5SOg3l4foqUlI2DenqBjZWVjoR8e4KOlpWOhH17g46XlY+FfXyEj5iWj4Z+foWQmJeQh39/hpGZl5CIgH+HkpmakoqChIiTmZuTjIaGipSbnZSNiImLlZ2elZCLi4yWnp+WkY2NjpefoJeSkY+PmJ+glpOSkZCZoaGXlJSSkpqioZiVlZSTm6KimJaXlJSco6OZl5iWlZ2ko5mYmZeXnqWkmZqbmZmenKWlmpybmpmfnaWlm5ydm5qgn6Wlm52em5uhoPX19fX19fX19fX19Q==" type="audio/wav">
+        </audio>
+        """, unsafe_allow_html=True)
+        st.session_state[_last_seen_key] = len(messages)
 
     if not messages:
         st.markdown("""
