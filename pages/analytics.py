@@ -242,7 +242,11 @@ def show():
     # ── TAB 1 : Bilan annuel ──────────────────────────────────────────────────
     # ── TAB PAYS ─────────────────────────────────────────────────────────
     with tab_pays:
-        _show_stats_pays(df)
+        # Filtre année pour les stats pays
+        annee_pays = st.selectbox("Année", ["Toutes"] + [str(int(a)) for a in annees],
+                                   key="pays_annee")
+        df_pays_filtre = df if annee_pays == "Toutes" else df[df["annee"] == int(annee_pays)]
+        _show_stats_pays(df_pays_filtre)
 
     with tab_bilan:
         df_an = df[df["annee"] == annee]
