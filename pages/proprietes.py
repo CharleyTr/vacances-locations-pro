@@ -104,22 +104,33 @@ def show():
                 st.caption("🔑 Aucun code gestionnaire")
         with col2:
             new_mdp = st.text_input(
-                "Nouveau mot de passe",
+                "Code propriétaire",
                 type="password",
-                placeholder="Laisser vide = pas de protection",
+                placeholder="Code accès propriétaire...",
                 key=f"mdp_{p['id']}"
+            )
+            new_mdp_gest = st.text_input(
+                "Code gestionnaire",
+                type="password",
+                placeholder="Code ménage / régisseur...",
+                key=f"mdp_gest_{p['id']}",
+                help="Accès limité : Dashboard, Calendrier, Ménage, Messages"
             )
         with col3:
             st.markdown("&nbsp;", unsafe_allow_html=True)
             if st.button("💾 Appliquer", key=f"save_mdp_{p['id']}"):
+                import hashlib as _hl
+                updates = {}
                 if new_mdp.strip():
-                    if set_password(p["id"], new_mdp.strip()):
-                        st.success(f"✅ Mot de passe défini pour {p['nom']}")
-                        st.rerun()
+                    updates["mot_de_passe"] = _hl.sha256(new_mdp.strip().encode()).hexdigest()
+                if new_mdp_gest.strip():
+                    updates["mot_de_passe_gestionnaire"] = _hl.sha256(new_mdp_gest.strip().encode()).hexdigest()
+                if updates:
+                    update_propriete(p["id"], updates)
+                    st.success(f"✅ Codes mis à jour pour {p['nom']}")
+                    st.rerun()
                 else:
-                    if remove_password(p["id"]):
-                        st.success(f"🔓 Mot de passe supprimé pour {p['nom']}")
-                        st.rerun()
+                    st.warning("Saisissez au moins un code.")
 
     st.divider()
 
