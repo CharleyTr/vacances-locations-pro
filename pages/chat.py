@@ -324,13 +324,20 @@ def show():
             label_visibility="collapsed",
             key="chat_input"
         )
+        st.markdown("""
+        <div style='background:#E3F2FD;border-radius:8px;padding:8px 12px;
+                    font-size:12px;color:#1565C0;margin-bottom:4px'>
+          📎 <strong>Joindre une image ou un fichier</strong> — 
+          glissez-déposez ou cliquez pour parcourir •
+          <strong>Capture d'écran :</strong> sauvegardez-la d'abord (Win+Shift+S → Enregistrer)
+        </div>""", unsafe_allow_html=True)
         col_f, col_btn = st.columns([3, 1])
         with col_f:
             fichier = st.file_uploader(
-                "📎 Joindre un fichier (optionnel)",
+                "Fichier",
                 type=["jpg","jpeg","png","gif","webp","pdf","docx","xlsx","txt","csv"],
                 key="chat_file",
-                label_visibility="visible"
+                label_visibility="collapsed"
             )
         with col_btn:
             st.markdown("<div style='margin-top:28px'></div>", unsafe_allow_html=True)
