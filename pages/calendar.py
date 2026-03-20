@@ -151,13 +151,19 @@ def _show_google_calendar(df: pd.DataFrame, annee: int, mois: int):
 <style>
   .cal-wrap  {{ font-family: Arial, sans-serif; user-select:none; }}
   .cal-grid  {{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:8px; }}
+  @media (prefers-color-scheme: dark) {{
+    .cal-cell  {{ background:#1A2332 !important; border-color:#2D3748 !important; }}
+    .cal-cell.today {{ background:#0D2137 !important; border-color:#4A90D9 !important; }}
+    .cal-cell.empty {{ background:#111827 !important; border-color:#1F2937 !important; }}
+    .cal-day-num {{ color:#9CA3AF !important; }}
+  }}
   .cal-hdr   {{ background:#1565C0; color:#fff; text-align:center;
                 font-weight:bold; padding:6px; border-radius:4px; font-size:13px; }}
-  .cal-cell  {{ background:#fff; border:1px solid #E0E0E0; border-radius:6px;
+  .cal-cell  {{ background:#fff; border:1px solid var(--border-color,#E0E0E0); border-radius:6px;
                 min-height:90px; padding:6px; cursor:default; position:relative; }}
-  .cal-cell.today {{ border:2px solid #1565C0; background:#E3F2FD; }}
-  .cal-cell.empty {{ background:#FAFAFA; border:1px solid #F0F0F0; }}
-  .cal-day-num {{ font-size:12px; color:#666; font-weight:bold; margin-bottom:4px; }}
+  .cal-cell.today {{ border:2px solid #1565C0; background:var(--bg-info,#E3F2FD); }}
+  .cal-cell.empty {{ background:var(--bg-neutral,#FAFAFA); border:1px solid #F0F0F0; }}
+  .cal-day-num {{ font-size:12px; color:var(--text-secondary,#666); font-weight:bold; margin-bottom:4px; }}
   .cal-resa  {{ border-radius:4px; padding:2px 5px; font-size:11px;
                 margin-bottom:2px; color:#fff; white-space:nowrap;
                 overflow:hidden; text-overflow:ellipsis; cursor:pointer;
@@ -309,7 +315,7 @@ def _show_week_view(df: pd.DataFrame, annee: int, mois: int, props: dict, prop_c
             )
             if not resa_jour:
                 st.markdown(
-                    "<div style='background:#FAFAFA;border:1px solid #E0E0E0;"
+                    "<div style='background:var(--bg-neutral,#FAFAFA);border:1px solid var(--border-color,#E0E0E0);"
                     "border-radius:0 0 8px 8px;min-height:120px;padding:8px;"
                     "text-align:center;color:#BDBDBD;font-size:12px'>Libre</div>",
                     unsafe_allow_html=True
@@ -328,7 +334,7 @@ def _show_week_view(df: pd.DataFrame, annee: int, mois: int, props: dict, prop_c
                         <span style='font-weight:normal'>{r.get('plateforme','')}</span>
                         </div>"""
                 st.markdown(
-                    f"<div style='border:1px solid #E0E0E0;border-radius:0 0 8px 8px;"
+                    f"<div style='border:1px solid var(--border-color,#E0E0E0);border-radius:0 0 8px 8px;"
                     f"padding:6px;min-height:120px'>{content}</div>",
                     unsafe_allow_html=True
                 )
@@ -544,7 +550,7 @@ def _show_conflicts(df: pd.DataFrame, props: dict, prop_choix: int):
     for _, row in conflicts.iterrows():
         prop_nom = props.get(int(row["propriete_id"]), f"Propriété {row['propriete_id']}")
         st.markdown(
-            f"""<div style='background:#FFEBEE;border-left:5px solid #C62828;
+            f"""<div style='background:var(--bg-danger,#FFEBEE);border-left:5px solid #C62828;
             padding:14px 18px;border-radius:0 8px 8px 0;margin-bottom:12px'>
             <b>🏠 {prop_nom}</b> — Chevauchement de <b>{int(row['overlap_days'])} jour(s)</b><br>
             <table style='margin-top:8px;font-size:13px;width:100%'>
@@ -667,7 +673,7 @@ def _show_blocage(prop_choix: int, props: dict):
             arr = str(row["date_arrivee"])[:10]
             dep = str(row.get("date_depart", ""))[:10]
             st.markdown(
-                f"<div style='background:#F5F5F5;border-left:4px solid #9E9E9E;"
+                f"<div style='background:var(--bg-neutral,#F5F5F5);border-left:4px solid #9E9E9E;"
                 f"padding:8px 14px;border-radius:0 6px 6px 0;margin-bottom:6px'>"
                 f"🔒 <b>{row.get('nom_client','')}</b> &nbsp;|&nbsp; {arr} → {dep} "
                 f"({int(row.get('nuitees',0) or 0)} nuits)</div>",
