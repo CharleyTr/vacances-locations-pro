@@ -10,3 +10,5 @@ python-dateutil>=2.8.0
 numpy>=1.26.0
 
 streamlit-paste-button
+
+reportlab>=4.0.0
