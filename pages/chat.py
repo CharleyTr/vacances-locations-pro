@@ -155,7 +155,12 @@ def show():
         .msg-mine   { display:flex; justify-content:flex-end; margin:6px 0; }
         .msg-other  { display:flex; justify-content:flex-start; margin:6px 0; }
         .bubble-mine  { background:#1565C0; color:white; padding:10px 16px; border-radius:18px 18px 4px 18px; max-width:70%; font-size:14px; }
-        .bubble-other { background:#F0F4FF; color:#222; padding:10px 16px; border-radius:18px 18px 18px 4px; max-width:70%; font-size:14px; }
+        .bubble-other { background:var(--bg-info,#E3F2FD); color:var(--text-primary,#222); padding:10px 16px; border-radius:18px 18px 18px 4px; max-width:70%; font-size:14px; }
+        @media (prefers-color-scheme: dark) {
+            .bubble-other { background:#1E2D3D !important; color:#E8EAF0 !important; }
+            .msg-meta     { color:#888 !important; }
+            .chat-container { border-color:#2D3748; }
+        }
         .msg-meta   { font-size:11px; color:#999; margin:2px 4px; }
         </style>
         <div class="chat-container" id="chat-bottom">
@@ -213,7 +218,7 @@ def show():
                         ext = fichier_nom.rsplit(".",1)[-1].upper() if "." in fichier_nom else "?"
                         st.markdown(
                             f"<a href='{url}' target='_blank' style='display:inline-block;"
-                            f"padding:6px 12px;background:#E3F2FD;border-radius:8px;"
+                            f"padding:6px 12px;background:var(--bg-info,#E3F2FD);border-radius:8px;"
                             f"color:#1565C0;text-decoration:none;font-size:13px'>"
                             f"📎 {fichier_nom} <span style='opacity:0.6;font-size:11px'>({ext})</span></a>",
                             unsafe_allow_html=True
