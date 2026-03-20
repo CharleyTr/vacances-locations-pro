@@ -1200,10 +1200,10 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
 
     # ── Disclaimer ───────────────────────────────────────────────────────
     with tab6:
-        _show_liasse_2033(df_an, annee, props, barem)
+        _show_liasse_2033(df_an, annee, props, b)
 
     with tab7:
-        _show_export_fiscal(df_an, annee, props, barem)
+        _show_export_fiscal(df_an, annee, props, b)
 
     st.caption(
         "⚠️ Ce tableau de bord est un outil d'aide à la décision. "
