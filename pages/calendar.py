@@ -426,7 +426,15 @@ def _show_month_summary(df: pd.DataFrame, annee: int, mois: int):
     nuits_louees    = int(df_reel["nuits_mois"].sum())
     nuits_fermeture = int(df_mois[df_mois["plateforme"] == "Fermeture"]["nuits_mois"].sum()) \
                       if "plateforme" in df_mois.columns else 0
-    ca_net = float(df_reel["prix_net"].sum()) if "prix_net" in df_reel.columns else 0
+    # CA pro-raté : pour les résas qui chevauchent le mois, on ne compte que la part du mois
+    def _ca_prorata(row):
+        nuits_tot = int(row.get("nuitees", 0) or 0)
+        if nuits_tot <= 0:
+            return float(row.get("prix_net", 0) or 0)
+        return float(row.get("prix_net", 0) or 0) * row["nuits_mois"] / nuits_tot
+    df_reel = df_reel.copy()
+    df_reel["ca_net_mois"] = df_reel.apply(_ca_prorata, axis=1)
+    ca_net = float(df_reel["ca_net_mois"].sum())
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("📅 Réservations",   len(df_reel))
@@ -446,7 +454,15 @@ def _show_month_summary(df: pd.DataFrame, annee: int, mois: int):
         lambda x: str(x)[:10] if pd.notna(x) else "")
     df_display["Nuits mois"] = df_display["nuits_mois"].astype(int)
     df_display["CA Brut"]    = df_display["prix_brut"].fillna(0).apply(lambda v: f"{float(v):,.0f} €")
-    df_display["CA Net"]     = df_display["prix_net"].fillna(0).apply(lambda v: f"{float(v):,.0f} €")
+    # CA pro-raté dans le tableau
+    def _fmt_ca(row):
+        nuits_tot = int(row.get("nuitees", 0) or 0)
+        pn = float(row.get("prix_net", 0) or 0)
+        if nuits_tot > 0 and row["nuits_mois"] < nuits_tot:
+            pn_mois = pn * row["nuits_mois"] / nuits_tot
+            return f"{pn_mois:,.0f} €*"
+        return f"{pn:,.0f} €"
+    df_display["CA Net"] = df_display.apply(_fmt_ca, axis=1)
     df_display["Commission"] = df_display.get("commissions", pd.Series(0, index=df_display.index)).fillna(0).apply(lambda v: f"{float(v):,.0f} €")
     df_display["Ménage"]     = df_display.get("prix_menage", 
                                df_display.get("menage", pd.Series(0, index=df_display.index))).fillna(0).apply(lambda v: f"{float(v):,.0f} €")
