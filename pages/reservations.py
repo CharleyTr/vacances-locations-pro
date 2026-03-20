@@ -328,8 +328,8 @@ def _show_formulaire_modifier():
                 _pays_display_e = str(row.get("pays","") or "")
                 pays = str(row.get("pays","") or "")
             st.markdown(
-                f"<div style='background:#F0F4FF;border-radius:6px;padding:7px 12px;"
-                f"font-size:14px;border:1px solid #E0E0E0;min-height:36px'>"
+                f"<div style='background:var(--bg-card,#F0F4FF);border-radius:6px;padding:7px 12px;"
+                f"font-size:14px;border:1px solid var(--border-color,#E0E0E0);min-height:36px'>"
                 f"{'🌍 <strong>' + _pays_display_e + '</strong>' if _pays_display_e else '<span style="color:#aaa">🌍 Pays — détecté depuis le tél.</span>'}"
                 f"</div>",
                 unsafe_allow_html=True
