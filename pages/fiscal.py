@@ -268,12 +268,14 @@ def show():
     # Pour LMNP le CA déclaré = recettes brutes encaissées
 
     # ── Onglets ───────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "📊 Seuils & Alertes",
         "💶 Estimation fiscale",
         "⚖️ Micro-BIC vs Réel",
         "🧾 Cotisations sociales",
         "📅 Projection annuelle",
+        "📋 Liasse 2033",
+        "📄 Export PDF",
     ])
 
     # ════════════════════════════════════════════════════════════════════════
@@ -978,6 +980,12 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
             st.info("Données mensuelles insuffisantes pour la projection.")
 
     # ── Disclaimer ───────────────────────────────────────────────────────
+    with tab6:
+        _show_liasse_2033(df_an, annee, props, barem)
+
+    with tab7:
+        _show_export_fiscal(df_an, annee, props, barem)
+
     st.caption(
         "⚠️ Ce tableau de bord est un outil d'aide à la décision. "
         "Les calculs sont indicatifs et ne remplacent pas l'avis d'un expert-comptable. "
