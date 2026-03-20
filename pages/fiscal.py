@@ -196,7 +196,7 @@ def _show_declaration_revenus(df_an, annee, props, b):
 
     # ── Paramètres foyer fiscal ───────────────────────────────────────────
     st.markdown("### 👨‍👩‍👧 Foyer fiscal")
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
 
     with col1:
         situation = st.selectbox("Situation familiale", [
@@ -208,33 +208,67 @@ def _show_declaration_revenus(df_an, annee, props, b):
             "Parent isolé + 1 enfant (2 parts)",
             "Parent isolé + 2 enfants (2,5 parts)",
         ], key="decl_situation")
-
         parts_map = {
-            "Célibataire (1 part)":                     1.0,
-            "Marié / Pacsé sans enfant (2 parts)":      2.0,
-            "Marié / Pacsé + 1 enfant (2,5 parts)":    2.5,
-            "Marié / Pacsé + 2 enfants (3 parts)":      3.0,
-            "Marié / Pacsé + 3 enfants (4 parts)":      4.0,
-            "Parent isolé + 1 enfant (2 parts)":        2.0,
-            "Parent isolé + 2 enfants (2,5 parts)":     2.5,
+            "Célibataire (1 part)":                    1.0,
+            "Marié / Pacsé sans enfant (2 parts)":     2.0,
+            "Marié / Pacsé + 1 enfant (2,5 parts)":   2.5,
+            "Marié / Pacsé + 2 enfants (3 parts)":     3.0,
+            "Marié / Pacsé + 3 enfants (4 parts)":     4.0,
+            "Parent isolé + 1 enfant (2 parts)":       2.0,
+            "Parent isolé + 2 enfants (2,5 parts)":    2.5,
         }
         nb_parts = parts_map[situation]
-
-    with col2:
-        autres_revenus = st.number_input(
-            "Autres revenus du foyer (€)",
-            min_value=0, value=0, step=1000,
-            key="decl_autres_revenus",
-            help="Salaires, pensions, autres revenus à déclarer"
-        )
-        deduction_10 = st.checkbox("Déduction 10% frais professionnels", value=True,
-                                    key="decl_ded10",
-                                    help="Abattement 10% sur salaires (limité à 14 171€ en 2025)")
-
-    with col3:
         regime = st.selectbox("Régime LMNP", ["Micro-BIC", "Réel simplifié"], key="decl_regime")
         classe = st.selectbox("Classement", ["Non classé", "Classé / Meublé tourisme"],
                                key="decl_classe")
+
+    with col2:
+        st.markdown("**Autres revenus du foyer**")
+        st.caption("Ajoutez autant de lignes que nécessaire (salaires, pensions, autres LMNP...)")
+
+        # Initialiser la liste des revenus dans session_state
+        if "decl_revenus_list" not in st.session_state:
+            st.session_state["decl_revenus_list"] = [
+                {"libelle": "Salaires / Traitement", "montant": 0, "ded10": True}
+            ]
+
+        # Afficher chaque ligne de revenu
+        for i, rev in enumerate(st.session_state["decl_revenus_list"]):
+            r1, r2, r3, r4 = st.columns([3, 2, 1, 0.5])
+            with r1:
+                st.session_state["decl_revenus_list"][i]["libelle"] = st.text_input(
+                    "Libellé", value=rev["libelle"], key=f"rev_lib_{i}",
+                    label_visibility="collapsed"
+                )
+            with r2:
+                st.session_state["decl_revenus_list"][i]["montant"] = st.number_input(
+                    "Montant €", value=float(rev["montant"]),
+                    min_value=0.0, step=500.0, key=f"rev_mnt_{i}",
+                    label_visibility="collapsed"
+                )
+            with r3:
+                st.session_state["decl_revenus_list"][i]["ded10"] = st.checkbox(
+                    "Ded.10%", value=rev.get("ded10", False), key=f"rev_d10_{i}",
+                    help="Appliquer la déduction 10% frais professionnels"
+                )
+            with r4:
+                if st.button("🗑️", key=f"del_rev_{i}", help="Supprimer"):
+                    st.session_state["decl_revenus_list"].pop(i)
+                    st.rerun()
+
+        if st.button("➕ Ajouter un revenu", key="add_revenu"):
+            st.session_state["decl_revenus_list"].append(
+                {"libelle": "Nouveau revenu", "montant": 0, "ded10": False}
+            )
+            st.rerun()
+
+        # Calculer totaux
+        autres_revenus = sum(r["montant"] for r in st.session_state["decl_revenus_list"])
+        deduction_10   = sum(
+            min(r["montant"] * 0.10, 14171) for r in st.session_state["decl_revenus_list"]
+            if r.get("ded10") and r["montant"] > 0
+        )
+        st.metric("Total autres revenus bruts", f"{autres_revenus:,.0f} €")
 
     st.divider()
 
@@ -290,12 +324,9 @@ def _show_declaration_revenus(df_an, annee, props, b):
     st.markdown("### 📊 Calcul de l'impôt sur le revenu")
 
     # Revenus du foyer
-    if deduction_10 and autres_revenus > 0:
-        ded_10 = min(autres_revenus * 0.10, 14171)
-        autres_nets = autres_revenus - ded_10
-    else:
-        autres_nets = autres_revenus
-        ded_10 = 0
+    # deduction_10 est déjà calculée ligne par ligne dans le foyer fiscal
+    ded_10 = deduction_10
+    autres_nets = max(autres_revenus - ded_10, 0)
 
     revenu_fiscal_brut = autres_nets + revenu_lmnp
     quotient_familial  = revenu_fiscal_brut / nb_parts
