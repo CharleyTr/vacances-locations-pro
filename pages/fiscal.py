@@ -200,30 +200,37 @@ def _show_liasse_2033(df_an, annee, props, barem):
         from database.frais_repo import get_frais
         pids = [prop_id] if prop_id else list(props.keys())
         for pid in pids:
-            for f in (get_frais(pid, annee) or []):
+            frais_list = get_frais(pid, annee) or []
+            for f in frais_list:
                 m   = float(f.get("montant", 0) or 0)
-                cat = f.get("categorie", "Frais divers")
+                cat = str(f.get("categorie") or "Frais divers").strip()
                 frais_par_cat[cat] = frais_par_cat.get(cat, 0) + m
                 frais_total += m
     except Exception as e:
         st.warning(f"Erreur chargement frais : {e}")
 
+    # Debug temporaire — afficher les catégories trouvées
+    if frais_par_cat:
+        st.caption(f"📊 Catégories trouvées : {list(frais_par_cat.keys())}")
+
     resultat = ca_net - frais_total
 
-    # ── Regroupement par ligne 2033-B ─────────────────────────────────────
-    # Correspondance exacte avec CATEGORIES de frais_repo.py
-    ligne236 = (frais_par_cat.get("Travaux & réparations",      0) +
-                frais_par_cat.get("Frais de gestion / Compta",  0) +
-                frais_par_cat.get("Assurances",                 0) +
-                frais_par_cat.get("Charges de copropriété",     0) +
-                frais_par_cat.get("Frais de ménage",            0) +
-                frais_par_cat.get("Frais de plateforme",        0) +
-                frais_par_cat.get("Abonnements & services",     0) +
-                frais_par_cat.get("Équipements & mobilier",     0))
-    ligne240 = frais_par_cat.get("Taxe foncière",               0)
-    ligne250 = frais_par_cat.get("Amortissements",              0)
-    ligne256 = frais_par_cat.get("Intérêts d'emprunt",          0)
-    ligne258 = frais_par_cat.get("Frais divers",                0)
+    # ── Regroupement par ligne 2033-B via IR_RUBRIQUES ───────────────────
+    from database.frais_repo import IR_RUBRIQUES
+    lignes = {}
+    for cat, montant in frais_par_cat.items():
+        rubrique = IR_RUBRIQUES.get(cat, "2033-B Ligne 258 — Autres charges")
+        # Extraire le numéro de ligne
+        import re as _re
+        m_ligne = _re.search(r"Ligne (\d+)", rubrique)
+        num = int(m_ligne.group(1)) if m_ligne else 258
+        lignes[num] = lignes.get(num, 0) + montant
+
+    ligne236 = lignes.get(236, 0)
+    ligne240 = lignes.get(240, 0)
+    ligne250 = lignes.get(250, 0)
+    ligne256 = lignes.get(256, 0)
+    ligne258 = lignes.get(258, 0)
 
     st.divider()
     st.markdown("### 📄 2033-B — Compte de résultat simplifié")
