@@ -174,6 +174,217 @@ def _jauge(label, valeur, seuil, unite="€"):
 
 
 
+
+
+def _show_declaration_revenus(df_an, annee, props, b):
+    """Simulation déclaration revenus + calcul IR avec barèmes à jour."""
+    import pandas as pd
+
+    st.subheader(f"💰 Simulation déclaration revenus — {annee}")
+    st.caption(f"Barèmes {annee} — {b.get('loi_note','DGFiP')} | À titre indicatif.")
+
+    # ── Sélection propriété ───────────────────────────────────────────────
+    props_opt = {0: "Toutes les propriétés"}
+    props_opt.update({p["id"]: p["nom"] for p in props.values()})
+    prop_id = st.selectbox("Propriété", list(props_opt.keys()),
+                            format_func=lambda x: props_opt[x], key="decl_prop")
+    df = df_an if prop_id == 0 else df_an[df_an["propriete_id"] == prop_id]
+
+    ca_brut = float(df["prix_brut"].fillna(0).sum())
+
+    st.divider()
+
+    # ── Paramètres foyer fiscal ───────────────────────────────────────────
+    st.markdown("### 👨‍👩‍👧 Foyer fiscal")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        situation = st.selectbox("Situation familiale", [
+            "Célibataire (1 part)",
+            "Marié / Pacsé sans enfant (2 parts)",
+            "Marié / Pacsé + 1 enfant (2,5 parts)",
+            "Marié / Pacsé + 2 enfants (3 parts)",
+            "Marié / Pacsé + 3 enfants (4 parts)",
+            "Parent isolé + 1 enfant (2 parts)",
+            "Parent isolé + 2 enfants (2,5 parts)",
+        ], key="decl_situation")
+
+        parts_map = {
+            "Célibataire (1 part)":                     1.0,
+            "Marié / Pacsé sans enfant (2 parts)":      2.0,
+            "Marié / Pacsé + 1 enfant (2,5 parts)":    2.5,
+            "Marié / Pacsé + 2 enfants (3 parts)":      3.0,
+            "Marié / Pacsé + 3 enfants (4 parts)":      4.0,
+            "Parent isolé + 1 enfant (2 parts)":        2.0,
+            "Parent isolé + 2 enfants (2,5 parts)":     2.5,
+        }
+        nb_parts = parts_map[situation]
+
+    with col2:
+        autres_revenus = st.number_input(
+            "Autres revenus du foyer (€)",
+            min_value=0, value=0, step=1000,
+            key="decl_autres_revenus",
+            help="Salaires, pensions, autres revenus à déclarer"
+        )
+        deduction_10 = st.checkbox("Déduction 10% frais professionnels", value=True,
+                                    key="decl_ded10",
+                                    help="Abattement 10% sur salaires (limité à 14 171€ en 2025)")
+
+    with col3:
+        regime = st.selectbox("Régime LMNP", ["Micro-BIC", "Réel simplifié"], key="decl_regime")
+        classe = st.selectbox("Classement", ["Non classé", "Classé / Meublé tourisme"],
+                               key="decl_classe")
+
+    st.divider()
+
+    # ── Calculs revenus LMNP ─────────────────────────────────────────────
+    st.markdown("### 🏠 Revenus LMNP")
+
+    if regime == "Micro-BIC":
+        if classe == "Classé / Meublé tourisme":
+            abatt = b.get("abattement_classe", 0.50)
+            seuil = b.get("micro_bic_classe_seuil", 77700)
+        else:
+            abatt = b.get("abattement_non_classe", 0.30)
+            seuil = b.get("micro_bic_non_classe_seuil", 15000)
+        abatt_min = b.get("abattement_min_classe", 305)
+        revenu_lmnp = max(ca_brut * (1 - abatt), abatt_min) if ca_brut > 0 else 0
+        frais_total = 0
+        depassement = ca_brut > seuil
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("CA brut", f"{ca_brut:,.0f} €")
+        c2.metric(f"Abattement {abatt*100:.0f}%", f"-{ca_brut * abatt:,.0f} €")
+        c3.metric("Revenu imposable LMNP", f"{revenu_lmnp:,.0f} €")
+
+        if depassement:
+            st.error(f"⚠️ CA dépasse le seuil Micro-BIC ({seuil:,.0f} €) — passage obligatoire au Réel.")
+    else:
+        # Réel simplifié
+        frais_total = 0
+        try:
+            from database.frais_repo import get_frais
+            pids = [prop_id] if prop_id else list(props.keys())
+            for pid in pids:
+                frais_total += sum(float(f.get("montant",0) or 0)
+                                   for f in (get_frais(pid, annee) or []))
+        except: pass
+
+        revenu_lmnp = max(ca_brut - frais_total, 0)
+        deficit      = max(frais_total - ca_brut, 0)
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("CA brut", f"{ca_brut:,.0f} €")
+        c2.metric("Charges déductibles", f"-{frais_total:,.0f} €")
+        c3.metric("Bénéfice / déficit", f"{ca_brut - frais_total:+,.0f} €")
+        c4.metric("Imposable LMNP", f"{revenu_lmnp:,.0f} €")
+
+        if deficit > 0:
+            st.info(f"💡 Déficit LMNP de **{deficit:,.0f} €** — reportable sur les revenus LMNP "
+                     "des 10 années suivantes (non imputable sur revenu global).")
+
+    st.divider()
+
+    # ── Calcul IR global ─────────────────────────────────────────────────
+    st.markdown("### 📊 Calcul de l'impôt sur le revenu")
+
+    # Revenus du foyer
+    if deduction_10 and autres_revenus > 0:
+        ded_10 = min(autres_revenus * 0.10, 14171)
+        autres_nets = autres_revenus - ded_10
+    else:
+        autres_nets = autres_revenus
+        ded_10 = 0
+
+    revenu_fiscal_brut = autres_nets + revenu_lmnp
+    quotient_familial  = revenu_fiscal_brut / nb_parts
+
+    # IR sur 1 part
+    ir_1_part = _impot_tranche(quotient_familial, b)
+    ir_total  = ir_1_part * nb_parts
+
+    # Décote (si IR < seuil)
+    decote = 0
+    seuil_decote = 1929 if nb_parts == 1 else 3191
+    if ir_total < seuil_decote:
+        decote = min(873 if nb_parts == 1 else 1444,
+                     0.4525 * (seuil_decote - ir_total))
+    ir_apres_decote = max(ir_total - decote, 0)
+
+    # Prélèvements sociaux sur revenus du patrimoine
+    ps_lmnp = revenu_lmnp * 0.172  # CSG/CRDS 17.2%
+
+    ir_final = ir_apres_decote + ps_lmnp
+
+    # Barème affiché
+    tranches = b.get("tranches_ir", [])
+    df_tranches = pd.DataFrame([
+        (f"{bas:,.0f} €", f"{(haut or '∞'):,.0f} €" if haut else "∞", f"{taux*100:.0f}%",
+         f"{_impot_tranche(min(quotient_familial, haut or 1e9), b) - _impot_tranche(min(quotient_familial, bas), b):,.0f} €"
+         if quotient_familial > bas else "0 €")
+        for bas, haut, taux in tranches
+    ], columns=["De", "À", "Taux", "IR sur cette tranche"])
+
+    col_t, col_r = st.columns([2, 1])
+
+    with col_t:
+        st.markdown(f"**Tranches IR {annee}** — Quotient familial : {quotient_familial:,.0f} €")
+        st.dataframe(df_tranches, use_container_width=True, hide_index=True,
+                     column_config={
+                         "Taux": st.column_config.TextColumn(width="small"),
+                     })
+
+    with col_r:
+        st.markdown("**Résumé du calcul**")
+        st.dataframe(pd.DataFrame([
+            ("Revenus nets (hors LMNP)",       f"{autres_nets:,.0f} €"),
+            ("Déduction 10% frais pro",        f"-{ded_10:,.0f} €" if ded_10 else "—"),
+            ("Revenus LMNP imposables",        f"{revenu_lmnp:,.0f} €"),
+            ("= Revenu fiscal de référence",   f"{revenu_fiscal_brut:,.0f} €"),
+            ("Nombre de parts",                f"{nb_parts}"),
+            ("Quotient familial",              f"{quotient_familial:,.0f} €"),
+            ("IR brut",                        f"{ir_total:,.0f} €"),
+            ("Décote",                         f"-{decote:,.0f} €" if decote else "—"),
+            ("IR net",                         f"{ir_apres_decote:,.0f} €"),
+            ("Prélèvements sociaux (17,2%)",   f"{ps_lmnp:,.0f} €"),
+            ("**TOTAL impôts + PS**",          f"**{ir_final:,.0f} €**"),
+        ], columns=["", "Montant"]), use_container_width=True, hide_index=True)
+
+    # KPIs finaux
+    st.divider()
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("🏠 Revenu LMNP net imposable", f"{revenu_lmnp:,.0f} €")
+    k2.metric("📊 IR net", f"{ir_apres_decote:,.0f} €")
+    k3.metric("💶 Prélèv. sociaux", f"{ps_lmnp:,.0f} €")
+    k4.metric("💸 Total fiscal estimé", f"{ir_final:,.0f} €",
+              delta=f"{ir_final/ca_brut*100:.1f}% du CA" if ca_brut else "—",
+              delta_color="inverse")
+
+    st.divider()
+    # ── Calendrier déclaratif ─────────────────────────────────────────────
+    st.markdown("### 📅 Calendrier déclaratif")
+    df_cal = pd.DataFrame([
+        ("Janvier",    "Clôture exercice comptable",
+                       "Préparer le bilan, rassembler justificatifs"),
+        ("Mars-Avril", "Déclaration 2042-C-PRO",
+                       "Reporter cases 5NA/5NK (LMNP)"),
+        ("Mai",        "Dépôt liasse 2033 (Réel simplifié)",
+                       "Formulaire 2033-A à 2033-G + liasse comptable"),
+        ("Mai",        "Déclaration de revenus en ligne",
+                       "impots.gouv.fr — délai selon département"),
+        ("Septembre",  "Acompte IR (si > 300€)",
+                       "Prélèvement à la source ajustable"),
+        ("Décembre",   "Estimation revenus N+1",
+                       "Moduler les acomptes si besoin"),
+    ], columns=["Période", "Action", "Détail"])
+    st.dataframe(df_cal, use_container_width=True, hide_index=True)
+
+    st.warning(
+        "⚠️ Simulation indicative. Pour une situation complexe (LMP, SCI, déficit antérieur, "
+        "investissements, démembrement...) consultez un expert-comptable spécialisé en LMNP."
+    )
+
 def _show_liasse_2033(df_an, annee, props, barem):
     """Liasse fiscale 2033 pré-remplie avec les vraies catégories de frais."""
     import pandas as pd
@@ -525,12 +736,13 @@ def show():
     # Pour LMNP le CA déclaré = recettes brutes encaissées
 
     # ── Onglets ───────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "📊 Seuils & Alertes",
         "💶 Estimation fiscale",
         "⚖️ Micro-BIC vs Réel",
         "🧾 Cotisations sociales",
         "📅 Projection annuelle",
+        "💰 Déclaration revenus",
         "📋 Liasse 2033",
         "📄 Export PDF",
     ])
@@ -1238,9 +1450,12 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
 
     # ── Disclaimer ───────────────────────────────────────────────────────
     with tab6:
-        _show_liasse_2033(df_an, annee, props, b)
+        _show_declaration_revenus(df_an, annee, props, b)
 
     with tab7:
+        _show_liasse_2033(df_an, annee, props, b)
+
+    with tab8:
         _show_export_fiscal(df_an, annee, props, b)
 
     st.caption(
