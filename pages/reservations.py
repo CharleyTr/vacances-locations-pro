@@ -151,10 +151,13 @@ def _show_formulaire_ajout():
         _det = None
 
     if _det:
+        _iso = _det[1].lower()  # code ISO ex: "fr", "us", "gb"
+        _pays_nom = _det[0]
         st.markdown(
-            f"<div style='padding:10px 16px;border-radius:8px;font-size:16px;font-weight:600;"
-            f"border:2px solid #1565C0;display:inline-block;margin-bottom:8px'>"
-            f"{_det[2]} {_det[0]}</div>",
+            f"<div style='padding:8px 16px;border-radius:8px;font-size:15px;font-weight:600;"
+            f"border:2px solid #1565C0;display:inline-flex;align-items:center;gap:10px;margin-bottom:8px'>"
+            f"<img src='https://flagcdn.com/24x18/{_iso}.png' width='24' height='18' "
+            f"style='border-radius:2px;vertical-align:middle'> {_pays_nom}</div>",
             unsafe_allow_html=True
         )
     elif _tel_pre:
