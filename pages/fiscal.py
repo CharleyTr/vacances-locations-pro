@@ -172,6 +172,225 @@ def _jauge(label, valeur, seuil, unite="€"):
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+
+
+def _show_liasse_2033(df_an, annee, props, barem):
+    """Liasse fiscale 2033 pré-remplie."""
+    import pandas as pd
+
+    st.subheader(f"📋 Liasse fiscale 2033 — Exercice {annee}")
+    st.caption("Pré-remplissage automatique depuis vos données. À vérifier avec votre expert-comptable.")
+
+    props_opt = {0: "Toutes les propriétés"}
+    props_opt.update({p["id"]: p["nom"] for p in props.values()})
+    prop_id = st.selectbox("Propriété", list(props_opt.keys()),
+                            format_func=lambda x: props_opt[x], key="liasse_prop")
+    df = df_an if prop_id == 0 else df_an[df_an["propriete_id"] == prop_id]
+
+    ca_brut      = float(df["prix_brut"].fillna(0).sum())
+    commissions  = float(df["commission"].fillna(0).sum()) if "commission" in df.columns else 0
+    taxes_sejour = float(df["taxes_sejour"].fillna(0).sum()) if "taxes_sejour" in df.columns else 0
+    ca_net       = ca_brut - commissions - taxes_sejour
+
+    frais_total = 0
+    frais_par_cat = {}
+    try:
+        from database.frais_repo import get_frais
+        for f in (get_frais(prop_id if prop_id else None, annee) or []):
+            m = float(f.get("montant", 0) or 0)
+            cat = f.get("categorie", "Autres")
+            frais_par_cat[cat] = frais_par_cat.get(cat, 0) + m
+            frais_total += m
+    except: pass
+
+    resultat = ca_net - frais_total
+
+    st.divider()
+    st.markdown("### 📄 2033-A — Compte de résultat simplifié")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**PRODUITS**")
+        st.dataframe(pd.DataFrame([
+            ("Ligne 214 — Recettes locatives",      f"{ca_brut:,.0f} €"),
+            ("Ligne 218 — Taxes de séjour déduits", f"-{taxes_sejour:,.0f} €"),
+            ("Ligne 218 — Commissions déduits",     f"-{commissions:,.0f} €"),
+            ("**= Recettes nettes**",               f"**{ca_net:,.0f} €**"),
+        ], columns=["Libellé", "Montant"]), use_container_width=True, hide_index=True)
+
+    with col2:
+        st.markdown("**CHARGES**")
+        charges = [
+            ("Ligne 236 — Achats & fournitures",    frais_par_cat.get("Fournitures & consommables", 0)),
+            ("Ligne 244 — Entretien & réparations", frais_par_cat.get("Entretien & réparations", 0) + frais_par_cat.get("Travaux", 0)),
+            ("Ligne 250 — Amortissements",           frais_par_cat.get("Amortissements", 0)),
+            ("Ligne 264 — Assurances",              frais_par_cat.get("Assurances", 0)),
+            ("Ligne 260 — Frais financiers",        frais_par_cat.get("Frais financiers / intérêts emprunt", 0)),
+            ("Ligne 280 — Autres charges",          frais_total - sum(frais_par_cat.get(k,0) for k in
+                ["Fournitures & consommables","Entretien & réparations","Travaux",
+                 "Amortissements","Assurances","Frais financiers / intérêts emprunt"])),
+            ("**= Total charges**",                 frais_total),
+        ]
+        st.dataframe(pd.DataFrame(
+            [(l, f"{m:,.0f} €") for l, m in charges],
+            columns=["Libellé", "Montant"]
+        ), use_container_width=True, hide_index=True)
+
+    st.divider()
+    c1, c2, c3 = st.columns(3)
+    c1.metric("📥 Recettes nettes", f"{ca_net:,.0f} €")
+    c2.metric("📤 Charges totales", f"{frais_total:,.0f} €")
+    c3.metric("✅ Résultat fiscal",  f"{resultat:,.0f} €",
+              delta=f"{resultat:+,.0f} €",
+              delta_color="normal" if resultat >= 0 else "inverse")
+
+    st.divider()
+    st.markdown("### 📌 Cases à reporter sur la 2042-C-PRO")
+    st.dataframe(pd.DataFrame([
+        ("5NA", "Recettes brutes LMNP",    f"{ca_brut:,.0f} €"),
+        ("5NF", "Recettes nettes",          f"{ca_net:,.0f} €"),
+        ("5NK", "Résultat bénéficiaire",    f"{max(resultat,0):,.0f} €"),
+        ("5NM", "Déficit reportable",       f"{abs(min(resultat,0)):,.0f} €"),
+    ], columns=["Case", "Libellé", "Montant"]), use_container_width=True, hide_index=True)
+
+
+def _show_export_fiscal(df_an, annee, props, barem):
+    """Export PDF rapport fiscal."""
+    st.subheader(f"📄 Export rapport fiscal {annee}")
+
+    props_opt = {0: "Toutes les propriétés"}
+    props_opt.update({p["id"]: p["nom"] for p in props.values()})
+    prop_id   = st.selectbox("Propriété", list(props_opt.keys()),
+                              format_func=lambda x: props_opt[x], key="export_prop")
+    df        = df_an if prop_id == 0 else df_an[df_an["propriete_id"] == prop_id]
+    prop_nom  = props_opt[prop_id]
+    prop_data = props.get(prop_id, {}) if prop_id else {}
+
+    ca_brut      = float(df["prix_brut"].fillna(0).sum())
+    commissions  = float(df["commission"].fillna(0).sum()) if "commission" in df.columns else 0
+    taxes_sejour = float(df["taxes_sejour"].fillna(0).sum()) if "taxes_sejour" in df.columns else 0
+    ca_net       = ca_brut - commissions - taxes_sejour
+    frais_total  = 0
+    try:
+        from database.frais_repo import get_frais
+        frais_total = sum(float(f.get("montant",0) or 0)
+                         for f in (get_frais(prop_id if prop_id else None, annee) or []))
+    except: pass
+    resultat = ca_net - frais_total
+    nb_nuits = int(df["nuitees"].fillna(0).sum()) if "nuitees" in df.columns else 0
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        nom_d    = st.text_input("Nom / Raison sociale", key="pdf_nom",
+                                  value=prop_data.get("signataire","") if isinstance(prop_data,dict) else "")
+        siret    = st.text_input("SIRET", key="pdf_siret",
+                                  value=prop_data.get("siret","") if isinstance(prop_data,dict) else "")
+        adresse  = st.text_input("Adresse", key="pdf_adresse",
+                                  value=f"{prop_data.get('rue','')} {prop_data.get('code_postal','')} {prop_data.get('ville','')}".strip() if isinstance(prop_data,dict) else "")
+    with col_b:
+        regime   = st.selectbox("Régime", ["Micro-BIC","Réel simplifié"], key="pdf_regime")
+        classe   = st.selectbox("Classement", ["Non classé","Classé / Meublé tourisme"], key="pdf_classe")
+        st.metric("Nuits louées", nb_nuits)
+
+    if st.button("📥 Générer le PDF", type="primary", use_container_width=True):
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib import colors
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer, HRFlowable
+            from reportlab.lib.units import cm
+            import io
+
+            buf = io.BytesIO()
+            doc = SimpleDocTemplate(buf, pagesize=A4,
+                                     rightMargin=2*cm, leftMargin=2*cm,
+                                     topMargin=2*cm, bottomMargin=2*cm)
+            S   = getSampleStyleSheet()
+            h1  = ParagraphStyle("h1",  fontSize=18, fontName="Helvetica-Bold",
+                                  spaceAfter=4, textColor=colors.HexColor("#1565C0"))
+            h2  = ParagraphStyle("h2",  fontSize=13, fontName="Helvetica-Bold",
+                                  spaceAfter=6, spaceBefore=10,
+                                  textColor=colors.HexColor("#1565C0"))
+            sub = ParagraphStyle("sub", fontSize=10, fontName="Helvetica",
+                                  spaceAfter=3, textColor=colors.grey)
+            ft  = ParagraphStyle("ft",  fontSize=8,  fontName="Helvetica",
+                                  textColor=colors.grey, alignment=1)
+
+            def tbl(data, widths, header_color="#1565C0"):
+                t = Table(data, colWidths=widths)
+                t.setStyle(TableStyle([
+                    ("BACKGROUND",    (0,0),(-1,0), colors.HexColor(header_color)),
+                    ("TEXTCOLOR",     (0,0),(-1,0), colors.white),
+                    ("FONTNAME",      (0,0),(-1,0), "Helvetica-Bold"),
+                    ("FONTSIZE",      (0,0),(-1,-1), 9),
+                    ("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white, colors.HexColor("#F0F4FF")]),
+                    ("BOX",           (0,0),(-1,-1), 0.5, colors.HexColor("#90CAF9")),
+                    ("INNERGRID",     (0,0),(-1,-1), 0.25, colors.HexColor("#E0E0E0")),
+                    ("PADDING",       (0,0),(-1,-1), 5),
+                ]))
+                return t
+
+            story = []
+            story.append(Paragraph(f"Rapport Fiscal LMNP — {annee}", h1))
+            story.append(Paragraph(nom_d or prop_nom, sub))
+            if adresse: story.append(Paragraph(adresse, sub))
+            if siret:   story.append(Paragraph(f"SIRET : {siret}", sub))
+            story.append(HRFlowable(width="100%", thickness=1,
+                                     color=colors.HexColor("#1565C0")))
+            story.append(Spacer(1, 0.4*cm))
+
+            story.append(Paragraph("Compte de résultat", h2))
+            story.append(tbl([
+                ["Libellé","Montant"],
+                ["Recettes brutes",           f"{ca_brut:,.0f} €"],
+                ["− Taxes de séjour",         f"-{taxes_sejour:,.0f} €"],
+                ["− Commissions",             f"-{commissions:,.0f} €"],
+                ["= Recettes nettes",         f"{ca_net:,.0f} €"],
+                ["− Charges déductibles",     f"-{frais_total:,.0f} €"],
+                ["= Résultat fiscal",         f"{resultat:,.0f} €"],
+            ], [12*cm, 5*cm]))
+            story.append(Spacer(1, 0.4*cm))
+
+            story.append(Paragraph("Activité locative", h2))
+            story.append(tbl([
+                ["Indicateur","Valeur"],
+                ["Nuits louées",              str(nb_nuits)],
+                ["Réservations",              str(len(df))],
+                ["Revenu moyen / nuit",       f"{ca_net/nb_nuits:.0f} €" if nb_nuits else "—"],
+                ["Régime",                    regime],
+                ["Classement",               classe],
+            ], [12*cm, 5*cm]))
+            story.append(Spacer(1, 0.4*cm))
+
+            story.append(Paragraph("Cases 2042-C-PRO", h2))
+            story.append(tbl([
+                ["Case","Libellé","Montant"],
+                ["5NA","Recettes brutes LMNP",   f"{ca_brut:,.0f} €"],
+                ["5NF","Recettes nettes",          f"{ca_net:,.0f} €"],
+                ["5NK","Résultat bénéficiaire",    f"{max(resultat,0):,.0f} €"],
+                ["5NM","Déficit reportable",       f"{abs(min(resultat,0)):,.0f} €"],
+            ], [3*cm, 9*cm, 5*cm]))
+            story.append(Spacer(1, 0.8*cm))
+            story.append(HRFlowable(width="100%", thickness=0.5, color=colors.grey))
+            story.append(Paragraph(
+                f"Généré par Vacances-Locations Pro — {annee} | "
+                "À titre indicatif — consultez votre expert-comptable", ft))
+
+            doc.build(story)
+            buf.seek(0)
+            st.download_button(
+                "📥 Télécharger le PDF",
+                data=buf.getvalue(),
+                file_name=f"fiscal_lmnp_{annee}_{prop_nom.replace(' ','_')}.pdf",
+                mime="application/pdf",
+                type="primary",
+                use_container_width=True
+            )
+            st.success("✅ PDF prêt !")
+        except Exception as e:
+            st.error(f"❌ Erreur : {e}")
+
+
 def show():
     st.title("🏛️ Tableau de bord fiscal")
     st.caption("LMNP — Meublé de tourisme — Suivi micro-BIC & estimation fiscale")
