@@ -41,6 +41,12 @@ def show():
     st.title("💬 Chat interne")
     st.caption("Messagerie en temps réel entre tous les utilisateurs de l'application.")
 
+    # Auto-refresh toutes les 30 secondes via meta tag
+    st.markdown(
+        "<meta http-equiv='refresh' content='30'>",
+        unsafe_allow_html=True
+    )
+
     user_email, user_nom = _get_user_info()
     is_admin = st.session_state.get("is_admin", False)
 
@@ -78,7 +84,15 @@ def show():
             st.session_state["chat_refresh"] += 1
             st.rerun()
     with col_t:
-        st.caption("💡 Cliquez 🔄 pour voir les nouveaux messages")
+        # Auto-refresh toutes les 30 secondes si page Chat ouverte
+        import time as _time
+        _last = st.session_state.get("chat_last_refresh_time", 0)
+        _now  = _time.time()
+        if _now - _last > 30:
+            st.session_state["chat_last_refresh_time"] = _now
+            st.session_state["chat_refresh"] += 1
+        _secs_left = max(0, int(30 - (_now - _last)))
+        st.caption(f"🔄 Auto-actualisation dans {_secs_left}s")
     with col_p:
         st.markdown(
             "<a href='https://CharleyTr.github.io/vlp-auth/chat-paste.html' target='_blank' "
