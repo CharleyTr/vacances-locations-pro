@@ -139,6 +139,13 @@ def sidebar() -> str:
                     f"margin-bottom:6px'>💬 {_unread} nouveau(x) message(s)</div>",
                     unsafe_allow_html=True
                 )
+                # Auto-navigation : si l'utilisateur n'est pas sur le Chat, proposer d'y aller
+                _current_page = st.session_state.get("current_page", "")
+                if _current_page != "Chat":
+                    if st.button("💬 Voir les messages", key="btn_goto_chat",
+                                  use_container_width=True, type="primary"):
+                        st.session_state["nav_page"] = "Chat"
+                        st.rerun()
         except: pass
 
         st.divider()
