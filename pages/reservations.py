@@ -317,8 +317,26 @@ def _show_formulaire_modifier():
             st.markdown("**👤 Client**")
             nom_client  = st.text_input("Nom du client *", value=str(row.get("nom_client", "")))
             email       = st.text_input("Email", value=str(row.get("email", "") or ""))
-            telephone   = st.text_input("Téléphone", value=str(row.get("telephone", "") or ""))
-            pays        = st.text_input("Pays", value=str(row.get("pays", "") or ""))
+            telephone = st.text_input("Téléphone",
+                                    value=str(row.get("telephone","") or ""),
+                                    key="tel_edit_form")
+            # Pays auto depuis téléphone, ou valeur existante
+            _tel_edit = st.session_state.get("tel_edit_form","") or str(row.get("telephone","") or "")
+            try:
+                from services.indicatifs_service import detect_pays
+                _det_e = detect_pays(_tel_edit) if _tel_edit else None
+                _pays_display_e = f"{_det_e[2]} {_det_e[0]}" if _det_e else str(row.get("pays","") or "")
+                pays = _det_e[0] if _det_e else str(row.get("pays","") or "")
+            except:
+                _pays_display_e = str(row.get("pays","") or "")
+                pays = str(row.get("pays","") or "")
+            st.markdown(
+                f"<div style='background:#F0F4FF;border-radius:6px;padding:7px 12px;"
+                f"font-size:14px;border:1px solid #E0E0E0;min-height:36px'>"
+                f"{'🌍 <strong>' + _pays_display_e + '</strong>' if _pays_display_e else '<span style="color:#aaa">🌍 Pays — détecté depuis le tél.</span>'}"
+                f"</div>",
+                unsafe_allow_html=True
+            )
 
         with col2:
             st.markdown("**🏠 Séjour**")
