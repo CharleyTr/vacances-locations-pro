@@ -141,23 +141,20 @@ def _show_formulaire_ajout():
         st.error("⛔ Connexion Supabase requise pour ajouter une réservation.")
         return
 
-    # ── Détection pays hors formulaire (fonctionne en temps réel) ───────
-    _col_tel, _col_pays = st.columns(2)
-    with _col_tel:
-        _tel_pre = st.text_input("📞 Téléphone", placeholder="+33 6 00 00 00 00",
-                                  key="res_tel_pre")
-    with _col_pays:
-        _pays_auto = ""
-        if _tel_pre and (_tel_pre.startswith("+") or _tel_pre.startswith("00")):
-            try:
-                from services.indicatifs_service import detect_pays
-                _res = detect_pays(_tel_pre)
-                if _res:
-                    _pays_auto = f"{_res[2]} {_res[0]}"
-            except: pass
-        _pays_pre = st.text_input("🌍 Pays (auto)", value=_pays_auto,
-                                   placeholder="Détecté automatiquement",
-                                   key="res_pays_pre")
+    # ── Téléphone hors formulaire → pays temps réel ─────────────────────
+    _tel_pre = st.text_input("📞 Téléphone", placeholder="+33 6 12 34 56 78",
+                              key="res_tel_pre")
+    try:
+        from services.indicatifs_service import detect_pays as _dp
+        _det = _dp(_tel_pre) if _tel_pre else None
+    except:
+        _det = None
+
+    if _det:
+        st.success(f"{_det[2]} **{_det[0]}**")
+    elif _tel_pre:
+        st.caption("Indicatif non reconnu — pays non détecté")
+    
     st.divider()
 
     with st.form("form_ajout", clear_on_submit=True):
