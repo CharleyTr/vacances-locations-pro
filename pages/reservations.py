@@ -151,7 +151,12 @@ def _show_formulaire_ajout():
         _det = None
 
     if _det:
-        st.success(f"{_det[2]} **{_det[0]}**")
+        st.markdown(
+            f"<div style='padding:10px 16px;border-radius:8px;font-size:16px;font-weight:600;"
+            f"border:2px solid #1565C0;display:inline-block;margin-bottom:8px'>"
+            f"{_det[2]} {_det[0]}</div>",
+            unsafe_allow_html=True
+        )
     elif _tel_pre:
         st.caption("Indicatif non reconnu — pays non détecté")
     
