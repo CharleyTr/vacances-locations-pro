@@ -330,7 +330,7 @@ def _show_formulaire_modifier():
             try:
                 from services.indicatifs_service import detect_pays
                 _det_e = detect_pays(_tel_edit) if _tel_edit else None
-                _pays_display_e = f"{_det_e[2]} {_det_e[0]}" if _det_e else str(row.get("pays","") or "")
+                _pays_display_e = _det_e[0] if _det_e else str(row.get("pays","") or "")
                 pays = _det_e[0] if _det_e else str(row.get("pays","") or "")
             except:
                 _pays_display_e = str(row.get("pays","") or "")
@@ -345,7 +345,10 @@ def _show_formulaire_modifier():
                     unsafe_allow_html=True
                 )
             elif _pays_display_e:
-                st.markdown(f"**{_pays_display_e}**")
+                # Nettoyer les emojis éventuels dans les données existantes
+                import re as _re2
+                _pays_clean = _re2.sub(r'[\U0001F1E0-\U0001F1FF\U0001F300-\U0001FFFF]', '', _pays_display_e).strip()
+                st.markdown(f"**{_pays_clean}**")
 
         with col2:
             st.markdown("**🏠 Séjour**")
