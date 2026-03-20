@@ -14,19 +14,19 @@ def show():
     <style>
     div[data-testid="stButton"] button {
         text-align:left !important;
-        background:#F8FBFF !important;
+        background:var(--bg-card,#F8FBFF) !important;
         border-left:4px solid #1565C0 !important;
         border-top:none !important;
         border-right:none !important;
         border-bottom:1px solid #E3F2FD !important;
         border-radius:0 6px 6px 0 !important;
-        color:#333 !important;
+        color:var(--text-primary,#333) !important;
         padding:8px 14px !important;
         margin-bottom:2px !important;
         font-size:14px !important;
     }
     div[data-testid="stButton"] button:hover {
-        background:#E3F2FD !important;
+        background:var(--bg-info,#E3F2FD) !important;
         border-left:4px solid #0D47A1 !important;
     }
     </style>
@@ -153,7 +153,7 @@ communication clients et tarification.
     for i, (icon, name, desc) in enumerate(modules):
         st.markdown(
             "<div style='display:flex;align-items:center;padding:7px 14px;"
-            "border-left:4px solid #1565C0;background:#F8FBFF;"
+            "border-left:4px solid #1565C0;background:var(--bg-card,#F8FBFF);"
             "margin-bottom:3px;border-radius:0 6px 6px 0'>"
             f"<span style='font-size:19px;width:32px'>{icon}</span>"
             f"<span style='font-weight:bold;width:210px;color:#1565C0'>{name}</span>"
@@ -564,10 +564,10 @@ Exécutez ces scripts dans l'ordre dans l'éditeur SQL Supabase :
     # Crédits
     # ─────────────────────────────────────────────────────────────────────
     st.markdown("""
-<div style='text-align:center;padding:2rem;background:#F8FBFF;border-radius:12px;margin-top:1rem'>
+<div style='text-align:center;padding:2rem;background:var(--bg-card,#F8FBFF);border-radius:12px;margin-top:1rem'>
     <div style='font-size:36px'>🏖️</div>
     <h3 style='color:#1565C0;margin:0.5rem 0'>Vacances-Locations Pro</h3>
-    <p style='color:#555;margin:0.3rem 0'>Développé par <strong>Charley Trigano</strong></p>
+    <p style='color:var(--text-secondary,#555);margin:0.3rem 0'>Développé par <strong>Charley Trigano</strong></p>
     <p style='color:#888;font-size:13px;margin:0'>Version 3.0 — 2026 · © Tous droits réservés</p>
 </div>
 """, unsafe_allow_html=True)
