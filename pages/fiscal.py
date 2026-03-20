@@ -175,7 +175,7 @@ def _jauge(label, valeur, seuil, unite="€"):
 
 
 def _show_liasse_2033(df_an, annee, props, barem):
-    """Liasse fiscale 2033 pré-remplie."""
+    """Liasse fiscale 2033 pré-remplie avec les vraies catégories de frais."""
     import pandas as pd
 
     st.subheader(f"📋 Liasse fiscale 2033 — Exercice {annee}")
@@ -185,6 +185,7 @@ def _show_liasse_2033(df_an, annee, props, barem):
     props_opt.update({p["id"]: p["nom"] for p in props.values()})
     prop_id = st.selectbox("Propriété", list(props_opt.keys()),
                             format_func=lambda x: props_opt[x], key="liasse_prop")
+
     df = df_an if prop_id == 0 else df_an[df_an["propriete_id"] == prop_id]
 
     ca_brut      = float(df["prix_brut"].fillna(0).sum())
@@ -192,49 +193,79 @@ def _show_liasse_2033(df_an, annee, props, barem):
     taxes_sejour = float(df["taxes_sejour"].fillna(0).sum()) if "taxes_sejour" in df.columns else 0
     ca_net       = ca_brut - commissions - taxes_sejour
 
-    frais_total = 0
+    # Charger TOUS les frais avec les vraies catégories
+    frais_total   = 0
     frais_par_cat = {}
     try:
         from database.frais_repo import get_frais
-        for f in (get_frais(prop_id if prop_id else None, annee) or []):
-            m = float(f.get("montant", 0) or 0)
-            cat = f.get("categorie", "Autres")
-            frais_par_cat[cat] = frais_par_cat.get(cat, 0) + m
-            frais_total += m
-    except: pass
+        pids = [prop_id] if prop_id else list(props.keys())
+        for pid in pids:
+            for f in (get_frais(pid, annee) or []):
+                m   = float(f.get("montant", 0) or 0)
+                cat = f.get("categorie", "Frais divers")
+                frais_par_cat[cat] = frais_par_cat.get(cat, 0) + m
+                frais_total += m
+    except Exception as e:
+        st.warning(f"Erreur chargement frais : {e}")
 
     resultat = ca_net - frais_total
 
+    # ── Regroupement par ligne 2033-B ─────────────────────────────────────
+    # Correspondance exacte avec CATEGORIES de frais_repo.py
+    ligne236 = (frais_par_cat.get("Travaux & réparations",      0) +
+                frais_par_cat.get("Frais de gestion / Compta",  0) +
+                frais_par_cat.get("Assurances",                 0) +
+                frais_par_cat.get("Charges de copropriété",     0) +
+                frais_par_cat.get("Frais de ménage",            0) +
+                frais_par_cat.get("Frais de plateforme",        0) +
+                frais_par_cat.get("Abonnements & services",     0) +
+                frais_par_cat.get("Équipements & mobilier",     0))
+    ligne240 = frais_par_cat.get("Taxe foncière",               0)
+    ligne250 = frais_par_cat.get("Amortissements",              0)
+    ligne256 = frais_par_cat.get("Intérêts d'emprunt",          0)
+    ligne258 = frais_par_cat.get("Frais divers",                0)
+
     st.divider()
-    st.markdown("### 📄 2033-A — Compte de résultat simplifié")
+    st.markdown("### 📄 2033-B — Compte de résultat simplifié")
 
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("**PRODUITS**")
-        st.dataframe(pd.DataFrame([
-            ("Ligne 214 — Recettes locatives",      f"{ca_brut:,.0f} €"),
-            ("Ligne 218 — Taxes de séjour déduits", f"-{taxes_sejour:,.0f} €"),
-            ("Ligne 218 — Commissions déduits",     f"-{commissions:,.0f} €"),
-            ("**= Recettes nettes**",               f"**{ca_net:,.0f} €**"),
-        ], columns=["Libellé", "Montant"]), use_container_width=True, hide_index=True)
+        df_prod = pd.DataFrame([
+            ("Ligne 214 — Recettes locatives brutes",  f"{ca_brut:,.0f} €"),
+            ("Ligne 218 — Taxes de séjour (-)",        f"-{taxes_sejour:,.0f} €"),
+            ("Ligne 218 — Commissions plateformes (-)",f"-{commissions:,.0f} €"),
+            ("= Recettes nettes déclarées",            f"{ca_net:,.0f} €"),
+        ], columns=["Libellé", "Montant"])
+        st.dataframe(df_prod, use_container_width=True, hide_index=True)
 
     with col2:
         st.markdown("**CHARGES**")
-        charges = [
-            ("Ligne 236 — Achats & fournitures",    frais_par_cat.get("Fournitures & consommables", 0)),
-            ("Ligne 244 — Entretien & réparations", frais_par_cat.get("Entretien & réparations", 0) + frais_par_cat.get("Travaux", 0)),
-            ("Ligne 250 — Amortissements",           frais_par_cat.get("Amortissements", 0)),
-            ("Ligne 264 — Assurances",              frais_par_cat.get("Assurances", 0)),
-            ("Ligne 260 — Frais financiers",        frais_par_cat.get("Frais financiers / intérêts emprunt", 0)),
-            ("Ligne 280 — Autres charges",          frais_total - sum(frais_par_cat.get(k,0) for k in
-                ["Fournitures & consommables","Entretien & réparations","Travaux",
-                 "Amortissements","Assurances","Frais financiers / intérêts emprunt"])),
-            ("**= Total charges**",                 frais_total),
-        ]
-        st.dataframe(pd.DataFrame(
-            [(l, f"{m:,.0f} €") for l, m in charges],
-            columns=["Libellé", "Montant"]
-        ), use_container_width=True, hide_index=True)
+        df_chg = pd.DataFrame([
+            ("Ligne 236 — Charges externes",          f"{ligne236:,.0f} €",
+             "Travaux, gestion, assurances, ménage, plateforme..."),
+            ("Ligne 240 — Impôts & taxes",            f"{ligne240:,.0f} €",
+             "Taxe foncière"),
+            ("Ligne 250 — Amortissements",            f"{ligne250:,.0f} €",
+             "Immobilier + mobilier"),
+            ("Ligne 256 — Charges financières",       f"{ligne256:,.0f} €",
+             "Intérêts d'emprunt"),
+            ("Ligne 258 — Autres charges",            f"{ligne258:,.0f} €",
+             "Frais divers"),
+            ("= Total charges déductibles",           f"{frais_total:,.0f} €", ""),
+        ], columns=["Ligne", "Montant", "Détail"])
+        st.dataframe(df_chg, use_container_width=True, hide_index=True)
+
+    # Détail par catégorie
+    if frais_par_cat:
+        with st.expander("🔍 Détail par catégorie de frais"):
+            df_det = pd.DataFrame([
+                (cat, f"{m:,.0f} €") for cat, m in sorted(frais_par_cat.items())
+            ], columns=["Catégorie", "Montant"])
+            st.dataframe(df_det, use_container_width=True, hide_index=True)
+    else:
+        st.warning("⚠️ Aucun frais enregistré pour cette propriété / année. "
+                    "Saisissez vos dépenses dans l'onglet **Frais déductibles**.")
 
     st.divider()
     c1, c2, c3 = st.columns(3)
