@@ -335,13 +335,17 @@ def _show_formulaire_modifier():
             except:
                 _pays_display_e = str(row.get("pays","") or "")
                 pays = str(row.get("pays","") or "")
-            st.markdown(
-                f"<div style='background:var(--bg-card,#F0F4FF);border-radius:6px;padding:7px 12px;"
-                f"font-size:14px;border:1px solid var(--border-color,#E0E0E0);min-height:36px'>"
-                f"{'🌍 <strong>' + _pays_display_e + '</strong>' if _pays_display_e else '<span style="color:#aaa">🌍 Pays — détecté depuis le tél.</span>'}"
-                f"</div>",
-                unsafe_allow_html=True
-            )
+            if _det_e:
+                _iso_e = _det_e[1].lower()
+                st.markdown(
+                    f"<div style='padding:8px 16px;border-radius:8px;font-size:15px;font-weight:600;"
+                    f"border:2px solid #1565C0;display:inline-flex;align-items:center;gap:10px'>"
+                    f"<img src='https://flagcdn.com/24x18/{_iso_e}.png' width='24' height='18' "
+                    f"style='border-radius:2px'> {_det_e[0]}</div>",
+                    unsafe_allow_html=True
+                )
+            elif _pays_display_e:
+                st.markdown(f"**{_pays_display_e}**")
 
         with col2:
             st.markdown("**🏠 Séjour**")
