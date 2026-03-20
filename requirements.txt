@@ -12,3 +12,5 @@ numpy>=1.26.0
 streamlit-paste-button
 
 reportlab>=4.0.0
+
+streamlit-cookies-manager>=0.2.0
