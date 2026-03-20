@@ -1,96 +1,187 @@
-# 🏖️ Vacances-Locations PRO — v2.0
+# 🏖️ Vacances-Locations PRO — v5.0
 
-Application Streamlit de gestion locative avec synchronisation Supabase.
+Application Python/Streamlit de gestion locative professionnelle avec Supabase.
 
-## 🚀 Démarrage rapide
+**URL** : https://vacances-locations-pro-iqmuq8xq9g3kxgw6n8ogpv.streamlit.app  
+**Développé par** : Charley Trigano — 2026
 
-### 1. Configurer l'environnement
-```bash
-cp .env.example .env
-# Remplir SUPABASE_URL et SUPABASE_KEY dans .env
+---
+
+## ✨ Fonctionnalités
+
+### 🏠 Gestion locative
+- Réservations (import Booking, Airbnb, saisie manuelle)
+- Calendrier mensuel/semaine avec liens plateformes cliquables
+- Paiements & relances
+- Planning ménage
+- Créneaux libres & opportunités
+- Sync iCal (Airbnb, Booking)
+
+### 👥 Utilisateurs & Sécurité
+- **3 niveaux d'accès** : Admin / Propriétaire / Gestionnaire
+- Login hybride : Code PIN propriété OU Email + code personnel
+- Session persistante via cookie (30 jours)
+- Journal des connexions (admin)
+- Gestion utilisateurs avec invitation email (Supabase Auth)
+
+### 💬 Communication
+- Chat interne temps réel (toutes propriétés)
+- Messagerie WhatsApp / SMS / Email (Brevo)
+- Modèles de messages personnalisables
+- Questionnaire satisfaction client bilingue FR/EN
+
+### 📊 Analyses & Reporting
+- Dashboard KPIs (CA brut/net, taux occupation, commissions)
+- Analyses par plateforme, mensuelle, pluriannuelle
+- Statistiques par pays (auto-détection depuis indicatif téléphonique)
+- Export comptable
+- Rapports PDF
+
+### 🏛️ Fiscal LMNP
+- Suivi seuils Micro-BIC (barèmes 2023-2026)
+- Estimation fiscale & cotisations sociales
+- Liasse 2033 pré-remplie automatiquement
+- Simulation déclaration revenus (multi-propriétés, multi-régimes)
+- Export rapport fiscal PDF
+- Frais déductibles avec justificatifs (Supabase Storage)
+
+### 🧾 Facturation
+- Génération factures PDF (logos distincts par propriété)
+- Mention LMNP TVA non applicable
+
+### 💾 Sauvegarde
+- Export CSV par table
+- Export Excel complet (toutes tables)
+
+---
+
+## 🗄️ Architecture
+
 ```
-
-### 2. Installer les dépendances
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Créer la table Supabase
-Exécuter le fichier `database/migrations/001_create_reservations.sql`
-dans l'éditeur SQL de votre dashboard Supabase.
-
-### 4. Importer les données
-Lancer l'app puis aller dans **Réservations → Import CSV**
-et uploader votre fichier `reservations.csv`.
-
-### 5. Lancer l'application
-```bash
-streamlit run app.py
+vacances-locations-pro/
+├── app.py                          # Routeur principal + login hybride
+├── config.py                       # Variables d'environnement
+├── requirements.txt
+│
+├── components/
+│   ├── sidebar.py                  # Navigation filtrée par rôle + badges
+│   └── kpi_cards.py
+│
+├── database/
+│   ├── supabase_client.py          # Connexion Supabase
+│   ├── reservations_repo.py
+│   ├── proprietes_repo.py
+│   ├── auth_repo.py                # Supabase Auth (invite, sign_in, codes)
+│   ├── journal_repo.py             # Journal connexions
+│   ├── chat_repo.py                # Messagerie interne
+│   ├── frais_repo.py               # Frais déductibles LMNP
+│   ├── justificatifs_repo.py       # Supabase Storage
+│   ├── baremes_repo.py             # Barèmes fiscaux
+│   └── ...
+│
+├── services/
+│   ├── auth_service.py             # Rôles, permissions, can_see/can_edit
+│   ├── reservation_service.py
+│   ├── facture_service.py          # PDF factures
+│   ├── indicatifs_service.py       # Détection pays depuis téléphone
+│   ├── template_service.py         # Modèles messages
+│   └── ...
+│
+├── pages/                          # 35 pages
+│   ├── dashboard.py
+│   ├── reservations.py
+│   ├── calendar.py
+│   ├── analytics.py                # Stats + onglet pays
+│   ├── fiscal.py                   # LMNP complet + liasse 2033
+│   ├── chat.py                     # Messagerie interne + pièces jointes
+│   ├── utilisateurs.py             # Gestion users (admin)
+│   ├── journal.py                  # Journal connexions (admin)
+│   ├── sauvegarde.py               # Export données (admin)
+│   └── ...
+│
+├── integrations/
+│   ├── brevo_client.py             # Email + SMS
+│   ├── whatsapp_client.py
+│   └── ical_sync.py
+│
+└── static/                         # PWA + icônes
+    ├── manifest.json
+    ├── sw.js                       # Service Worker
+    ├── offline.html
+    └── icon-*.png
 ```
 
 ---
 
-## 📂 Structure
+## ⚙️ Configuration
 
-```
-vacances-locations-pro/
-├── app.py                          # Point d'entrée
-├── config.py                       # Variables d'env
-├── .env.example                    # Template config
-├── requirements.txt
-│
-├── database/
-│   ├── supabase_client.py          # Connexion Supabase (avec fallback)
-│   ├── reservations_repo.py        # CRUD réservations
-│   └── migrations/
-│       └── 001_create_reservations.sql
-│
-├── models/
-│   └── reservation.py              # Dataclass Reservation
-│
-├── services/
-│   ├── reservation_service.py      # Chargement (Supabase ou CSV)
-│   ├── import_service.py           # Import CSV → Supabase
-│   ├── analytics_service.py        # KPIs et métriques
-│   ├── finance_service.py          # Rapport financier
-│   ├── gap_service.py              # Détection créneaux libres
-│   ├── opportunity_service.py      # Opportunités réservation
-│   ├── calendar_service.py         # Événements calendrier
-│   ├── cleaning_service.py         # Planning ménage
-│   ├── alert_service.py            # Alertes arrivées / paiements
-│   ├── messaging_service.py        # Envoi emails Brevo
-│   └── automation_service.py       # Automatisations
-│
-├── pages/
-│   ├── dashboard.py                # Vue principale + KPIs
-│   ├── reservations.py             # Liste + filtres + import
-│   ├── calendar.py                 # Vue calendrier
-│   ├── analytics.py                # Analyses financières
-│   └── gaps.py                     # Créneaux libres
-│
-├── components/
-│   └── sidebar.py                  # Navigation + statut connexion
-│
-└── data/
-    └── reservations.csv            # Données locales (fallback)
+### Secrets Streamlit Cloud
+```toml
+SUPABASE_URL         = "https://xxxx.supabase.co"
+SUPABASE_KEY         = "eyJ..."           # anon key
+SUPABASE_SERVICE_KEY = "eyJ..."           # service_role key
+BREVO_API_KEY        = "xkeysib-..."
+EMAIL_FROM           = "c.trigano@gmail.com"
+APP_URL              = "https://vacances-locations-pro-iqmuq8xq9g3kxgw6n8ogpv.streamlit.app"
+AUTH_REDIRECT_URL    = "https://CharleyTr.github.io/vlp-auth/"
+ADMIN_PROP_ID        = "2"                # ID propriété administrateur
+COOKIE_PASSWORD      = "votre-secret-cookie-long"
+TWILIO_ACCOUNT_SID   = "ACxxxxxxxxxx"
+TWILIO_AUTH_TOKEN    = "votre_token"
+TWILIO_WHATSAPP_FROM = "whatsapp:+14155238886"
 ```
 
-## 🔌 Mode hors ligne
+### Scripts SQL (dans l'ordre)
+| Script | Contenu |
+|--------|---------|
+| 001-004 | Tables de base |
+| 005 | message_templates |
+| 006 | signataire dans proprietes |
+| 007 | frais_deductibles |
+| 008 | pricing |
+| 009 | baremes_fiscaux |
+| 010 | mot_de_passe dans proprietes |
+| 011 | propriété modèle démo |
+| 012 | codes PIN |
+| 013 | justificatifs (Storage) |
+| 014 | infos facturation proprietes |
+| 015 | auth_preparation (profiles, propriete_access) |
+| 016 | admin_setup |
+| 017b | rls_fix (RLS désactivé) |
+| 018 | auth_email_config |
+| 019 | journal_connexions |
+| 020 | chat_messages + bucket |
+| 021 | code_acces dans profiles |
+| 022 | roles_propriete + mot_de_passe_gestionnaire |
 
-Sans `.env` configuré, l'app fonctionne en **mode CSV local** :
-le fichier `data/reservations.csv` est utilisé automatiquement.
+---
 
-## 📊 Colonnes CSV supportées
+## 🔐 Niveaux d'accès
 
-| Colonne | Type | Description |
-|---|---|---|
-| `nom_client` | text | Nom du voyageur |
-| `date_arrivee` | date | Date d'arrivée |
-| `date_depart` | date | Date de départ |
-| `plateforme` | text | Booking / Airbnb / Direct / Abritel |
-| `prix_brut` | float | Prix total encaissé |
-| `commissions` | float | Commissions plateforme |
-| `prix_net` | float | Revenu après commissions |
-| `menage` | float | Frais ménage |
-| `paye` | bool | Statut paiement |
-| `propriete_id` | int | ID de la propriété (1 ou 2) |
+| Rôle | Accès | Connexion |
+|------|-------|-----------|
+| **Admin** | Tout — toutes propriétés | Code PIN Villa Tobias |
+| **Propriétaire** | Sa propriété — menus complets | Code PIN propriété |
+| **Gestionnaire** | Dashboard, Calendrier, Ménage, Messages, Chat | Code gestionnaire |
+
+---
+
+## 🏗️ Déploiement
+
+1. Fork le repo GitHub
+2. Connecter à Streamlit Cloud
+3. Configurer les Secrets
+4. Exécuter les scripts SQL dans Supabase
+5. L'app est opérationnelle
+
+---
+
+## 📦 Dépendances principales
+
+```
+streamlit >= 1.32
+supabase >= 2.3
+pandas, plotly, reportlab
+streamlit-cookies-manager
+icalendar, openpyxl
+```
