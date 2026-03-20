@@ -173,11 +173,29 @@ def _show_stats_pays(df):
     st.subheader("📋 Détail par pays")
     agg_display = agg.copy()
     agg_display.columns = ["Pays", "Réservations", "Nuits", "CA net (€)", "CA brut (€)", "CA moyen (€)", "Nuits moy."]
+
+    # Ajouter colonne drapeau depuis le code ISO
+    from services.indicatifs_service import INDICATIFS as _IND
+    _pays_to_iso = {v[0]: v[1].lower() for v in _IND.values()}
+    agg_display.insert(1, "Drapeau",
+        agg_display["Pays"].apply(
+            lambda p: f"https://flagcdn.com/24x18/{_pays_to_iso.get(p,'').lower()}.png"
+            if _pays_to_iso.get(p) else ""
+        )
+    )
+
     agg_display["CA net (€)"]   = agg_display["CA net (€)"].apply(lambda x: f"{x:,.0f} €")
     agg_display["CA brut (€)"]  = agg_display["CA brut (€)"].apply(lambda x: f"{x:,.0f} €")
     agg_display["CA moyen (€)"] = agg_display["CA moyen (€)"].apply(lambda x: f"{x:,.0f} €")
 
-    st.dataframe(agg_display, use_container_width=True, hide_index=True)
+    st.dataframe(
+        agg_display,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Drapeau": st.column_config.ImageColumn("🏳️", width="small"),
+        }
+    )
 
     # Export
     csv = agg_display.to_csv(index=False).encode("utf-8")
