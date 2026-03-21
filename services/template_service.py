@@ -39,6 +39,16 @@ def apply_template(contenu: str, reservation: dict, propriete_nom: str = "",
                    ville: str = "", lien_questionnaire: str = "",
                    signataire: str = "") -> str:
     """Remplace toutes les variables dans le contenu du template."""
+    # Auto-générer le lien questionnaire si pas fourni et variable présente
+    if "{lien_questionnaire}" in contenu and not lien_questionnaire:
+        try:
+            import os as _os
+            from database.avis_repo import get_or_create_lien_questionnaire
+            _app_url = __import__("streamlit").secrets.get(
+                "APP_URL", _os.environ.get("APP_URL", ""))
+            lien_questionnaire = get_or_create_lien_questionnaire(reservation, _app_url)
+        except Exception as _e:
+            print(f"Auto-lien questionnaire: {_e}")
 
     def _fmt_date(val):
         if not val:
