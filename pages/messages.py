@@ -320,28 +320,75 @@ def _show_email_manuel(df: pd.DataFrame):
 
     col1, col2 = st.columns(2)
     with col1:
-        template = st.selectbox("Template", ["Confirmation", "Rappel arrivée", "Post-départ", "Rappel paiement", "Personnalisé"], key="email_tpl")
+        # Utiliser les mêmes templates WhatsApp pour les emails
+        from database.templates_repo import get_templates as _get_tpl
+        tpls_email = _get_tpl(canal="whatsapp")  # mêmes templates que WA
+        tpl_options_email = {"__custom__": "✏️ Personnalisé"}
+        tpl_options_email.update({
+            t["id"]: f"{t['nom']}  ({MOMENTS.get(t.get('moment',''), '')})"
+            for t in tpls_email
+        })
+        tpl_id_email = st.selectbox(
+            "Template", list(tpl_options_email.keys()),
+            format_func=lambda x: tpl_options_email[x],
+            key="email_tpl"
+        )
     with col2:
         email_dest = st.text_input("Email", value=str(row.get("email","") or ""))
 
-    if template == "Personnalisé":
-        sujet = st.text_input("Sujet")
-        corps = st.text_area("Corps (HTML)", height=150)
-    else:
-        sujet = corps = None
+    # Générer l'aperçu du message
+    from services.template_service import apply_template as _apply
+    from services.proprietes_service import get_proprietes_dict as _gpd
 
-    if st.button("📤 Envoyer l'email", type="primary"):
+    _props_e = _gpd()
+    _pid_e   = int(row.get("propriete_id") or 0)
+    _prop_e  = _props_e.get(_pid_e, {})
+    _prop_nom_e  = _prop_e.get("nom", "") if isinstance(_prop_e, dict) else ""
+    _ville_e     = _prop_e.get("ville", "") if isinstance(_prop_e, dict) else ""
+    _signataire_e= _prop_e.get("signataire", "") if isinstance(_prop_e, dict) else ""
+
+    if tpl_id_email == "__custom__":
+        sujet = st.text_input("Sujet", key="email_sujet_custom")
+        message_email = st.text_area("Message", height=200, key="email_corps_custom")
+    else:
+        tpl_obj_e = next((t for t in tpls_email if t["id"] == tpl_id_email), None)
+        if tpl_obj_e:
+            message_email = _apply(tpl_obj_e["contenu"], row,
+                                   propriete_nom=_prop_nom_e,
+                                   ville=_ville_e,
+                                   signataire=_signataire_e)
+            sujet = tpl_obj_e.get("nom", "Message")
+        else:
+            message_email = ""
+            sujet = ""
+        st.text_area("Aperçu du message", value=message_email, height=200,
+                     disabled=True, key="email_preview")
+
+    if st.button("📤 Envoyer l'email", type="primary", use_container_width=True):
         if not email_dest:
             st.error("Email manquant.")
             return
-        row["email"] = email_dest
-        MAP = {"Confirmation": send_confirmation, "Rappel arrivée": send_checkin_reminder,
-               "Post-départ": send_checkout_followup, "Rappel paiement": send_payment_reminder}
-        if template == "Personnalisé":
-            from integrations.brevo_client import send_email
-            result = send_email(email_dest, row.get("nom_client",""), sujet, corps)
-        else:
-            result = MAP[template](row)
+        if not message_email:
+            st.error("Message vide.")
+            return
+        # Convertir le texte en HTML simple pour l'email
+        html_body = "<br>".join(message_email.split("\n"))
+        html_body = f"""
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;
+                    border:1px solid #e0e0e0;border-radius:8px;overflow:hidden">
+          <div style="background:#1565C0;padding:20px;text-align:center">
+            <h2 style="color:white;margin:0">🏖️ {_prop_nom_e or 'Vacances-Locations'}</h2>
+          </div>
+          <div style="padding:24px;line-height:1.7">
+            {html_body}
+          </div>
+          <div style="background:#f5f5f5;padding:12px;text-align:center;
+                      font-size:12px;color:#757575">
+            Vacances-Locations PRO — Gestion locative
+          </div>
+        </div>"""
+        from integrations.brevo_client import send_email as _send_email
+        result = _send_email(email_dest, row.get("nom_client",""), sujet, html_body)
         if result.get("ok"):
             st.success(f"✅ Email envoyé à {email_dest}")
         else:
