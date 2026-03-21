@@ -279,58 +279,73 @@ def _show_splash_login():
     st.markdown("""<div style='text-align:center;margin-top:2.5rem;color:#AAAAAA;font-size:0.78rem'>Développé par <strong>Charley Trigano</strong> — 2026<br><span style='font-size:0.72rem'>© Tous droits réservés</span></div>""", unsafe_allow_html=True)
     st.stop()
 
-# ── Gestion session persistante via cookies ───────────────────────────────────
-try:
-    from streamlit_cookies_manager import EncryptedCookieManager
-    import os as _os2
-    _cookie_pwd = st.secrets.get("COOKIE_PASSWORD", _os2.environ.get("COOKIE_PASSWORD", "vlp-secret-key-2026"))
-    cookies = EncryptedCookieManager(prefix="vlp_", password=_cookie_pwd)
+# ── Gestion session persistante via localStorage (JS) ────────────────────────
+import json as _json
+import streamlit.components.v1 as _cv
 
-    if not cookies.ready():
-        st.stop()
+# Lire la session sauvegardée depuis localStorage
+_sess_html = _cv.html("""
+<script>
+(function() {
+    var s = localStorage.getItem('vlp_session');
+    if (s) {
+        // Envoyer via URL query param pour que Python puisse lire
+        var current = new URL(window.location.href);
+        if (!current.searchParams.get('vlp_restore')) {
+            current.searchParams.set('vlp_restore', encodeURIComponent(s));
+            window.location.replace(current.toString());
+        }
+    }
+    // Écouter le logout
+    window.addEventListener('message', function(e) {
+        if (e.data === 'vlp_logout') {
+            localStorage.removeItem('vlp_session');
+        }
+    });
+})();
+</script>
+""", height=0)
 
-    # ── Restaurer la session depuis le cookie ─────────────────────────────────
-    if not st.session_state.get("global_logged_in", False):
-        _saved = cookies.get("session")
-        if _saved:
-            import json as _json
-            try:
-                _sess = _json.loads(_saved)
-                st.session_state["global_logged_in"]  = True
-                st.session_state["is_admin"]          = _sess.get("is_admin", False)
-                st.session_state["user_role"]         = _sess.get("user_role", "proprietaire")
-                st.session_state["prop_id"]           = _sess.get("prop_id", 0)
-                st.session_state["auth_user_id"]      = _sess.get("auth_user_id", "")
-                st.session_state["auth_user_email"]   = _sess.get("auth_user_email", "")
-                for k, v in _sess.get("unlocked", {}).items():
-                    st.session_state[k] = v
-            except: pass
-
-except Exception as _cookie_err:
-    cookies = None
-    print(f"Cookie manager non disponible: {_cookie_err}")
+# Restaurer depuis query param
+_qp2 = st.query_params
+_restore = _qp2.get("vlp_restore", "")
+if _restore and not st.session_state.get("global_logged_in"):
+    try:
+        import urllib.parse
+        _sess = _json.loads(urllib.parse.unquote(_restore))
+        st.session_state["global_logged_in"]  = True
+        st.session_state["is_admin"]          = _sess.get("is_admin", False)
+        st.session_state["user_role"]         = _sess.get("user_role", "proprietaire")
+        st.session_state["prop_id"]           = _sess.get("prop_id", 0)
+        st.session_state["auth_user_id"]      = _sess.get("auth_user_id", "")
+        st.session_state["auth_user_email"]   = _sess.get("auth_user_email", "")
+        for k, v in _sess.get("unlocked", {}).items():
+            st.session_state[k] = v
+        # Nettoyer l'URL
+        _qp2.clear()
+        st.rerun()
+    except: pass
 
 if not st.session_state.get("global_logged_in", False):
     _show_splash_login()
 
-# ── Sauvegarder la session dans le cookie après connexion ─────────────────────
-if st.session_state.get("global_logged_in") and cookies is not None:
-    try:
-        import json as _json2
-        _unlocked = {k: v for k, v in st.session_state.items()
-                     if k.startswith("unlocked_")}
-        _sess_data = _json2.dumps({
-            "is_admin":       st.session_state.get("is_admin", False),
-            "user_role":      st.session_state.get("user_role", "proprietaire"),
-            "prop_id":        st.session_state.get("prop_id", 0),
-            "auth_user_id":   st.session_state.get("auth_user_id", ""),
-            "auth_user_email":st.session_state.get("auth_user_email", ""),
-            "unlocked":       _unlocked,
-        })
-        if cookies.get("session") != _sess_data:
-            cookies["session"] = _sess_data
-            cookies.save()
-    except: pass
+# ── Sauvegarder la session dans localStorage après connexion ──────────────────
+if st.session_state.get("global_logged_in"):
+    _unlocked = {k: v for k, v in st.session_state.items() if k.startswith("unlocked_")}
+    _sess_data = _json.dumps({
+        "is_admin":       st.session_state.get("is_admin", False),
+        "user_role":      st.session_state.get("user_role", "proprietaire"),
+        "prop_id":        st.session_state.get("prop_id", 0),
+        "auth_user_id":   st.session_state.get("auth_user_id", ""),
+        "auth_user_email":st.session_state.get("auth_user_email", ""),
+        "unlocked":       _unlocked,
+    })
+    import urllib.parse as _up
+    _cv.html(f"""
+    <script>
+    localStorage.setItem('vlp_session', {_json.dumps(_sess_data)});
+    </script>
+    """, height=0)
 
 # ── Imports pages ─────────────────────────────────────────────────────────────
 from pages import dashboard, reservations, calendar, analytics, gaps
