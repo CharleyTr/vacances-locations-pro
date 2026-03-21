@@ -175,18 +175,18 @@ def sidebar() -> str:
             )
         # Bouton déconnexion visible pour TOUS (mode PIN ou email)
         if st.button("🚪 Déconnexion", key="btn_logout", use_container_width=True):
+            # Effacer localStorage via JS
+            import streamlit.components.v1 as _cv_logout
+            _cv_logout.html("""
+            <script>
+            localStorage.removeItem('vlp_session');
+            // Nettoyer l'URL de tout paramètre de session
+            var url = window.location.origin + window.location.pathname;
+            window.location.replace(url);
+            </script>
+            """, height=0)
             from services.auth_service import logout
             logout()
-            # Effacer le cookie de session
-            try:
-                from streamlit_cookies_manager import EncryptedCookieManager
-                import os as _os3
-                _pwd = st.secrets.get("COOKIE_PASSWORD", _os3.environ.get("COOKIE_PASSWORD","vlp-secret-key-2026"))
-                _c = EncryptedCookieManager(prefix="vlp_", password=_pwd)
-                if _c.ready():
-                    _c["session"] = ""
-                    _c.save()
-            except: pass
             st.rerun()
         st.caption("v3.2 — 2026 · © Charley Trigano")
 
