@@ -68,6 +68,56 @@ def submit_questionnaire(token: str, reponses: dict) -> bool:
         return False
 
 
+
+
+def get_or_create_lien_questionnaire(reservation: dict, app_url: str = "") -> str:
+    """
+    Retourne le lien questionnaire pour une réservation.
+    Crée l'entrée dans la table avis si elle n'existe pas encore.
+    """
+    import hashlib, os, secrets as _sec
+    from datetime import datetime, timezone, timedelta
+
+    if not is_connected():
+        return ""
+
+    res_id  = str(reservation.get("id", "") or "")
+    nom     = str(reservation.get("nom_client", "") or "")
+    prop_id = reservation.get("propriete_id")
+    if not res_id:
+        return ""
+
+    _app_url = app_url or os.environ.get("APP_URL", "")
+
+    try:
+        sb = get_supabase()
+        # Chercher un avis existant pour cette réservation
+        existing = sb.table(TABLE).select("token")                     .eq("reservation_id", res_id).execute().data
+        if existing and existing[0].get("token"):
+            token = existing[0]["token"]
+        else:
+            # Créer un nouveau token unique
+            token = _sec.token_urlsafe(16)
+            expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+            sb.table(TABLE).insert({
+                "reservation_id":  res_id,
+                "nom_client":      nom,
+                "propriete_id":    prop_id,
+                "token":           token,
+                "token_expires_at": expires,
+                "token_used":      False,
+                "date_sejour":     str(reservation.get("date_arrivee", ""))[:10],
+                "plateforme":      reservation.get("plateforme", ""),
+            }).execute()
+
+        return f"{_app_url}/?token={token}" if _app_url else f"/?token={token}"
+
+    except Exception as e:
+        print(f"[AvisRepo] get_or_create_token: {e}")
+        # Fallback : lien simple avec hash
+        token_fb = hashlib.md5(f"{res_id}{_app_url}".encode()).hexdigest()[:16]
+        return f"{_app_url}/?token={token_fb}" if _app_url else ""
+
 def delete_avis(avis_id: int) -> bool:
     if not is_connected():
         return False
