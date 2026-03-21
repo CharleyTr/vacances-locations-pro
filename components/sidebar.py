@@ -173,10 +173,21 @@ def sidebar() -> str:
                 f"👤 {auth_email}</div>",
                 unsafe_allow_html=True
             )
-            if st.button("🚪 Déconnexion", key="btn_logout", use_container_width=True):
-                from services.auth_service import logout
-                logout()
-                st.rerun()
+        # Bouton déconnexion visible pour TOUS (mode PIN ou email)
+        if st.button("🚪 Déconnexion", key="btn_logout", use_container_width=True):
+            from services.auth_service import logout
+            logout()
+            # Effacer le cookie de session
+            try:
+                from streamlit_cookies_manager import EncryptedCookieManager
+                import os as _os3
+                _pwd = st.secrets.get("COOKIE_PASSWORD", _os3.environ.get("COOKIE_PASSWORD","vlp-secret-key-2026"))
+                _c = EncryptedCookieManager(prefix="vlp_", password=_pwd)
+                if _c.ready():
+                    _c["session"] = ""
+                    _c.save()
+            except: pass
+            st.rerun()
         st.caption("v3.2 — 2026 · © Charley Trigano")
 
     return pages_visibles[choice]
