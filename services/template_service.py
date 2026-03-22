@@ -20,6 +20,8 @@ VARIABLES = {
     "{propriete}":           "Nom du logement",
     "{ville}":               "Ville du logement",
     "{lien_questionnaire}":  "Lien vers le questionnaire satisfaction",
+    "{drapeau}":             "Drapeau du pays du client (ex: 🇫🇷)",
+    "{pays}":                "Pays du client (ex: France)",
     "{signataire}":          "Signataire (défini dans la fiche propriété)",
 }
 
@@ -33,6 +35,20 @@ MOMENTS = {
     "fidelite":     "🎁 Offre fidélité",
     "autre":        "📝 Autre",
 }
+
+
+def _get_drapeau(pays: str) -> str:
+    """Retourne le drapeau image HTML ou emoji depuis le nom du pays."""
+    if not pays:
+        return ""
+    try:
+        from services.indicatifs_service import INDICATIFS
+        pays_to_iso = {v[0]: v[1].lower() for v in INDICATIFS.values()}
+        iso = pays_to_iso.get(pays.strip())
+        if iso:
+            return f'<img src="https://flagcdn.com/16x12/{iso}.png" style="vertical-align:middle;margin-right:4px"> {pays}'
+    except: pass
+    return pays
 
 
 def apply_template(contenu: str, reservation: dict, propriete_nom: str = "",
@@ -79,6 +95,8 @@ def apply_template(contenu: str, reservation: dict, propriete_nom: str = "",
         "{propriete}":          propriete_nom,
         "{ville}":              ville,
         "{lien_questionnaire}": lien_questionnaire,
+        "{drapeau}":             _get_drapeau(reservation.get("pays", "") or ""),
+        "{pays}":                reservation.get("pays", "") or "",
         "{signataire}":          signataire,
     }
 
