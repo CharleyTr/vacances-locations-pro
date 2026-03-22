@@ -8,6 +8,8 @@ import plotly.graph_objects as go
 import secrets
 from datetime import date, datetime, timezone, timedelta
 from database.avis_repo import get_avis, save_avis, delete_avis, CRITERES
+from database.proprietes_repo import fetch_all as _fa_props
+from services.auth_service import is_unlocked
 from services.reservation_service import load_reservations
 from services.proprietes_service import (
     get_proprietes_dict, get_propriete_selectionnee, get_label, filter_df
@@ -70,9 +72,11 @@ def _show_livret(prop_id: int, props: dict):
         st.info("Aucun avis enregistré pour le moment.")
         return
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        filtre_note = st.selectbox("Note minimum", [1, 2, 3, 4, 5], index=0, key="av_note")
+        filtre_note = st.selectbox("Note minimum", [0, 1, 2, 3, 4, 5],
+                                   index=0, key="av_note",
+                                   format_func=lambda x: "Tous" if x == 0 else f"{x}★ et +")
     with col2:
         filtre_plat = st.selectbox(
             "Plateforme",
@@ -81,6 +85,8 @@ def _show_livret(prop_id: int, props: dict):
         )
     with col3:
         tri = st.selectbox("Trier par", ["Plus récent", "Meilleure note", "Moins bonne note"], key="av_tri")
+    with col4:
+        afficher_attente = st.checkbox("Afficher en attente", value=True, key="av_attente")
 
     # KPIs
     notes_val = [a["note"] for a in avis_list if a.get("note")]
@@ -115,13 +121,27 @@ def _show_livret(prop_id: int, props: dict):
     st.divider()
 
     # Filtrage et tri
-    filtered = [a for a in avis_list if (a.get("note") or 0) >= filtre_note]
+    filtered = [a for a in avis_list
+                if filtre_note == 0 or (a.get("note") or 0) >= filtre_note]
     if filtre_plat != "Toutes":
         filtered = [a for a in filtered if a.get("plateforme") == filtre_plat]
+    if not afficher_attente:
+        filtered = [a for a in filtered if a.get("token_used") or not a.get("token")]
     if tri == "Meilleure note":
         filtered = sorted(filtered, key=lambda x: x.get("note", 0), reverse=True)
     elif tri == "Moins bonne note":
         filtered = sorted(filtered, key=lambda x: x.get("note", 0))
+
+    st.caption(f"**{len(filtered)} avis affichés** sur {len(avis_list)} au total")
+
+    # Pagination
+    NB_PAR_PAGE = 10
+    nb_pages = max(1, (len(filtered) + NB_PAR_PAGE - 1) // NB_PAR_PAGE)
+    if nb_pages > 1:
+        page_num = st.number_input("Page", min_value=1, max_value=nb_pages, value=1,
+                                    key="av_page", step=1)
+        st.caption(f"Page {page_num} / {nb_pages}")
+        filtered = filtered[(page_num-1)*NB_PAR_PAGE : page_num*NB_PAR_PAGE]
 
     for a in filtered:
         _render_avis_card(a, props)
