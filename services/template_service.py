@@ -3,26 +3,24 @@ Service pour appliquer les variables dans les templates de messages.
 """
 from datetime import datetime
 
-# Toutes les zones variables disponibles avec leur description
 VARIABLES = {
-    "{prenom}":              "Prénom du client (1er mot du nom)",
-    "{nom}":                 "Nom complet du client",
-    "{email}":               "Email du client",
-    "{telephone}":           "Téléphone du client",
-    "{pays}":                "Pays d'origine",
-    "{date_arrivee}":        "Date d'arrivée (jj/mm/aaaa)",
-    "{date_depart}":         "Date de départ (jj/mm/aaaa)",
-    "{nuitees}":             "Nombre de nuits",
-    "{plateforme}":          "Plateforme (Airbnb, Booking...)",
-    "{numero_reservation}":  "Numéro de réservation",
-    "{prix_brut}":           "Montant total (€)",
-    "{prix_net}":            "Montant net hôte (€)",
-    "{propriete}":           "Nom du logement",
-    "{ville}":               "Ville du logement",
-    "{lien_questionnaire}":  "Lien vers le questionnaire satisfaction",
-    "{drapeau}":             "Drapeau du pays du client (ex: 🇫🇷)",
-    "{pays}":                "Pays du client (ex: France)",
-    "{signataire}":          "Signataire (défini dans la fiche propriété)",
+    "{prenom}":             "Prénom du client (1er mot du nom)",
+    "{nom}":                "Nom complet du client",
+    "{email}":              "Email du client",
+    "{telephone}":          "Téléphone du client",
+    "{pays}":               "Pays du client (ex: France)",
+    "{drapeau}":            "Drapeau du pays du client (ex: 🇫🇷)",
+    "{date_arrivee}":       "Date d'arrivée (jj/mm/aaaa)",
+    "{date_depart}":        "Date de départ (jj/mm/aaaa)",
+    "{nuitees}":            "Nombre de nuits",
+    "{plateforme}":         "Plateforme (Airbnb, Booking...)",
+    "{numero_reservation}": "Numéro de réservation",
+    "{prix_brut}":          "Montant total (€)",
+    "{prix_net}":           "Montant net hôte (€)",
+    "{propriete}":          "Nom du logement",
+    "{ville}":              "Ville du logement",
+    "{lien_questionnaire}": "Lien vers le questionnaire satisfaction",
+    "{signataire}":         "Signataire (défini dans la fiche propriété)",
 }
 
 MOMENTS = {
@@ -38,8 +36,7 @@ MOMENTS = {
 
 
 def _get_drapeau(pays: str) -> str:
-    """Retourne l'emoji drapeau unicode depuis le nom du pays.
-    Fonctionne dans WhatsApp, SMS, email et partout."""
+    """Retourne l'emoji drapeau unicode depuis le nom du pays."""
     if not pays:
         return ""
     try:
@@ -47,9 +44,8 @@ def _get_drapeau(pays: str) -> str:
         pays_to_iso = {v[0]: v[1].upper() for v in INDICATIFS.values()}
         iso = pays_to_iso.get(pays.strip())
         if iso and len(iso) == 2:
-            flag = (chr(0x1F1E6 + ord(iso[0]) - ord('A')) +
+            return (chr(0x1F1E6 + ord(iso[0]) - ord('A')) +
                     chr(0x1F1E6 + ord(iso[1]) - ord('A')))
-            return flag
     except Exception:
         pass
     return ""
@@ -59,7 +55,8 @@ def apply_template(contenu: str, reservation: dict, propriete_nom: str = "",
                    ville: str = "", lien_questionnaire: str = "",
                    signataire: str = "") -> str:
     """Remplace toutes les variables dans le contenu du template."""
-    # Auto-générer le lien questionnaire si pas fourni et variable présente
+
+    # Auto-générer le lien questionnaire si absent
     if "{lien_questionnaire}" in contenu and not lien_questionnaire:
         try:
             import os as _os
@@ -82,29 +79,30 @@ def apply_template(contenu: str, reservation: dict, propriete_nom: str = "",
 
     nom_complet = str(reservation.get("nom_client", "") or "")
     prenom = nom_complet.split()[0] if nom_complet else ""
+    pays   = str(reservation.get("pays", "") or "")
 
-    replacements = {
-        "{prenom}":             prenom,
-        "{nom}":                nom_complet,
-        "{email}":              str(reservation.get("email", "") or ""),
-        "{telephone}":          str(reservation.get("telephone", "") or ""),
-        "{pays}":               str(reservation.get("pays", "") or ""),
-        "{date_arrivee}":       _fmt_date(reservation.get("date_arrivee")),
-        "{date_depart}":        _fmt_date(reservation.get("date_depart")),
-        "{nuitees}":            str(int(reservation.get("nuitees", 0) or 0)),
-        "{plateforme}":         str(reservation.get("plateforme", "") or ""),
-        "{numero_reservation}": str(reservation.get("numero_reservation", "") or ""),
-        "{prix_brut}":          f"{float(reservation.get('prix_brut', 0) or 0):,.0f}",
-        "{prix_net}":           f"{float(reservation.get('prix_net', 0) or 0):,.0f}",
-        "{propriete}":          propriete_nom,
-        "{ville}":              ville,
-        "{lien_questionnaire}": lien_questionnaire,
-        "{drapeau}":             _get_drapeau(reservation.get("pays", "") or ""),
-        "{pays}":                reservation.get("pays", "") or "",
-        "{signataire}":          signataire,
-    }
+    # Ordre important : traiter {propriete} avant {pays} pour éviter les conflits
+    replacements = [
+        ("{prenom}",             prenom),
+        ("{nom}",                nom_complet),
+        ("{email}",              str(reservation.get("email", "") or "")),
+        ("{telephone}",          str(reservation.get("telephone", "") or "")),
+        ("{pays}",               pays),
+        ("{drapeau}",            _get_drapeau(pays)),
+        ("{date_arrivee}",       _fmt_date(reservation.get("date_arrivee"))),
+        ("{date_depart}",        _fmt_date(reservation.get("date_depart"))),
+        ("{nuitees}",            str(int(reservation.get("nuitees", 0) or 0))),
+        ("{plateforme}",         str(reservation.get("plateforme", "") or "")),
+        ("{numero_reservation}", str(reservation.get("numero_reservation", "") or "")),
+        ("{prix_brut}",          f"{float(reservation.get('prix_brut', 0) or 0):,.0f}"),
+        ("{prix_net}",           f"{float(reservation.get('prix_net', 0) or 0):,.0f}"),
+        ("{propriete}",          propriete_nom),
+        ("{ville}",              ville),
+        ("{lien_questionnaire}", lien_questionnaire),
+        ("{signataire}",         signataire),
+    ]
 
     result = contenu
-    for var, val in replacements.items():
-        result = result.replace(var, val)
+    for var, val in replacements:
+        result = result.replace(var, str(val) if val is not None else "")
     return result
