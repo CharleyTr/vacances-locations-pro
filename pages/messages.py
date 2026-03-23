@@ -55,13 +55,14 @@ def _show_whatsapp(df: pd.DataFrame):
     twilio_ok = bool(TWILIO_ACCOUNT_SID)
     col_brevo, col_twilio = st.columns(2)
     with col_brevo:
-        st.info("🔗 **Mode lien wa.me** — toujours disponible\nOuvre WhatsApp avec le message pré-rempli", icon="✅")
+        st.info("🔗 **Mode lien wa.me** — toujours disponible", icon="✅")
     with col_twilio:
         if twilio_ok:
             st.success("🤖 **Twilio configuré** — envoi automatique activé", icon="✅")
         else:
             st.warning("🤖 **Twilio non configuré** — envoi manuel uniquement", icon="⚠️")
     st.divider()
+
     search_wa = st.text_input("🔎 Rechercher un client", placeholder="Tapez un nom...", key="wa_search")
     df_sel = df.sort_values("date_arrivee", ascending=False)
     if search_wa:
@@ -78,6 +79,7 @@ def _show_whatsapp(df: pd.DataFrame):
     if not options:
         st.info("Aucune réservation trouvée.")
         return
+
     col1, col2 = st.columns([3, 2])
     with col1:
         selected_id = st.selectbox("Réservation", list(options.keys()),
@@ -93,12 +95,14 @@ def _show_whatsapp(df: pd.DataFrame):
         })
         tpl_id_wa = st.selectbox("Modèle", list(tpl_options_wa.keys()),
                                   format_func=lambda x: tpl_options_wa[x], key="wa_tpl")
+
     props_map  = {p["id"]: p for p in fetch_proprietes()}
     prop_id    = int(row.get("propriete_id", 0) or 0)
     prop_data  = props_map.get(prop_id, {})
     prop_nom   = prop_data.get("nom", "")
     ville      = prop_data.get("adresse", "") or prop_data.get("ville", "")
     signataire = prop_data.get("signataire", "") or ""
+    pays_client = str(row.get("pays", "") or "")
 
     if tpl_id_wa == 0:
         message = st.text_area("Message WhatsApp",
@@ -106,6 +110,7 @@ def _show_whatsapp(df: pd.DataFrame):
                                 height=150, key="wa_custom_msg")
     else:
         tpl_obj = next((t for t in tpls_wa if t["id"] == tpl_id_wa), None)
+        message = ""
         if tpl_obj:
             import os as _os
             _app_url = st.secrets.get("APP_URL", _os.environ.get("APP_URL", ""))
@@ -118,36 +123,42 @@ def _show_whatsapp(df: pd.DataFrame):
                                      signataire=signataire,
                                      lien_questionnaire=_lien_q)
 
-            # ── Traduction automatique ────────────────────────────────
-            pays_client = row.get("pays", "") or ""
-            try:
-                from services.traduction_service import get_langue_from_pays, traduire_message as _trad
-                _lg = get_langue_from_pays(pays_client)
-            except Exception:
-                _lg = None
-            if _lg:
-                _, _nom_lg = _lg
-                _ci1, _ci2 = st.columns([3, 1])
-                with _ci1:
-                    st.info(f"🌍 Client de **{pays_client}** — traduction **{_nom_lg}** disponible")
-                with _ci2:
-                    _bilingue_wa = st.checkbox("Bilingue", value=True, key="wa_bilingue")
-                if st.button(f"🌐 Traduire en {_nom_lg}", key="btn_trad_wa"):
+        # ── Traduction via session_state ──────────────────────────────
+        _trad_key = f"wa_msg_traduit_{selected_id}_{tpl_id_wa}"
+        if _trad_key not in st.session_state:
+            st.session_state[_trad_key] = message
+
+        try:
+            from services.traduction_service import get_langue_from_pays
+            _lg = get_langue_from_pays(pays_client)
+        except Exception:
+            _lg = None
+
+        if _lg and message:
+            _, _nom_lg = _lg
+            _c1, _c2, _c3 = st.columns([3, 1, 1])
+            with _c1:
+                st.info(f"🌍 **{pays_client}** — traduction **{_nom_lg}** disponible")
+            with _c2:
+                _bilingue = st.checkbox("Bilingue", value=True, key=f"wa_bilingue_{selected_id}")
+            with _c3:
+                if st.button(f"🌐 Traduire", key=f"btn_trad_wa_{selected_id}"):
                     with st.spinner(f"Traduction en {_nom_lg}..."):
-                        _r = _trad(message, pays_client, bilingue=_bilingue_wa)
-                        if _r["traduit"]:
-                            message = _r["message_final"]
-                            st.success(f"✅ Traduit en {_nom_lg}")
-                        else:
-                            st.error(f"❌ {_r.get('erreur', 'Erreur')}")
+                        try:
+                            from services.traduction_service import traduire_message
+                            _r = traduire_message(message, pays_client, bilingue=_bilingue)
+                            if _r["traduit"]:
+                                st.session_state[_trad_key] = _r["message_final"]
+                                st.success(f"✅ Traduit !")
+                            else:
+                                st.error(f"❌ {_r.get('erreur','Erreur')}")
+                        except Exception as _e:
+                            st.error(f"❌ {_e}")
 
-            st.text_area("Aperçu du message", value=message, height=180,
-                         disabled=True, key="wa_preview")
-        else:
-            message = ""
+        message = st.session_state.get(_trad_key, message)
+        st.text_area("Aperçu", value=message, height=180, disabled=True, key="wa_preview")
 
-    tel_input = st.text_input("Numéro WhatsApp", value=telephone,
-                               placeholder="+33 6 12 34 56 78")
+    tel_input = st.text_input("Numéro WhatsApp", value=telephone, placeholder="+33 6 12 34 56 78")
     st.markdown("---")
     col_a, col_b = st.columns(2)
     with col_a:
@@ -174,8 +185,8 @@ def _show_whatsapp(df: pd.DataFrame):
         else:
             st.button("🤖 Envoyer (Twilio)", disabled=True, use_container_width=True,
                       help="Configurez Twilio dans les Secrets")
+
     st.divider()
-    # ── Envoi en masse ────────────────────────────────────────────────────────
     st.subheader("📨 Envoi en masse")
     today = pd.Timestamp(date.today())
     in_7  = today + timedelta(days=7)
@@ -239,7 +250,6 @@ def _show_whatsapp(df: pd.DataFrame):
 # ─────────────────────────────────────────────────────────────────────────────
 def _show_auto(df: pd.DataFrame):
     st.subheader("🤖 Envois automatiques suggérés")
-    st.caption("Réservations qui correspondent aux déclencheurs automatiques.")
     today = pd.Timestamp(date.today())
     j2    = today + timedelta(days=2)
     hier  = today - timedelta(days=1)
@@ -288,12 +298,10 @@ def _show_email_manuel(df: pd.DataFrame):
     if not BREVO_API_KEY:
         st.error("⛔ BREVO_API_KEY non configurée dans les Secrets Streamlit Cloud.")
         return
-    search_email = st.text_input("🔎 Rechercher un client", placeholder="Tapez un nom...",
-                                  key="email_search")
+    search_email = st.text_input("🔎 Rechercher un client", placeholder="Tapez un nom...", key="email_search")
     df_email = df.sort_values("date_arrivee", ascending=False)
     if search_email:
-        df_email = df_email[df_email["nom_client"].str.contains(
-            search_email, case=False, na=False)]
+        df_email = df_email[df_email["nom_client"].str.contains(search_email, case=False, na=False)]
     options = {row["id"]: f"{row['nom_client']} ({row.get('email','sans email')})"
                for _, row in df_email.iterrows()}
     if not options:
@@ -302,6 +310,8 @@ def _show_email_manuel(df: pd.DataFrame):
     selected_id = st.selectbox("Réservation", list(options.keys()),
                                 format_func=lambda x: options[x], key="email_sel")
     row = df[df["id"] == selected_id].iloc[0].to_dict()
+    pays_client_e = str(row.get("pays", "") or "")
+
     col1, col2 = st.columns(2)
     with col1:
         tpls_email = get_templates(canal="whatsapp")
@@ -311,10 +321,10 @@ def _show_email_manuel(df: pd.DataFrame):
             for t in tpls_email
         })
         tpl_id_email = st.selectbox("Template", list(tpl_options_email.keys()),
-                                     format_func=lambda x: tpl_options_email[x],
-                                     key="email_tpl")
+                                     format_func=lambda x: tpl_options_email[x], key="email_tpl")
     with col2:
         email_dest = st.text_input("Email", value=str(row.get("email", "") or ""))
+
     props_e    = {p["id"]: p for p in fetch_proprietes()}
     pid_e      = int(row.get("propriete_id") or 0)
     prop_e     = props_e.get(pid_e, {})
@@ -327,37 +337,47 @@ def _show_email_manuel(df: pd.DataFrame):
         message_email = st.text_area("Message", height=200, key="email_corps_custom")
     else:
         tpl_obj_e = next((t for t in tpls_email if t["id"] == tpl_id_email), None)
+        message_email = ""
+        sujet = ""
         if tpl_obj_e:
             message_email = apply_template(tpl_obj_e["contenu"], row,
                                            propriete_nom=prop_nom_e,
                                            ville=ville_e, signataire=sign_e)
             sujet = tpl_obj_e.get("nom", "Message")
-        else:
-            message_email, sujet = "", ""
 
-        # ── Traduction automatique ────────────────────────────────────
-        pays_client_e = row.get("pays", "") or ""
+        # ── Traduction via session_state ──────────────────────────────
+        _trad_key_e = f"email_msg_traduit_{selected_id}_{tpl_id_email}"
+        if _trad_key_e not in st.session_state:
+            st.session_state[_trad_key_e] = message_email
+
         try:
-            from services.traduction_service import get_langue_from_pays, traduire_message as _trad_e
+            from services.traduction_service import get_langue_from_pays
             _lg_e = get_langue_from_pays(pays_client_e)
         except Exception:
             _lg_e = None
-        if _lg_e:
-            _, _nom_lg_e = _lg_e
-            _ce1, _ce2 = st.columns([3, 1])
-            with _ce1:
-                st.info(f"🌍 Client de **{pays_client_e}** — traduction **{_nom_lg_e}** disponible")
-            with _ce2:
-                _bilingue_e = st.checkbox("Bilingue", value=True, key="email_bilingue")
-            if st.button(f"🌐 Traduire en {_nom_lg_e}", key="btn_trad_email"):
-                with st.spinner(f"Traduction en {_nom_lg_e}..."):
-                    _r_e = _trad_e(message_email, pays_client_e, bilingue=_bilingue_e)
-                    if _r_e["traduit"]:
-                        message_email = _r_e["message_final"]
-                        st.success(f"✅ Traduit en {_nom_lg_e}")
-                    else:
-                        st.error(f"❌ {_r_e.get('erreur', 'Erreur')}")
 
+        if _lg_e and message_email:
+            _, _nom_lg_e = _lg_e
+            _ec1, _ec2, _ec3 = st.columns([3, 1, 1])
+            with _ec1:
+                st.info(f"🌍 **{pays_client_e}** — traduction **{_nom_lg_e}** disponible")
+            with _ec2:
+                _bilingue_e = st.checkbox("Bilingue", value=True, key=f"email_bilingue_{selected_id}")
+            with _ec3:
+                if st.button(f"🌐 Traduire", key=f"btn_trad_email_{selected_id}"):
+                    with st.spinner(f"Traduction en {_nom_lg_e}..."):
+                        try:
+                            from services.traduction_service import traduire_message
+                            _r_e = traduire_message(message_email, pays_client_e, bilingue=_bilingue_e)
+                            if _r_e["traduit"]:
+                                st.session_state[_trad_key_e] = _r_e["message_final"]
+                                st.success("✅ Traduit !")
+                            else:
+                                st.error(f"❌ {_r_e.get('erreur','Erreur')}")
+                        except Exception as _e2:
+                            st.error(f"❌ {_e2}")
+
+        message_email = st.session_state.get(_trad_key_e, message_email)
         st.text_area("Aperçu du message", value=message_email, height=200,
                      disabled=True, key="email_preview")
 
@@ -367,18 +387,7 @@ def _show_email_manuel(df: pd.DataFrame):
         if not message_email:
             st.error("Message vide."); return
         html_lines = "<br>".join(message_email.split("\n"))
-        html_body = f"""
-        <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;
-                    border:1px solid #e0e0e0;border-radius:8px;overflow:hidden">
-          <div style="background:#1565C0;padding:20px;text-align:center">
-            <h2 style="color:white;margin:0">🏖️ {prop_nom_e or 'Vacances-Locations'}</h2>
-          </div>
-          <div style="padding:24px;line-height:1.7">{html_lines}</div>
-          <div style="background:#f5f5f5;padding:12px;text-align:center;
-                      font-size:12px;color:#757575">
-            Vacances-Locations PRO — Gestion locative
-          </div>
-        </div>"""
+        html_body = f"""<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden"><div style="background:#1565C0;padding:20px;text-align:center"><h2 style="color:white;margin:0">🏖️ {prop_nom_e or 'Vacances-Locations'}</h2></div><div style="padding:24px;line-height:1.7">{html_lines}</div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:12px;color:#757575">Vacances-Locations PRO — Gestion locative</div></div>"""
         from integrations.brevo_client import send_email as _send_email
         result = _send_email(email_dest, row.get("nom_client", ""), sujet, html_body)
         if result.get("ok"):
@@ -405,8 +414,7 @@ def _show_sms_manuel(df: pd.DataFrame):
     row = df[df["id"] == selected_id].iloc[0].to_dict()
     col1, col2 = st.columns(2)
     with col1:
-        tpl = st.selectbox("Template", ["Rappel arrivée", "Rappel paiement", "Personnalisé"],
-                            key="sms_tpl")
+        tpl = st.selectbox("Template", ["Rappel arrivée", "Rappel paiement", "Personnalisé"], key="sms_tpl")
     with col2:
         tel = st.text_input("Téléphone", value=str(row.get("telephone", "") or ""))
     if tpl == "Personnalisé":
@@ -416,8 +424,7 @@ def _show_sms_manuel(df: pd.DataFrame):
             msg = (f"Bonjour {row.get('nom_client','').split()[0]}, votre arrivée est le "
                    f"{row.get('date_arrivee','')}. A bientôt ! - Vacances-Locations")
         else:
-            msg = (f"Rappel: paiement de {row.get('prix_net',0):.0f}€ en attente."
-                   " Merci. - Vacances-Locations")
+            msg = (f"Rappel: paiement de {row.get('prix_net',0):.0f}€ en attente. Merci. - Vacances-Locations")
         st.caption(f"Aperçu : *{msg[:160]}*")
     if st.button("📱 Envoyer SMS", type="primary"):
         row["telephone"] = tel
@@ -438,8 +445,7 @@ def _show_sms_manuel(df: pd.DataFrame):
 # ─────────────────────────────────────────────────────────────────────────────
 def _show_historique(df: pd.DataFrame):
     st.subheader("📊 Historique des envois")
-    cols = ["nom_client", "email", "telephone", "date_arrivee",
-            "sms_envoye", "post_depart_envoye", "plateforme"]
+    cols = ["nom_client", "email", "telephone", "date_arrivee", "sms_envoye", "post_depart_envoye", "plateforme"]
     st.dataframe(
         df[[c for c in cols if c in df.columns]].sort_values("date_arrivee", ascending=False),
         use_container_width=True, hide_index=True,
