@@ -2,24 +2,21 @@
 Service de traduction automatique des messages selon le pays du client.
 Utilise l'API Claude (Anthropic) pour traduire.
 """
+import re as _re
 
 # Mapping pays → (code langue, nom langue)
 PAYS_VERS_LANGUE = {
-    # Français (pas de traduction nécessaire)
     "France": ("fr", "français"), "Belgique": ("fr", "français"),
     "Suisse": ("fr", "français"), "Luxembourg": ("fr", "français"),
     "Monaco": ("fr", "français"), "Martinique": ("fr", "français"),
     "Guadeloupe": ("fr", "français"), "La Réunion": ("fr", "français"),
     "Polynésie française": ("fr", "français"), "Nouvelle-Calédonie": ("fr", "français"),
-    # Anglais
     "Royaume-Uni": ("en", "anglais"), "Irlande": ("en", "anglais"),
     "États-Unis / Canada": ("en", "anglais"), "Australie": ("en", "anglais"),
     "Nouvelle-Zélande": ("en", "anglais"), "Canada": ("en", "anglais"),
     "Singapour": ("en", "anglais"),
-    # Allemand
     "Allemagne": ("de", "allemand"), "Autriche": ("de", "allemand"),
     "Liechtenstein": ("de", "allemand"),
-    # Espagnol
     "Espagne": ("es", "espagnol"), "Mexique": ("es", "espagnol"),
     "Argentine": ("es", "espagnol"), "Colombie": ("es", "espagnol"),
     "Chili": ("es", "espagnol"), "Pérou": ("es", "espagnol"),
@@ -28,34 +25,31 @@ PAYS_VERS_LANGUE = {
     "Uruguay": ("es", "espagnol"), "Paraguay": ("es", "espagnol"),
     "Bolivie": ("es", "espagnol"), "Panama": ("es", "espagnol"),
     "Costa Rica": ("es", "espagnol"),
-    # Italien
     "Italie": ("it", "italien"),
-    # Portugais
     "Portugal": ("pt", "portugais"), "Brésil": ("pt", "portugais"),
-    # Néerlandais
     "Pays-Bas": ("nl", "néerlandais"),
-    # Russe
     "Russie": ("ru", "russe"), "Ukraine": ("uk", "ukrainien"),
     "Biélorussie": ("ru", "russe"),
-    # Arabe
     "Maroc": ("ar", "arabe"), "Algérie": ("ar", "arabe"),
     "Tunisie": ("ar", "arabe"), "Arabie saoudite": ("ar", "arabe"),
     "Émirats arabes unis": ("ar", "arabe"), "Qatar": ("ar", "arabe"),
     "Koweït": ("ar", "arabe"), "Bahreïn": ("ar", "arabe"),
     "Oman": ("ar", "arabe"), "Jordanie": ("ar", "arabe"),
     "Liban": ("ar", "arabe"), "Égypte": ("ar", "arabe"),
-    # Asie
     "Chine": ("zh", "chinois"), "Japon": ("ja", "japonais"),
     "Corée du Sud": ("ko", "coréen"), "Inde": ("hi", "hindi"),
     "Thaïlande": ("th", "thaï"), "Vietnam": ("vi", "vietnamien"),
     "Israël": ("he", "hébreu"), "Turquie": ("tr", "turc"),
-    # Europe du Nord
     "Suède": ("sv", "suédois"), "Norvège": ("no", "norvégien"),
     "Danemark": ("da", "danois"), "Finlande": ("fi", "finnois"),
     "Pologne": ("pl", "polonais"), "Hongrie": ("hu", "hongrois"),
     "République tchèque": ("cs", "tchèque"), "Roumanie": ("ro", "roumain"),
     "Grèce": ("el", "grec"),
 }
+
+# Pattern regex pour emojis drapeaux (Regional Indicator Symbols)
+# Utilise les codepoints unicode pour éviter les problèmes d'encodage
+_FLAG_PATTERN = "[\U0001F1E0-\U0001F1FF]{2}"
 
 
 def get_langue_from_pays(pays: str):
@@ -69,24 +63,12 @@ def get_langue_from_pays(pays: str):
 
 
 def traduire_message(message: str, pays: str, bilingue: bool = True) -> dict:
-    """
-    Traduit un message dans la langue du pays du client via Claude API.
-
-    Args:
-        message:  Le message original en français
-        pays:     Le nom du pays du client (ex: "Royaume-Uni")
-        bilingue: Si True, conserve le français + ajoute la traduction
-
-    Returns:
-        dict avec clés: traduit, langue, message_traduit, message_final, erreur
-    """
+    """Traduit un message dans la langue du pays du client via Claude API."""
     langue_info = get_langue_from_pays(pays)
     if not langue_info:
         return {
-            "traduit": False,
-            "langue": "français",
-            "message_traduit": message,
-            "message_final": message,
+            "traduit": False, "langue": "français",
+            "message_traduit": message, "message_final": message,
         }
 
     code_langue, nom_langue = langue_info
@@ -107,14 +89,11 @@ def traduire_message(message: str, pays: str, bilingue: bool = True) -> dict:
                 "erreur": "ANTHROPIC_API_KEY manquante dans les Secrets"
             }
 
-        # Remplacer le drapeau emoji par un placeholder avant traduction
-        import re as _re
-        # Extraire et protéger les emojis drapeaux (séquences Regional Indicator)
-        _flag_pattern = r'[🇠-🇿]{2}'
-        _flags_found = _re.findall(_flag_pattern, message)
-        _msg_to_translate = message
-        for i, flag in enumerate(_flags_found):
-            _msg_to_translate = _msg_to_translate.replace(flag, f"__FLAG{i}__", 1)
+        # Protéger les emojis drapeaux avec des placeholders
+        flags_found = _re.findall(_FLAG_PATTERN, message)
+        msg_to_translate = message
+        for i, flag in enumerate(flags_found):
+            msg_to_translate = msg_to_translate.replace(flag, f"__FLAG{i}__", 1)
 
         prompt = f"""Traduis ce message de location de vacances en {nom_langue}.
 Règles importantes :
@@ -126,7 +105,7 @@ Règles importantes :
 - Réponds UNIQUEMENT avec le message traduit, sans aucune explication ni commentaire
 
 Message à traduire :
-{_msg_to_translate}"""
+{msg_to_translate}"""
 
         r = requests.post(
             "https://api.anthropic.com/v1/messages",
@@ -145,10 +124,10 @@ Message à traduire :
 
         if r.status_code == 200:
             traduit = r.json()["content"][0]["text"].strip()
-            if bilingue:
-                message_final = f"{message}\n\n---\n\n{traduit}"
-            else:
-                message_final = traduit
+            # Restaurer les emojis drapeaux
+            for i, flag in enumerate(flags_found):
+                traduit = traduit.replace(f"__FLAG{i}__", flag)
+            message_final = f"{message}\n\n---\n\n{traduit}" if bilingue else traduit
             return {
                 "traduit": True, "langue": nom_langue,
                 "message_traduit": traduit, "message_final": message_final,
