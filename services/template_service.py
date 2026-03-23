@@ -1,110 +1,168 @@
 """
-Service pour appliquer les variables dans les templates de messages.
+Service de traduction automatique des messages selon le pays du client.
+Utilise l'API Claude (Anthropic) pour traduire.
 """
-from datetime import datetime
 
-# Toutes les zones variables disponibles avec leur description
-VARIABLES = {
-    "{prenom}":              "Prénom du client (1er mot du nom)",
-    "{nom}":                 "Nom complet du client",
-    "{email}":               "Email du client",
-    "{telephone}":           "Téléphone du client",
-    "{pays}":                "Pays d'origine",
-    "{date_arrivee}":        "Date d'arrivée (jj/mm/aaaa)",
-    "{date_depart}":         "Date de départ (jj/mm/aaaa)",
-    "{nuitees}":             "Nombre de nuits",
-    "{plateforme}":          "Plateforme (Airbnb, Booking...)",
-    "{numero_reservation}":  "Numéro de réservation",
-    "{prix_brut}":           "Montant total (€)",
-    "{prix_net}":            "Montant net hôte (€)",
-    "{propriete}":           "Nom du logement",
-    "{ville}":               "Ville du logement",
-    "{lien_questionnaire}":  "Lien vers le questionnaire satisfaction",
-    "{drapeau}":             "Drapeau du pays du client (ex: 🇫🇷)",
-    "{pays}":                "Pays du client (ex: France)",
-    "{signataire}":          "Signataire (défini dans la fiche propriété)",
+# Mapping pays → (code langue, nom langue)
+PAYS_VERS_LANGUE = {
+    # Français (pas de traduction nécessaire)
+    "France": ("fr", "français"), "Belgique": ("fr", "français"),
+    "Suisse": ("fr", "français"), "Luxembourg": ("fr", "français"),
+    "Monaco": ("fr", "français"), "Martinique": ("fr", "français"),
+    "Guadeloupe": ("fr", "français"), "La Réunion": ("fr", "français"),
+    "Polynésie française": ("fr", "français"), "Nouvelle-Calédonie": ("fr", "français"),
+    # Anglais
+    "Royaume-Uni": ("en", "anglais"), "Irlande": ("en", "anglais"),
+    "États-Unis / Canada": ("en", "anglais"), "Australie": ("en", "anglais"),
+    "Nouvelle-Zélande": ("en", "anglais"), "Canada": ("en", "anglais"),
+    "Singapour": ("en", "anglais"),
+    # Allemand
+    "Allemagne": ("de", "allemand"), "Autriche": ("de", "allemand"),
+    "Liechtenstein": ("de", "allemand"),
+    # Espagnol
+    "Espagne": ("es", "espagnol"), "Mexique": ("es", "espagnol"),
+    "Argentine": ("es", "espagnol"), "Colombie": ("es", "espagnol"),
+    "Chili": ("es", "espagnol"), "Pérou": ("es", "espagnol"),
+    "Venezuela": ("es", "espagnol"), "Équateur": ("es", "espagnol"),
+    "Cuba": ("es", "espagnol"), "République dominicaine": ("es", "espagnol"),
+    "Uruguay": ("es", "espagnol"), "Paraguay": ("es", "espagnol"),
+    "Bolivie": ("es", "espagnol"), "Panama": ("es", "espagnol"),
+    "Costa Rica": ("es", "espagnol"),
+    # Italien
+    "Italie": ("it", "italien"),
+    # Portugais
+    "Portugal": ("pt", "portugais"), "Brésil": ("pt", "portugais"),
+    # Néerlandais
+    "Pays-Bas": ("nl", "néerlandais"),
+    # Russe
+    "Russie": ("ru", "russe"), "Ukraine": ("uk", "ukrainien"),
+    "Biélorussie": ("ru", "russe"),
+    # Arabe
+    "Maroc": ("ar", "arabe"), "Algérie": ("ar", "arabe"),
+    "Tunisie": ("ar", "arabe"), "Arabie saoudite": ("ar", "arabe"),
+    "Émirats arabes unis": ("ar", "arabe"), "Qatar": ("ar", "arabe"),
+    "Koweït": ("ar", "arabe"), "Bahreïn": ("ar", "arabe"),
+    "Oman": ("ar", "arabe"), "Jordanie": ("ar", "arabe"),
+    "Liban": ("ar", "arabe"), "Égypte": ("ar", "arabe"),
+    # Asie
+    "Chine": ("zh", "chinois"), "Japon": ("ja", "japonais"),
+    "Corée du Sud": ("ko", "coréen"), "Inde": ("hi", "hindi"),
+    "Thaïlande": ("th", "thaï"), "Vietnam": ("vi", "vietnamien"),
+    "Israël": ("he", "hébreu"), "Turquie": ("tr", "turc"),
+    # Europe du Nord
+    "Suède": ("sv", "suédois"), "Norvège": ("no", "norvégien"),
+    "Danemark": ("da", "danois"), "Finlande": ("fi", "finnois"),
+    "Pologne": ("pl", "polonais"), "Hongrie": ("hu", "hongrois"),
+    "République tchèque": ("cs", "tchèque"), "Roumanie": ("ro", "roumain"),
+    "Grèce": ("el", "grec"),
 }
 
-MOMENTS = {
-    "confirmation": "✅ Confirmation réservation",
-    "j-3":          "📅 Rappel arrivée J-3",
-    "arrivee":      "🏠 Jour d'arrivée",
-    "depart":       "🧳 Veille départ",
-    "post_depart":  "⭐ Post-départ & avis",
-    "paiement":     "💳 Rappel paiement",
-    "fidelite":     "🎁 Offre fidélité",
-    "autre":        "📝 Autre",
-}
 
-
-def _get_drapeau(pays: str) -> str:
-    """Retourne l'emoji drapeau unicode depuis le nom du pays.
-    Fonctionne dans WhatsApp, SMS, email et partout."""
+def get_langue_from_pays(pays: str):
+    """Retourne (code_langue, nom_langue) ou None si français/inconnu."""
     if not pays:
-        return ""
-    try:
-        from services.indicatifs_service import INDICATIFS
-        pays_to_iso = {v[0]: v[1].upper() for v in INDICATIFS.values()}
-        iso = pays_to_iso.get(pays.strip())
-        if iso and len(iso) == 2:
-            flag = (chr(0x1F1E6 + ord(iso[0]) - ord('A')) +
-                    chr(0x1F1E6 + ord(iso[1]) - ord('A')))
-            return flag
-    except Exception:
-        pass
-    return ""
-
-
-def apply_template(contenu: str, reservation: dict, propriete_nom: str = "",
-                   ville: str = "", lien_questionnaire: str = "",
-                   signataire: str = "") -> str:
-    """Remplace toutes les variables dans le contenu du template."""
-    # Auto-générer le lien questionnaire si pas fourni et variable présente
-    if "{lien_questionnaire}" in contenu and not lien_questionnaire:
-        try:
-            import os as _os
-            from database.avis_repo import get_or_create_lien_questionnaire
-            _app_url = __import__("streamlit").secrets.get(
-                "APP_URL", _os.environ.get("APP_URL", ""))
-            lien_questionnaire = get_or_create_lien_questionnaire(reservation, _app_url)
-        except Exception as _e:
-            print(f"Auto-lien questionnaire: {_e}")
-
-    def _fmt_date(val):
-        if not val:
-            return ""
-        try:
-            if hasattr(val, "strftime"):
-                return val.strftime("%d/%m/%Y")
-            return datetime.strptime(str(val)[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
-        except Exception:
-            return str(val)[:10]
-
-    nom_complet = str(reservation.get("nom_client", "") or "")
-    prenom = nom_complet.split()[0] if nom_complet else ""
-
-    replacements = {
-        "{prenom}":             prenom,
-        "{nom}":                nom_complet,
-        "{email}":              str(reservation.get("email", "") or ""),
-        "{telephone}":          str(reservation.get("telephone", "") or ""),
-        "{pays}":               str(reservation.get("pays", "") or ""),
-        "{date_arrivee}":       _fmt_date(reservation.get("date_arrivee")),
-        "{date_depart}":        _fmt_date(reservation.get("date_depart")),
-        "{nuitees}":            str(int(reservation.get("nuitees", 0) or 0)),
-        "{plateforme}":         str(reservation.get("plateforme", "") or ""),
-        "{numero_reservation}": str(reservation.get("numero_reservation", "") or ""),
-        "{prix_brut}":          f"{float(reservation.get('prix_brut', 0) or 0):,.0f}",
-        "{prix_net}":           f"{float(reservation.get('prix_net', 0) or 0):,.0f}",
-        "{propriete}":          propriete_nom,
-        "{ville}":              ville,
-        "{lien_questionnaire}": lien_questionnaire,
-        "{drapeau}":             _get_drapeau(reservation.get("pays", "") or ""),
-        "{pays}":                reservation.get("pays", "") or "",
-        "{signataire}":          signataire,
-    }
-
-    result = contenu
-    for var, val in replacements.items():
-        result = result.replace(var, val)
+        return None
+    result = PAYS_VERS_LANGUE.get(pays.strip())
+    if not result or result[0] == "fr":
+        return None
     return result
+
+
+def traduire_message(message: str, pays: str, bilingue: bool = True) -> dict:
+    """
+    Traduit un message dans la langue du pays du client via Claude API.
+
+    Args:
+        message:  Le message original en français
+        pays:     Le nom du pays du client (ex: "Royaume-Uni")
+        bilingue: Si True, conserve le français + ajoute la traduction
+
+    Returns:
+        dict avec clés: traduit, langue, message_traduit, message_final, erreur
+    """
+    langue_info = get_langue_from_pays(pays)
+    if not langue_info:
+        return {
+            "traduit": False,
+            "langue": "français",
+            "message_traduit": message,
+            "message_final": message,
+        }
+
+    code_langue, nom_langue = langue_info
+
+    try:
+        import requests, os
+        try:
+            import streamlit as st
+            api_key = st.secrets.get("ANTHROPIC_API_KEY",
+                       os.environ.get("ANTHROPIC_API_KEY", ""))
+        except Exception:
+            api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+
+        if not api_key:
+            return {
+                "traduit": False, "langue": nom_langue,
+                "message_traduit": message, "message_final": message,
+                "erreur": "ANTHROPIC_API_KEY manquante dans les Secrets"
+            }
+
+        # Remplacer le drapeau emoji par un placeholder avant traduction
+        import re as _re
+        # Extraire et protéger les emojis drapeaux (séquences Regional Indicator)
+        _flag_pattern = r'[🇠-🇿]{2}'
+        _flags_found = _re.findall(_flag_pattern, message)
+        _msg_to_translate = message
+        for i, flag in enumerate(_flags_found):
+            _msg_to_translate = _msg_to_translate.replace(flag, f"__FLAG{i}__", 1)
+
+        prompt = f"""Traduis ce message de location de vacances en {nom_langue}.
+Règles importantes :
+- Garde exactement la même mise en forme (sauts de ligne, emojis, ponctuation)
+- Ne traduis PAS les variables entre accolades : {{prenom}}, {{date_arrivee}}, {{lien_questionnaire}}, {{drapeau}}, etc.
+- Ne traduis PAS les tokens __FLAG0__, __FLAG1__, etc. — laisse-les tels quels
+- Ne traduis PAS les URLs, numéros de téléphone, adresses email
+- Adapte le ton à la culture locale (ex: plus formel en allemand/japonais)
+- Réponds UNIQUEMENT avec le message traduit, sans aucune explication ni commentaire
+
+Message à traduire :
+{_msg_to_translate}"""
+
+        r = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-sonnet-4-20250514",
+                "max_tokens": 2000,
+                "messages": [{"role": "user", "content": prompt}]
+            },
+            timeout=30
+        )
+
+        if r.status_code == 200:
+            traduit = r.json()["content"][0]["text"].strip()
+            if bilingue:
+                message_final = f"{message}\n\n---\n\n{traduit}"
+            else:
+                message_final = traduit
+            return {
+                "traduit": True, "langue": nom_langue,
+                "message_traduit": traduit, "message_final": message_final,
+            }
+        else:
+            return {
+                "traduit": False, "langue": nom_langue,
+                "message_traduit": message, "message_final": message,
+                "erreur": f"Erreur API {r.status_code}"
+            }
+
+    except Exception as e:
+        return {
+            "traduit": False, "langue": nom_langue,
+            "message_traduit": message, "message_final": message,
+            "erreur": str(e)
+        }
