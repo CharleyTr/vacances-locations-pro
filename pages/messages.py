@@ -147,6 +147,29 @@ def _show_whatsapp(df: pd.DataFrame):
                                      propriete_nom=prop_nom, ville=ville,
                                      signataire=signataire,
                                      lien_questionnaire=_lien_q)
+
+            # ── Traduction automatique ────────────────────────────────
+            pays_client = row.get("pays", "") or ""
+            try:
+                from services.traduction_service import get_langue_from_pays, traduire_message as _trad
+                _lg = get_langue_from_pays(pays_client)
+            except: _lg = None
+            if _lg:
+                _, _nom_lg = _lg
+                _ci1, _ci2 = st.columns([3, 1])
+                with _ci1:
+                    st.info(f"🌍 Client de **{pays_client}** — traduction **{_nom_lg}** disponible")
+                with _ci2:
+                    _bilingue_wa = st.checkbox("Bilingue", value=True, key="wa_bilingue")
+                if st.button(f"🌐 Traduire en {_nom_lg}", key="btn_trad_wa"):
+                    with st.spinner(f"Traduction en {_nom_lg}..."):
+                        _r = _trad(message, pays_client, bilingue=_bilingue_wa)
+                        if _r["traduit"]:
+                            message = _r["message_final"]
+                            st.success(f"✅ Traduit en {_nom_lg}")
+                        else:
+                            st.error(f"❌ {_r.get('erreur','Erreur')}")
+
             st.text_area("Aperçu du message", value=message, height=180, disabled=True, key="wa_preview")
         else:
             message = ""
@@ -361,6 +384,28 @@ def _show_email_manuel(df: pd.DataFrame):
         else:
             message_email = ""
             sujet = ""
+        # ── Traduction automatique ────────────────────────────────────
+        pays_client_e = row.get("pays", "") or ""
+        try:
+            from services.traduction_service import get_langue_from_pays, traduire_message as _trad_e
+            _lg_e = get_langue_from_pays(pays_client_e)
+        except: _lg_e = None
+        if _lg_e:
+            _, _nom_lg_e = _lg_e
+            _ce1, _ce2 = st.columns([3, 1])
+            with _ce1:
+                st.info(f"🌍 Client de **{pays_client_e}** — traduction **{_nom_lg_e}** disponible")
+            with _ce2:
+                _bilingue_e = st.checkbox("Bilingue", value=True, key="email_bilingue")
+            if st.button(f"🌐 Traduire en {_nom_lg_e}", key="btn_trad_email"):
+                with st.spinner(f"Traduction en {_nom_lg_e}..."):
+                    _r_e = _trad_e(message_email, pays_client_e, bilingue=_bilingue_e)
+                    if _r_e["traduit"]:
+                        message_email = _r_e["message_final"]
+                        st.success(f"✅ Traduit en {_nom_lg_e}")
+                    else:
+                        st.error(f"❌ {_r_e.get('erreur','Erreur')}")
+
         st.text_area("Aperçu du message", value=message_email, height=200,
                      disabled=True, key="email_preview")
 
