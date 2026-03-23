@@ -22,10 +22,20 @@ except ImportError:
 from integrations.whatsapp_client import build_wa_link, send_whatsapp
 from database.supabase_client import is_connected
 import database.reservations_repo as repo
-from config import BREVO_API_KEY, TWILIO_ACCOUNT_SID
+from config import BREVO_API_KEY
+try:
+    from config import TWILIO_ACCOUNT_SID
+except ImportError:
+    TWILIO_ACCOUNT_SID = ""
+
 from database.templates_repo import get_templates
 from services.template_service import apply_template, MOMENTS
-from database.proprietes_repo import fetch_all as fetch_proprietes, fetch_dict as fetch_props_dict
+from database.proprietes_repo import fetch_all as fetch_proprietes
+try:
+    from database.proprietes_repo import fetch_dict as fetch_props_dict
+except ImportError:
+    def fetch_props_dict():
+        return {p["id"]: p for p in fetch_proprietes()}
 
 
 def show():
