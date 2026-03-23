@@ -182,10 +182,9 @@ def _show_whatsapp(df: pd.DataFrame):
                                      signataire=signataire,
                                      lien_questionnaire=_lien_q)
 
-        # ── Traduction via session_state ──────────────────────────────
+        # ── Traduction via session_state (uniquement si traduit) ─────
         _trad_key = f"wa_msg_traduit_{selected_id}_{tpl_id_wa}"
-        if _trad_key not in st.session_state:
-            st.session_state[_trad_key] = message
+        # NE PAS stocker le message original — uniquement la version traduite
 
         try:
             from services.traduction_service import get_langue_from_pays
@@ -214,7 +213,9 @@ def _show_whatsapp(df: pd.DataFrame):
                         except Exception as _e:
                             st.error(f"❌ {_e}")
 
-        message = st.session_state.get(_trad_key, message)
+        # Utiliser la version traduite si disponible, sinon le message original
+        if _trad_key in st.session_state and st.session_state[_trad_key]:
+            message = st.session_state[_trad_key]
         st.text_area("Aperçu", value=message, height=180, disabled=True, key="wa_preview")
 
     tel_input = st.text_input("Numéro WhatsApp", value=telephone, placeholder="+33 6 12 34 56 78")
@@ -406,8 +407,7 @@ def _show_email_manuel(df: pd.DataFrame):
 
         # ── Traduction via session_state ──────────────────────────────
         _trad_key_e = f"email_msg_traduit_{selected_id}_{tpl_id_email}"
-        if _trad_key_e not in st.session_state:
-            st.session_state[_trad_key_e] = message_email
+        # NE PAS stocker le message original — uniquement la version traduite
 
         try:
             from services.traduction_service import get_langue_from_pays
@@ -436,7 +436,8 @@ def _show_email_manuel(df: pd.DataFrame):
                         except Exception as _e2:
                             st.error(f"❌ {_e2}")
 
-        message_email = st.session_state.get(_trad_key_e, message_email)
+        if _trad_key_e in st.session_state and st.session_state[_trad_key_e]:
+            message_email = st.session_state[_trad_key_e]
         st.text_area("Aperçu du message", value=message_email, height=200,
                      disabled=True, key="email_preview")
 
