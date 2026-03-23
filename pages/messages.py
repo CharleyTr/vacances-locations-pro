@@ -29,7 +29,6 @@ except ImportError:
     def fetch_props_dict():
         return {p["id"]: p for p in fetch_proprietes()}
 
-
 def show():
     st.title("📧 Messages & Notifications")
     df = load_reservations()
@@ -48,11 +47,9 @@ def show():
     with tab_sms:   _show_sms_manuel(df)
     with tab_histo: _show_historique(df)
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # WHATSAPP
 # ─────────────────────────────────────────────────────────────────────────────
-
 def _show_whatsapp(df: pd.DataFrame):
     st.subheader("💬 WhatsApp")
     twilio_ok = bool(TWILIO_ACCOUNT_SID)
@@ -64,13 +61,11 @@ def _show_whatsapp(df: pd.DataFrame):
             st.success("🤖 **Twilio configuré** — envoi automatique activé", icon="✅")
         else:
             st.warning("🤖 **Twilio non configuré** — envoi manuel uniquement", icon="⚠️")
-
     st.divider()
     search_wa = st.text_input("🔎 Rechercher un client", placeholder="Tapez un nom...", key="wa_search")
     df_sel = df.sort_values("date_arrivee", ascending=False)
     if search_wa:
         df_sel = df_sel[df_sel["nom_client"].str.contains(search_wa, case=False, na=False)]
-
     options = {
         row["id"]: (
             f"{row['nom_client']} "
@@ -83,14 +78,12 @@ def _show_whatsapp(df: pd.DataFrame):
     if not options:
         st.info("Aucune réservation trouvée.")
         return
-
     col1, col2 = st.columns([3, 2])
     with col1:
         selected_id = st.selectbox("Réservation", list(options.keys()),
                                     format_func=lambda x: options[x], key="wa_sel")
     row = df[df["id"] == selected_id].iloc[0].to_dict()
     telephone = str(row.get("telephone", "") or "")
-
     with col2:
         tpls_wa = get_templates(canal="whatsapp")
         tpl_options_wa = {0: "✏️ Message personnalisé"}
@@ -100,7 +93,6 @@ def _show_whatsapp(df: pd.DataFrame):
         })
         tpl_id_wa = st.selectbox("Modèle", list(tpl_options_wa.keys()),
                                   format_func=lambda x: tpl_options_wa[x], key="wa_tpl")
-
     props_map  = {p["id"]: p for p in fetch_proprietes()}
     prop_id    = int(row.get("propriete_id", 0) or 0)
     prop_data  = props_map.get(prop_id, {})
@@ -121,7 +113,6 @@ def _show_whatsapp(df: pd.DataFrame):
             import hashlib as _hl
             _token  = _hl.md5(f"{_res_id}{_app_url}".encode()).hexdigest()[:16]
             _lien_q = f"{_app_url}/?token={_token}" if _app_url and _res_id else ""
-
             message = apply_template(tpl_obj["contenu"], row,
                                      propriete_nom=prop_nom, ville=ville,
                                      signataire=signataire,
@@ -183,19 +174,16 @@ def _show_whatsapp(df: pd.DataFrame):
         else:
             st.button("🤖 Envoyer (Twilio)", disabled=True, use_container_width=True,
                       help="Configurez Twilio dans les Secrets")
-
     st.divider()
     # ── Envoi en masse ────────────────────────────────────────────────────────
     st.subheader("📨 Envoi en masse")
     today = pd.Timestamp(date.today())
     in_7  = today + timedelta(days=7)
-
     preset = st.selectbox("Cibler", [
         "Arrivées dans 7 jours",
         "Paiements en attente + arrivée dans 14 jours",
         "Tous les séjours à venir",
     ], key="wa_bulk_preset")
-
     if preset == "Arrivées dans 7 jours":
         df_bulk = df[(df["date_arrivee"] >= today) & (df["date_arrivee"] <= in_7) & df["telephone"].notna()]
     elif preset == "Paiements en attente + arrivée dans 14 jours":
@@ -203,19 +191,15 @@ def _show_whatsapp(df: pd.DataFrame):
                      (df["date_arrivee"] <= today + timedelta(days=14)) & df["telephone"].notna()]
     else:
         df_bulk = df[(df["date_arrivee"] >= today) & df["telephone"].notna()]
-
-    # Template en masse = template sélectionné ci-dessus
     tpls_bulk = get_templates(canal="whatsapp")
     tpl_bulk_opts = {t["id"]: t["nom"] for t in tpls_bulk}
     st.markdown(f"**{len(df_bulk)} contact(s)** — choisir le template :")
     tpl_bulk_id = st.selectbox("Template envoi masse", list(tpl_bulk_opts.keys()),
                                 format_func=lambda x: tpl_bulk_opts[x],
                                 key="bulk_tpl") if tpl_bulk_opts else None
-
     if not df_bulk.empty:
         st.dataframe(df_bulk[["nom_client", "telephone", "date_arrivee", "plateforme"]].head(10),
                      use_container_width=True, hide_index=True)
-
         if twilio_ok and tpl_bulk_id:
             if st.button(f"🤖 Envoyer à tous ({len(df_bulk)}) via Twilio", type="primary"):
                 tpl_bulk_obj = next((t for t in tpls_bulk if t["id"] == tpl_bulk_id), None)
@@ -250,25 +234,21 @@ def _show_whatsapp(df: pd.DataFrame):
                     if lnk:
                         st.markdown(f"- [{r.get('nom_client','')}]({lnk})")
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # AUTO
 # ─────────────────────────────────────────────────────────────────────────────
-
 def _show_auto(df: pd.DataFrame):
     st.subheader("🤖 Envois automatiques suggérés")
     st.caption("Réservations qui correspondent aux déclencheurs automatiques.")
     today = pd.Timestamp(date.today())
     j2    = today + timedelta(days=2)
     hier  = today - timedelta(days=1)
-
     rappels   = df[(df["date_arrivee"].dt.date == j2.date()) &
                    (df["sms_envoye"] == False) & df["email"].notna()]
     post_dep  = df[(df["date_depart"].dt.date == hier.date()) &
                    (df["post_depart_envoye"] == False) & df["email"].notna()]
     paiements = df[(df["paye"] == False) & (df["date_arrivee"] >= today) &
                    (df["date_arrivee"] <= today + timedelta(days=7)) & df["email"].notna()]
-
     _section_auto(rappels,   "🔔 Rappels arrivée (J-2)",          "Envoyer rappels arrivée",
                   send_checkin_reminder,  "sms_envoye",         "checkin")
     st.divider()
@@ -277,7 +257,6 @@ def _show_auto(df: pd.DataFrame):
     st.divider()
     _section_auto(paiements, "💳 Rappels paiement (arrivée <7j)", "Envoyer rappels paiement",
                   send_payment_reminder,  None,                  "paiement")
-
 
 def _section_auto(df_sub, titre, btn_label, fn_send, flag_col, key_suffix):
     st.markdown(f"**{titre}**")
@@ -301,34 +280,28 @@ def _section_auto(df_sub, titre, btn_label, fn_send, flag_col, key_suffix):
         if ok: st.success(f"✅ {ok} message(s) envoyé(s)")
         for e in errors: st.error(f"❌ {e}")
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # EMAIL MANUEL
 # ─────────────────────────────────────────────────────────────────────────────
-
 def _show_email_manuel(df: pd.DataFrame):
     st.subheader("✉️ Envoyer un email")
     if not BREVO_API_KEY:
         st.error("⛔ BREVO_API_KEY non configurée dans les Secrets Streamlit Cloud.")
         return
-
     search_email = st.text_input("🔎 Rechercher un client", placeholder="Tapez un nom...",
                                   key="email_search")
     df_email = df.sort_values("date_arrivee", ascending=False)
     if search_email:
         df_email = df_email[df_email["nom_client"].str.contains(
             search_email, case=False, na=False)]
-
     options = {row["id"]: f"{row['nom_client']} ({row.get('email','sans email')})"
                for _, row in df_email.iterrows()}
     if not options:
         st.info("Aucune réservation trouvée.")
         return
-
     selected_id = st.selectbox("Réservation", list(options.keys()),
                                 format_func=lambda x: options[x], key="email_sel")
     row = df[df["id"] == selected_id].iloc[0].to_dict()
-
     col1, col2 = st.columns(2)
     with col1:
         tpls_email = get_templates(canal="whatsapp")
@@ -342,7 +315,6 @@ def _show_email_manuel(df: pd.DataFrame):
                                      key="email_tpl")
     with col2:
         email_dest = st.text_input("Email", value=str(row.get("email", "") or ""))
-
     props_e    = {p["id"]: p for p in fetch_proprietes()}
     pid_e      = int(row.get("propriete_id") or 0)
     prop_e     = props_e.get(pid_e, {})
@@ -414,11 +386,9 @@ def _show_email_manuel(df: pd.DataFrame):
         else:
             st.error(f"❌ {result.get('error')}")
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # SMS MANUEL
 # ─────────────────────────────────────────────────────────────────────────────
-
 def _show_sms_manuel(df: pd.DataFrame):
     st.subheader("📱 Envoyer un SMS")
     if not BREVO_API_KEY:
@@ -463,11 +433,9 @@ def _show_sms_manuel(df: pd.DataFrame):
         else:
             st.error(f"❌ {result.get('error')}")
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # HISTORIQUE
 # ─────────────────────────────────────────────────────────────────────────────
-
 def _show_historique(df: pd.DataFrame):
     st.subheader("📊 Historique des envois")
     cols = ["nom_client", "email", "telephone", "date_arrivee",
