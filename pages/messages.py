@@ -69,9 +69,10 @@ except ImportError:
     def get_templates(**kwargs): return []
 
 try:
-    from services.template_service import apply_template
+    from services.template_service import apply_template, apply_template_texte
 except ImportError:
     def apply_template(c, r, **kw): return c
+    def apply_template_texte(c, r, **kw): return c
 
 MOMENTS = {
     "confirmation": "✅ Confirmation réservation",
@@ -177,10 +178,16 @@ def _show_whatsapp(df: pd.DataFrame):
             import hashlib as _hl
             _token  = _hl.md5(f"{_res_id}{_app_url}".encode()).hexdigest()[:16]
             _lien_q = f"{_app_url}/?token={_token}" if _app_url and _res_id else ""
-            message = apply_template(tpl_obj["contenu"], row,
-                                     propriete_nom=prop_nom, ville=ville,
-                                     signataire=signataire,
-                                     lien_questionnaire=_lien_q)
+            # Message HTML pour aperçu (avec image drapeau)
+            message_html = apply_template(tpl_obj["contenu"], row,
+                                          propriete_nom=prop_nom, ville=ville,
+                                          signataire=signataire,
+                                          lien_questionnaire=_lien_q)
+            # Message texte pour WhatsApp (avec code pays [NL])
+            message = apply_template_texte(tpl_obj["contenu"], row,
+                                           propriete_nom=prop_nom, ville=ville,
+                                           signataire=signataire,
+                                           lien_questionnaire=_lien_q)
 
         # ── Traduction via session_state (uniquement si traduit) ─────
         _trad_key = f"wa_msg_traduit_{selected_id}_{tpl_id_wa}"
@@ -216,7 +223,17 @@ def _show_whatsapp(df: pd.DataFrame):
         # Utiliser la version traduite si disponible, sinon le message original
         if _trad_key in st.session_state and st.session_state[_trad_key]:
             message = st.session_state[_trad_key]
-        st.text_area("Aperçu", value=message, height=180, disabled=True, key="wa_preview")
+        # Aperçu HTML avec image drapeau (fonctionne sur Windows)
+        _apercu_html = message_html if "message_html" in dir() else message
+        if _trad_key in st.session_state and st.session_state[_trad_key]:
+            _apercu_html = st.session_state[_trad_key]
+        st.markdown("**Aperçu :**")
+        st.markdown(
+            f"<div style='background:#F8F9FA;border:1px solid #DEE2E6;border-radius:8px;"
+            f"padding:12px 16px;font-size:13px;white-space:pre-wrap;line-height:1.6'>"
+            f"{_apercu_html.replace(chr(10), '<br>')}</div>",
+            unsafe_allow_html=True
+        )
 
     tel_input = st.text_input("Numéro WhatsApp", value=telephone, placeholder="+33 6 12 34 56 78")
     st.markdown("---")
