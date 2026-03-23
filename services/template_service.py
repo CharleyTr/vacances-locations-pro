@@ -38,17 +38,21 @@ MOMENTS = {
 
 
 def _get_drapeau(pays: str) -> str:
-    """Retourne le drapeau image HTML ou emoji depuis le nom du pays."""
+    """Retourne l'emoji drapeau unicode depuis le nom du pays.
+    Fonctionne dans WhatsApp, SMS, email et partout."""
     if not pays:
         return ""
     try:
         from services.indicatifs_service import INDICATIFS
-        pays_to_iso = {v[0]: v[1].lower() for v in INDICATIFS.values()}
+        pays_to_iso = {v[0]: v[1].upper() for v in INDICATIFS.values()}
         iso = pays_to_iso.get(pays.strip())
-        if iso:
-            return f'<img src="https://flagcdn.com/16x12/{iso}.png" style="vertical-align:middle;margin-right:4px"> {pays}'
-    except: pass
-    return pays
+        if iso and len(iso) == 2:
+            flag = (chr(0x1F1E6 + ord(iso[0]) - ord('A')) +
+                    chr(0x1F1E6 + ord(iso[1]) - ord('A')))
+            return flag
+    except Exception:
+        pass
+    return ""
 
 
 def apply_template(contenu: str, reservation: dict, propriete_nom: str = "",
