@@ -41,11 +41,24 @@ def show():
     st.title("💬 Chat interne")
     st.caption("Messagerie en temps réel entre tous les utilisateurs de l'application.")
 
-    # Auto-refresh toutes les 30 secondes via meta tag
-    st.markdown(
-        "<meta http-equiv='refresh' content='30'>",
-        unsafe_allow_html=True
-    )
+    # Keep-alive WebSocket via rerun automatique (sans meta refresh qui déconnecte)
+    import streamlit.components.v1 as _cv_chat
+    _cv_chat.html("""
+    <script>
+    (function() {
+        // Maintenir le WebSocket Streamlit actif pendant la saisie
+        // en simulant des micro-événements sur le window parent
+        var _ping = setInterval(function() {
+            try {
+                // Déclencher un mousemove synthétique pour réveiller le WebSocket
+                var evt = new MouseEvent('mousemove', {bubbles: true, cancelable: true});
+                window.parent.document.dispatchEvent(evt);
+            } catch(e) {}
+        }, 15000);
+        window.addEventListener('beforeunload', function() { clearInterval(_ping); });
+    })();
+    </script>
+    """, height=0)
 
     user_email, user_nom = _get_user_info()
     is_admin = st.session_state.get("is_admin", False)
@@ -88,11 +101,12 @@ def show():
         import time as _time
         _last = st.session_state.get("chat_last_refresh_time", 0)
         _now  = _time.time()
-        if _now - _last > 30:
+        if _now - _last > 20:
             st.session_state["chat_last_refresh_time"] = _now
             st.session_state["chat_refresh"] += 1
-        _secs_left = max(0, int(30 - (_now - _last)))
-        st.caption(f"🔄 Auto-actualisation dans {_secs_left}s")
+            st.rerun()
+        _secs_left = max(0, int(20 - (_now - _last)))
+        st.caption(f"🔄 Actualisation dans {_secs_left}s")
     with col_p:
         st.markdown(
             "<a href='https://CharleyTr.github.io/vlp-auth/chat-paste.html' target='_blank' "
