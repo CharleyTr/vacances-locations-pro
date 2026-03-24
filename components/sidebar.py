@@ -27,7 +27,6 @@ PAGES = {
     "📐 Barèmes fiscaux":    "Barèmes fiscaux",
     "👥 Utilisateurs":       "Utilisateurs",
     "📋 Journal":            "Journal",
-    "💬 Chat":               "Chat",
     "💾 Sauvegarde":         "Sauvegarde",
     "👤 Mon profil":         "Mon profil",
     "🧾 Factures":           "Factures",
@@ -107,7 +106,7 @@ def sidebar() -> str:
         # Pages visibles uniquement pour gestionnaire
         PAGES_GESTIONNAIRE = {
             "📊 Dashboard", "📋 Réservations", "📅 Calendrier",
-            "🧹 Ménage", "📧 Messages", "💬 Chat", "👤 Mon profil", "📖 Documentation"
+            "🧹 Ménage", "📧 Messages", "👤 Mon profil", "📖 Documentation"
         }
 
         if is_admin:
