@@ -214,6 +214,18 @@ def sidebar() -> str:
                     )
             except Exception:
                 pass
+        # ── Bouton WhatsApp groupe ────────────────────────────────────
+        st.markdown("""
+        <a href="https://chat.whatsapp.com/F7XaE9wpctMLnqK7ZRP" target="_blank"
+           style="text-decoration:none">
+          <div style="background:#25D366;color:white;border-radius:8px;
+                      padding:8px 12px;text-align:center;font-size:13px;
+                      font-weight:600;margin:4px 0;cursor:pointer">
+            💬 Chat équipe WhatsApp
+          </div>
+        </a>
+        """, unsafe_allow_html=True)
+
         st.caption("v3.2 — 2026 · © Charley Trigano")
 
     return pages_visibles[choice]
