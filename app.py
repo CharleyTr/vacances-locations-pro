@@ -89,6 +89,28 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ── Keep-alive : empêche la déconnexion pendant la saisie ────────────────────
+import streamlit.components.v1 as _cv_ka
+_cv_ka.html("""
+<script>
+(function() {
+    // Ping toutes les 25 secondes pour maintenir la session Streamlit active
+    setInterval(function() {
+        try {
+            // Créer un WebSocket message factice via l'API Streamlit
+            var ws = window.parent.document.querySelector('iframe');
+            // Fallback : fetch silencieux
+            fetch(window.parent.location.href, {
+                method: 'GET',
+                headers: {'Cache-Control': 'no-cache'},
+                credentials: 'same-origin'
+            }).catch(function(){});
+        } catch(e) {}
+    }, 25000);
+})();
+</script>
+""", height=0)
+
 # ── Page création de mot de passe (invitation + reset) ────────────────────────
 import streamlit.components.v1 as _components
 _components.html("""
