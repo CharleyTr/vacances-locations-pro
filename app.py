@@ -348,6 +348,11 @@ if _restore and not st.session_state.get("global_logged_in"):
         st.rerun()
     except: pass
 
+# ── Session ID unique par onglet navigateur ──────────────────────────────────
+if "session_id" not in st.session_state:
+    import uuid
+    st.session_state["session_id"] = str(uuid.uuid4())[:16]
+
 if not st.session_state.get("global_logged_in", False):
     _show_splash_login()
 
@@ -420,8 +425,21 @@ except: questionnaire = None
 
 page = sidebar()
 
-# ── Tracker la page courante pour les notifications chat ─────────────────────
+# ── Tracker la page courante + session active ────────────────────────────────
 st.session_state["current_page"] = page
+
+# Ping session active (toutes les 30s grâce au keep-alive)
+try:
+    from database.sessions_repo import ping_session
+    ping_session(
+        session_id  = st.session_state.get("session_id", "unknown"),
+        user_email  = st.session_state.get("auth_user_email", ""),
+        user_role   = st.session_state.get("user_role", "admin" if st.session_state.get("is_admin") else "proprietaire"),
+        prop_id     = st.session_state.get("prop_id", 0),
+        page        = page,
+    )
+except Exception:
+    pass
 
 # ── Navigation auto (depuis badge chat) ──────────────────────────────────────
 if st.session_state.get("nav_page"):
