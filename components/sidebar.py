@@ -188,6 +188,32 @@ def sidebar() -> str:
             from services.auth_service import logout
             logout()
             st.rerun()
+        # ── Mouchard sessions actives (admin only) ──────────────────
+        if st.session_state.get("is_admin", False):
+            try:
+                from database.sessions_repo import get_sessions_actives
+                sessions = get_sessions_actives()
+                nb = len(sessions)
+                if nb > 1:
+                    st.markdown(
+                        f"<div style='font-size:11px;color:#4CAF50;padding:2px 0'>"
+                        f"🟢 <b>{nb}</b> connecté(s) en ce moment</div>",
+                        unsafe_allow_html=True
+                    )
+                    with st.expander(f"👥 Voir ({nb})", expanded=False):
+                        for s in sessions:
+                            role_icon = "👑" if s.get("user_role") == "admin" else "🏠"
+                            page_s = s.get("page_courante", "")
+                            email_s = s.get("user_email", "anonyme")
+                            st.caption(f"{role_icon} {email_s} — {page_s}")
+                else:
+                    st.markdown(
+                        "<div style='font-size:11px;color:#9CA3AF;padding:2px 0'>"
+                        "🟢 Vous êtes seul connecté</div>",
+                        unsafe_allow_html=True
+                    )
+            except Exception:
+                pass
         st.caption("v3.2 — 2026 · © Charley Trigano")
 
     return pages_visibles[choice]
