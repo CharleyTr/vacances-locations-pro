@@ -416,6 +416,284 @@ def _show_declaration_revenus(df_an, annee, props, b):
         "investissements, démembrement...) consultez un expert-comptable spécialisé en LMNP."
     )
 
+
+def _show_amortissements(annee: int, props: dict):
+    """Tableau d'amortissement LMNP — calcul par composant."""
+    import pandas as pd
+    from datetime import date
+
+    st.subheader(f"📐 Tableau d\'amortissement LMNP")
+    st.caption(
+        "L\'amortissement est obligatoire au régime réel simplifié. "
+        "Chaque composant du bien est amorti sur sa durée de vie propre."
+    )
+
+    # ── Sélection propriété ───────────────────────────────────────────
+    props_opt = {0: "Toutes les propriétés"}
+    props_opt.update({p["id"]: p["nom"] for p in props.values()})
+    prop_id = st.selectbox("Propriété", list(props_opt.keys()),
+                            format_func=lambda x: props_opt[x], key="amort_prop")
+
+    st.divider()
+    st.markdown("### 🏗️ Décomposition du bien par composant")
+    st.caption(
+        "Méthode des composants (obligatoire en LMNP réel) : chaque élément est amorti "
+        "séparément selon sa durée de vie. La valeur du terrain n\'est PAS amortissable."
+    )
+
+    # ── Composants standards LMNP ─────────────────────────────────────
+    COMPOSANTS_DEFAUT = [
+        {"composant": "Structure / Gros œuvre",    "pct": 40, "duree": 80,  "actif": True},
+        {"composant": "Façade / Toiture",           "pct": 10, "duree": 30,  "actif": True},
+        {"composant": "Installations générales",    "pct": 10, "duree": 20,  "actif": True},
+        {"composant": "Agencements intérieurs",     "pct": 15, "duree": 15,  "actif": True},
+        {"composant": "Équipements / Mobilier",     "pct": 10, "duree": 10,  "actif": True},
+        {"composant": "Terrain (non amortissable)", "pct": 15, "duree": 0,   "actif": False},
+    ]
+
+    # ── Paramètres du bien ────────────────────────────────────────────
+    col_p1, col_p2, col_p3 = st.columns(3)
+    with col_p1:
+        valeur_bien = st.number_input(
+            "Prix d\'acquisition total (€)", min_value=0, value=200000, step=5000,
+            key="amort_valeur",
+            help="Prix d\'achat + frais notaire + travaux initiaux"
+        )
+        frais_notaire = st.number_input(
+            "Frais de notaire (€)", min_value=0, value=0, step=500,
+            key="amort_notaire"
+        )
+    with col_p2:
+        annee_achat = st.number_input(
+            "Année d\'acquisition", min_value=1990, max_value=2030,
+            value=2020, step=1, key="amort_annee_achat"
+        )
+        mois_achat = st.selectbox(
+            "Mois d\'acquisition",
+            list(range(1, 13)),
+            format_func=lambda x: ["Jan","Fév","Mar","Avr","Mai","Jun",
+                                    "Jul","Aoû","Sep","Oct","Nov","Déc"][x-1],
+            key="amort_mois_achat"
+        )
+    with col_p3:
+        travaux = st.number_input(
+            "Travaux amortissables (€)", min_value=0, value=0, step=1000,
+            key="amort_travaux",
+            help="Travaux > 500 € à amortir séparément (10-15 ans)"
+        )
+        duree_travaux = st.number_input(
+            "Durée amort. travaux (ans)", min_value=1, max_value=30,
+            value=10, step=1, key="amort_duree_travaux"
+        ) if travaux > 0 else 0
+
+    valeur_amortissable = valeur_bien + frais_notaire
+
+    st.divider()
+    st.markdown("### ⚙️ Composants du bien")
+
+    # Tableau éditable des composants
+    composants_data = []
+    total_pct = 0
+    for i, comp in enumerate(COMPOSANTS_DEFAUT):
+        c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
+        with c1:
+            nom = st.text_input("Composant", value=comp["composant"],
+                                 key=f"amort_nom_{i}", label_visibility="collapsed")
+        with c2:
+            pct = st.number_input("% valeur", value=comp["pct"], min_value=0,
+                                   max_value=100, step=1, key=f"amort_pct_{i}",
+                                   label_visibility="collapsed")
+        with c3:
+            duree = st.number_input("Durée (ans)", value=comp["duree"], min_value=0,
+                                     max_value=150, step=5, key=f"amort_dur_{i}",
+                                     label_visibility="collapsed")
+        with c4:
+            actif = st.checkbox("Amortir", value=comp["actif"],
+                                 key=f"amort_act_{i}",
+                                 help="Décocher pour le terrain")
+
+        valeur_comp = valeur_amortissable * pct / 100
+        amort_annuel = valeur_comp / duree if actif and duree > 0 else 0
+        composants_data.append({
+            "composant": nom, "pct": pct, "duree": duree,
+            "actif": actif, "valeur": valeur_comp, "amort_annuel": amort_annuel
+        })
+        total_pct += pct
+
+    if total_pct != 100:
+        st.warning(f"⚠️ Total des pourcentages : {total_pct}% (doit être égal à 100%)")
+
+    # Ajouter les travaux
+    if travaux > 0:
+        composants_data.append({
+            "composant": "Travaux", "pct": 0, "duree": duree_travaux,
+            "actif": True, "valeur": travaux,
+            "amort_annuel": travaux / duree_travaux if duree_travaux > 0 else 0
+        })
+
+    # ── KPIs ─────────────────────────────────────────────────────────
+    total_amort_annuel = sum(c["amort_annuel"] for c in composants_data)
+    valeur_terrain = sum(c["valeur"] for c in composants_data if not c["actif"])
+
+    st.divider()
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("🏠 Valeur totale", f"{valeur_amortissable:,.0f} €")
+    k2.metric("🌿 Terrain (non amorti)", f"{valeur_terrain:,.0f} €")
+    k3.metric("📉 Amort. annuel total", f"{total_amort_annuel:,.0f} €")
+    k4.metric("📅 Années restantes (moy.)", 
+              f"{(valeur_amortissable - valeur_terrain) / total_amort_annuel:.0f} ans"
+              if total_amort_annuel > 0 else "—")
+
+    st.divider()
+
+    # ── Tableau récapitulatif ─────────────────────────────────────────
+    st.markdown("### 📋 Récapitulatif des composants")
+    df_comp = pd.DataFrame([{
+        "Composant":        c["composant"],
+        "% Valeur":         f"{c['pct']}%",
+        "Valeur (€)":       f"{c['valeur']:,.0f} €",
+        "Durée (ans)":      str(c["duree"]) if c["actif"] else "—",
+        "Amort./an (€)":    f"{c['amort_annuel']:,.0f} €" if c["actif"] else "Non amortissable",
+    } for c in composants_data])
+    st.dataframe(df_comp, use_container_width=True, hide_index=True)
+
+    # ── Tableau d\'amortissement sur N années ─────────────────────────
+    st.divider()
+    st.markdown("### 📊 Plan d\'amortissement pluriannuel")
+
+    nb_annees_affich = st.slider("Nombre d\'années à afficher", 5, 40, 20,
+                                  key="amort_nb_ans")
+    annee_debut = annee_achat
+
+    rows = []
+    valeur_nette = valeur_amortissable
+    cumul = 0
+    for an in range(annee_debut, annee_debut + nb_annees_affich):
+        # Prorata la première année
+        if an == annee_debut:
+            mois_restants = 13 - mois_achat
+            amort_an = total_amort_annuel * mois_restants / 12
+        else:
+            amort_an = total_amort_annuel
+        cumul += amort_an
+        valeur_nette -= amort_an
+        rows.append({
+            "Année":            an,
+            "Amort. (€)":       f"{amort_an:,.0f} €",
+            "Cumul amorti (€)": f"{cumul:,.0f} €",
+            "Valeur nette (€)": f"{max(valeur_nette, valeur_terrain):,.0f} €",
+            "% amorti":         f"{min(cumul / (valeur_amortissable - valeur_terrain) * 100, 100):.1f}%"
+                                if (valeur_amortissable - valeur_terrain) > 0 else "—",
+        })
+        if valeur_nette <= valeur_terrain:
+            break  # Bien totalement amorti
+
+    df_plan = pd.DataFrame(rows)
+
+    # Mettre en évidence l\'année courante
+    def _style_row(row):
+        if row["Année"] == annee:
+            return ["background-color: #E3F2FD; font-weight: bold"] * len(row)
+        return [""] * len(row)
+
+    st.dataframe(df_plan, use_container_width=True, hide_index=True)
+    st.caption(f"🔵 L\'année {annee} (sélectionnée) est mise en évidence dans le tableau.")
+
+    # ── Export PDF ────────────────────────────────────────────────────
+    if st.button("📥 Exporter le plan en PDF", key="amort_pdf"):
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib import colors
+            from reportlab.lib.styles import ParagraphStyle
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer
+            from reportlab.lib.units import cm
+            import io
+
+            buf = io.BytesIO()
+            doc = SimpleDocTemplate(buf, pagesize=A4,
+                                     rightMargin=1.5*cm, leftMargin=1.5*cm,
+                                     topMargin=2*cm, bottomMargin=2*cm)
+            story = []
+            h1 = ParagraphStyle("h1", fontSize=16, fontName="Helvetica-Bold",
+                                  spaceAfter=4, textColor=colors.HexColor("#1565C0"))
+            sub = ParagraphStyle("sub", fontSize=9, fontName="Helvetica",
+                                  textColor=colors.grey, spaceAfter=8)
+            h2 = ParagraphStyle("h2", fontSize=12, fontName="Helvetica-Bold",
+                                  spaceBefore=10, spaceAfter=4,
+                                  textColor=colors.HexColor("#1565C0"))
+
+            prop_nom = props_opt.get(prop_id, "Toutes")
+            story.append(Paragraph(f"Plan d\'Amortissement LMNP — {prop_nom}", h1))
+            story.append(Paragraph(
+                f"Valeur bien : {valeur_amortissable:,.0f} € | "
+                f"Acquisition : {mois_achat:02d}/{annee_achat} | "
+                f"Amort. annuel : {total_amort_annuel:,.0f} €", sub))
+
+            # Table composants
+            story.append(Paragraph("Composants", h2))
+            data_c = [["Composant", "Valeur (€)", "Durée", "Amort./an"]]
+            for c in composants_data:
+                data_c.append([
+                    c["composant"],
+                    f"{c['valeur']:,.0f} €",
+                    f"{c['duree']} ans" if c["actif"] else "—",
+                    f"{c['amort_annuel']:,.0f} €" if c["actif"] else "Non amortissable"
+                ])
+            t_c = Table(data_c, colWidths=[8*cm, 3*cm, 2.5*cm, 3.5*cm])
+            t_c.setStyle(TableStyle([
+                ("BACKGROUND", (0,0),(-1,0), colors.HexColor("#1565C0")),
+                ("TEXTCOLOR",  (0,0),(-1,0), colors.white),
+                ("FONTNAME",   (0,0),(-1,0), "Helvetica-Bold"),
+                ("FONTSIZE",   (0,0),(-1,-1), 9),
+                ("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white,colors.HexColor("#F0F4FF")]),
+                ("BOX",        (0,0),(-1,-1), 0.5, colors.HexColor("#90CAF9")),
+                ("INNERGRID",  (0,0),(-1,-1), 0.25, colors.HexColor("#E0E0E0")),
+                ("PADDING",    (0,0),(-1,-1), 5),
+            ]))
+            story.append(t_c)
+            story.append(Spacer(1, 0.5*cm))
+
+            # Table plan
+            story.append(Paragraph("Plan pluriannuel", h2))
+            data_p = [["Année", "Amort. (€)", "Cumul (€)", "Valeur nette (€)", "% amorti"]]
+            for row_d in rows:
+                data_p.append([
+                    str(row_d["Année"]), row_d["Amort. (€)"],
+                    row_d["Cumul amorti (€)"], row_d["Valeur nette (€)"],
+                    row_d["% amorti"]
+                ])
+            t_p = Table(data_p, colWidths=[2*cm, 3*cm, 3*cm, 3.5*cm, 2.5*cm])
+            t_p.setStyle(TableStyle([
+                ("BACKGROUND", (0,0),(-1,0), colors.HexColor("#1565C0")),
+                ("TEXTCOLOR",  (0,0),(-1,0), colors.white),
+                ("FONTNAME",   (0,0),(-1,0), "Helvetica-Bold"),
+                ("FONTSIZE",   (0,0),(-1,-1), 8),
+                ("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white,colors.HexColor("#F0F4FF")]),
+                ("BOX",        (0,0),(-1,-1), 0.5, colors.HexColor("#90CAF9")),
+                ("INNERGRID",  (0,0),(-1,-1), 0.25, colors.HexColor("#E0E0E0")),
+                ("PADDING",    (0,0),(-1,-1), 4),
+            ]))
+            story.append(t_p)
+            story.append(Spacer(1, 0.5*cm))
+            story.append(Paragraph(
+                "Document généré par Vacances-Locations Pro | À titre indicatif",
+                ParagraphStyle("ft", fontSize=7, textColor=colors.grey, alignment=1)
+            ))
+
+            doc.build(story)
+            buf.seek(0)
+            st.download_button(
+                "📥 Télécharger le PDF",
+                data=buf.getvalue(),
+                file_name=f"amortissement_{prop_nom.replace(' ','_')}_{annee}.pdf",
+                mime="application/pdf",
+                type="primary",
+                use_container_width=True
+            )
+            st.success("✅ PDF prêt !")
+        except Exception as e:
+            st.error(f"❌ Erreur PDF : {e}")
+
 def _show_liasse_2033(df_an, annee, props, barem):
     """Liasse fiscale 2033 pré-remplie avec les vraies catégories de frais."""
     import pandas as pd
@@ -767,7 +1045,7 @@ def show():
     # Pour LMNP le CA déclaré = recettes brutes encaissées
 
     # ── Onglets ───────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "📊 Seuils & Alertes",
         "💶 Estimation fiscale",
         "⚖️ Micro-BIC vs Réel",
@@ -776,6 +1054,7 @@ def show():
         "💰 Déclaration revenus",
         "📋 Liasse 2033",
         "📄 Export PDF",
+        "📐 Amortissements",
     ])
 
     # ════════════════════════════════════════════════════════════════════════
@@ -1488,6 +1767,9 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
 
     with tab8:
         _show_export_fiscal(df_an, annee, props, b)
+
+    with tab9:
+        _show_amortissements(annee, props)
 
     st.caption(
         "⚠️ Ce tableau de bord est un outil d'aide à la décision. "
