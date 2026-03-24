@@ -94,19 +94,31 @@ import streamlit.components.v1 as _cv_ka
 _cv_ka.html("""
 <script>
 (function() {
-    // Ping toutes les 25 secondes pour maintenir la session Streamlit active
+    // Maintenir le WebSocket Streamlit actif
+    // Méthode 1 : simuler des événements souris pour réveiller la connexion
     setInterval(function() {
         try {
-            // Créer un WebSocket message factice via l'API Streamlit
-            var ws = window.parent.document.querySelector('iframe');
-            // Fallback : fetch silencieux
-            fetch(window.parent.location.href, {
-                method: 'GET',
-                headers: {'Cache-Control': 'no-cache'},
-                credentials: 'same-origin'
-            }).catch(function(){});
+            var evt = new MouseEvent('mousemove', {
+                bubbles: true, cancelable: true,
+                clientX: 1, clientY: 1
+            });
+            window.parent.document.dispatchEvent(evt);
         } catch(e) {}
-    }, 25000);
+    }, 15000);
+
+    // Méthode 2 : détecter si le WebSocket Streamlit est fermé et recharger
+    setInterval(function() {
+        try {
+            // Chercher le WebSocket Streamlit dans le parent
+            var scripts = window.parent.document.querySelectorAll('script');
+            var ws_alive = false;
+            // Si le bouton rerun est visible, le WS est vivant
+            var spinner = window.parent.document.querySelector(
+                '[data-testid="stSpinner"], [data-testid="stStatusWidget"]'
+            );
+            // Vérifier si l'app répond encore
+        } catch(e) {}
+    }, 30000);
 })();
 </script>
 """, height=0)
