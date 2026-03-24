@@ -1,11 +1,17 @@
 [server]
-maxUploadSize = 200
-
-[client]
-showSidebarNavigation = false
+maxUploadSize = 50
+enableCORS = false
+enableXsrfProtection = false
 
 [browser]
+serverAddress = "localhost"
 gatherUsageStats = false
 
 [runner]
+# Timeout en secondes avant déconnexion (0 = jamais)
+# Note: sur Streamlit Cloud ce paramètre n'est pas toujours respecté
+# mais le keep-alive JS compense
 fastReruns = true
+
+[theme]
+base = "dark"
