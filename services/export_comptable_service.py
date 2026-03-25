@@ -313,6 +313,7 @@ def _sheet_kpis(wb, df, annee, prop_nom):
     ca_brut   = float(df_reel["prix_brut"].fillna(0).sum()) if "prix_brut" in df_reel.columns else 0
     comm      = float(df_reel["commission"].fillna(0).sum()) if "commission" in df_reel.columns else 0
     menage    = float(df_reel["prix_menage"].fillna(0).sum()) if "prix_menage" in df_reel.columns else 0
+    frais_cb  = float(df_reel["frais_cb"].fillna(0).sum())   if "frais_cb"    in df_reel.columns else 0
     taxes     = float(df_reel["taxes_sejour"].fillna(0).sum()) if "taxes_sejour" in df_reel.columns else 0
     ca_net    = float(df_reel["prix_net"].fillna(0).sum()) if "prix_net" in df_reel.columns else 0
     nb_res    = len(df_reel)
