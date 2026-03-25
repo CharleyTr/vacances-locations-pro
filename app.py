@@ -428,6 +428,8 @@ try: from pages import chat
 except: chat = None
 try: from pages import sauvegarde
 except: sauvegarde = None
+try: from pages import import_corrections
+except: import_corrections = None
 try: from pages import mon_profil
 except: mon_profil = None
 try: from pages import utilisateurs
@@ -498,5 +500,6 @@ elif page == "Utilisateurs":       utilisateurs.show()    if utilisateurs    els
 elif page == "Journal":            journal.show()         if journal         else st.error("Uploadez pages/journal.py")
 elif page == "Chat":               chat.show()            if chat            else st.error("Uploadez pages/chat.py")
 elif page == "Sauvegarde":         sauvegarde.show()      if sauvegarde      else st.error("Uploadez pages/sauvegarde.py")
+elif page == "Corrections":        import_corrections.show() if import_corrections else st.error("Uploadez pages/import_corrections.py")      if sauvegarde      else st.error("Uploadez pages/sauvegarde.py")
 elif page == "Mon profil":         mon_profil.show()      if mon_profil      else st.error("Uploadez pages/mon_profil.py")
 elif page == "Questionnaire":      questionnaire.show()   if questionnaire   else st.error("Uploadez pages/questionnaire.py")
