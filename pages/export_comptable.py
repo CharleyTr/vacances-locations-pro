@@ -70,8 +70,10 @@ def show():
     c4.metric("💵 CA Net",         f"{kpis['ca_net']:,.0f} €")
     c5.metric("📊 Taux occupation", f"{kpis.get('taux_occupation', 0):.1f} %")
 
-    c6, c7, c8 = st.columns(3)
+    frais_cb_exp = float(df_an["frais_cb"].fillna(0).sum()) if "frais_cb" in df_an.columns else 0
+    c6, c7, c8, c9 = st.columns(4)
     c6.metric("🔖 Commissions",    f"{kpis['commissions']:,.0f} €")
+    c7.metric("💳 Frais CB",       f"{frais_cb_exp:,.0f} €")
     c7.metric("🧹 Ménages",        f"{kpis['menage']:,.0f} €")
     c8.metric("💰 Rev. moy./nuit", f"{kpis['revenu_nuit']:,.0f} €")
 
