@@ -54,7 +54,7 @@ def _sheet_detail(wb, df, annee, prop_nom):
     ws.freeze_panes = "A3"
 
     # Titre
-    ws.merge_cells("A1:M1")
+    ws.merge_cells("A1:N1")
     ws["A1"] = f"EXPORT COMPTABLE — {prop_nom.upper()} — {annee}"
     ws["A1"].font    = _font(bold=True, color=C_HEADER_FG, size=12)
     ws["A1"].fill   = _fill(C_TITLE_BG)
@@ -66,8 +66,8 @@ def _sheet_detail(wb, df, annee, prop_nom):
         ("N° Réservation", 20), ("Plateforme", 14), ("Client", 22),
         ("Arrivée", 12),        ("Départ", 12),      ("Nuits", 7),
         ("CA Brut", 12),        ("Commission", 12),  ("Ménage", 10),
-        ("Taxes séjour", 12),   ("CA Net", 12),      ("Payé", 8),
-        ("Observation", 22),
+        ("Taxes séjour", 12),   ("Frais CB", 11),    ("CA Net", 12),
+        ("Payé", 8),            ("Observation", 22),
     ]
     for c, (title, width) in enumerate(COLS, 1):
         cell = ws.cell(row=2, column=c, value=title)
@@ -99,12 +99,13 @@ def _sheet_detail(wb, df, annee, prop_nom):
             _fv(row, "commission"),
             _fv(row, "prix_menage"),
             _fv(row, "taxes_sejour"),
+            _fv(row, "frais_cb"),
             _fv(row, "prix_net"),
             "✓" if row.get("paye") else "—",
             "",
         ]
         fmts = [None, None, None, DATE_FMT, DATE_FMT, "0",
-                EUR0, EUR0, EUR0, EUR0, EUR0, None, None]
+                EUR0, EUR0, EUR0, EUR0, EUR0, EUR0, None, None]
 
         for c, (val, fmt) in enumerate(zip(vals, fmts), 1):
             cell = ws.cell(row=i, column=c, value=val)
@@ -113,12 +114,12 @@ def _sheet_detail(wb, df, annee, prop_nom):
             cell.border    = _border()
             if fmt:
                 cell.number_format = fmt
-            if c >= 7 and c <= 11:
+            if c >= 7 and c <= 12:
                 cell.alignment = _right()
             # Couleur colonne CA Net
-            if c == 11:
+            if c == 12:
                 cell.font = _font(bold=True, color=C_GREEN, size=9)
-            if c == 12 and val == "—":
+            if c == 13 and val == "—":
                 cell.font = _font(color=C_RED, size=9)
 
     # Ligne TOTAL
@@ -127,7 +128,7 @@ def _sheet_detail(wb, df, annee, prop_nom):
     ws.cell(row=n, column=1).fill = _fill(C_TOTAL_BG)
 
     total_cols = {7: "prix_brut", 8: "commission", 9: "prix_menage",
-                  10: "taxes_sejour", 11: "prix_net", 6: "nuitees"}
+                  10: "taxes_sejour", 11: "frais_cb", 12: "prix_net", 6: "nuitees"}
     for col_idx, field in total_cols.items():
         first_row = 3
         last_row  = n - 1
@@ -190,6 +191,7 @@ def _sheet_mensuel(wb, df, annee):
             float(df_m["prix_brut"].fillna(0).sum())     if "prix_brut"    in df_m.columns else 0,
             float(df_m["commission"].fillna(0).sum())    if "commission"   in df_m.columns else 0,
             float(df_m["prix_menage"].fillna(0).sum())   if "prix_menage"  in df_m.columns else 0,
+            float(df_m["frais_cb"].fillna(0).sum())      if "frais_cb"     in df_m.columns else 0,
             float(df_m["prix_net"].fillna(0).sum())      if "prix_net"     in df_m.columns else 0,
             taux,
         ]
@@ -330,6 +332,7 @@ def _sheet_kpis(wb, df, annee, prop_nom):
         ("CA Brut total",            ca_brut,                      EUR0),
         ("Commissions plateformes",  comm,                         EUR0),
         ("Frais ménage",             menage,                       EUR0),
+        ("Frais CB",                 frais_cb,                     EUR0),
         ("Taxes de séjour",          taxes,                        EUR0),
         ("CA Net total",             ca_net,                       EUR0),
         ("Revenu moyen / nuit",      rev_nuit,                     EUR0),
