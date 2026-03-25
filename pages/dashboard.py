@@ -95,9 +95,17 @@ def show():
     c5.metric("📈 Revenu / nuit",  f"{revenu_nuit:.0f} €")
 
     c6, c7, c8 = st.columns(3)
+    frais_cb_total = float(df_reel["frais_cb"].fillna(0).sum())                      if "frais_cb" in df_reel.columns else 0
     c6.metric("⏳ En attente",      f"{kpis['montant_en_attente']:,.0f} €")
     c7.metric("🏡 Taux occupation", f"{kpis['taux_occupation']} %")
     c8.metric("🔖 Commissions",     f"{kpis['commissions']:,.0f} €")
+    c9, c10 = st.columns(2)
+    c9.metric("💳 Frais CB",        f"{frais_cb_total:,.0f} €",
+              help="Total des frais carte bancaire sur la période")
+    ca_net_apres_cb = (kpis['ca_net'] - frais_cb_total) if frais_cb_total else kpis['ca_net']
+    c10.metric("💵 CA Net (après CB)", f"{ca_net_apres_cb:,.0f} €",
+               delta=f"-{frais_cb_total:,.0f} €" if frais_cb_total else None,
+               delta_color="inverse")
 
     st.divider()
 
