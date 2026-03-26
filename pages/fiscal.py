@@ -417,6 +417,188 @@ def _show_declaration_revenus(df_an, annee, props, b):
     )
 
 
+
+def _show_declaration_2044(df_an, annee, props, b):
+    """Calcul des revenus fonciers imposables — Déclaration 2044 (location nue)."""
+    import pandas as pd
+
+    st.subheader(f"🏠 Déclaration 2044 — Revenus fonciers {annee}")
+    st.info("""
+    📌 **Formulaire 2044** — Revenus fonciers (location **nue** / non meublée)  
+    Si vous louez en **meublé (LMNP)**, utilisez l'onglet **💰 Déclaration revenus** et la **📋 Liasse 2033**.  
+    Le formulaire 2044 concerne uniquement les locations **vides** (sans meubles).
+    """)
+
+    # ── Sélection propriété ───────────────────────────────────────────
+    props_opt = {0: "Toutes les propriétés"}
+    props_opt.update({p["id"]: p["nom"] for p in props.values()})
+    prop_id = st.selectbox("Propriété", list(props_opt.keys()),
+                            format_func=lambda x: props_opt[x], key="dec2044_prop")
+    df = df_an if prop_id == 0 else df_an[df_an["propriete_id"] == prop_id]
+
+    st.divider()
+
+    # ── RECETTES (Ligne 200) ──────────────────────────────────────────
+    st.markdown("### 📥 RECETTES BRUTES — Ligne 200")
+
+    ca_brut = float(df["prix_brut"].fillna(0).sum())
+    taxes   = float(df["taxes_sejour"].fillna(0).sum()) if "taxes_sejour" in df.columns else 0
+    recettes_nettes = ca_brut - taxes
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        loyers = st.number_input("Loyers encaissés (€)", value=ca_brut,
+                                  key="d2044_loyers", help="Ligne 200 — recettes brutes")
+        charges_locataires = st.number_input("Charges récupérées sur locataires (€)",
+                                              value=0.0, step=100.0, key="d2044_charges_loc",
+                                              help="Charges refacturées aux locataires")
+    with col2:
+        subventions = st.number_input("Subventions / Indemnités (€)", value=0.0,
+                                       step=100.0, key="d2044_subv")
+        recettes_acc = st.number_input("Recettes accessoires (€)", value=0.0,
+                                        step=100.0, key="d2044_acc")
+    with col3:
+        total_recettes = loyers + charges_locataires + subventions + recettes_acc
+        st.metric("📊 Total Recettes (L.200)", f"{total_recettes:,.0f} €")
+
+    st.divider()
+
+    # ── CHARGES DÉDUCTIBLES ───────────────────────────────────────────
+    st.markdown("### 📤 CHARGES DÉDUCTIBLES")
+
+    # Charger les frais depuis la BDD
+    frais_bdd = {}
+    try:
+        from database.frais_repo import get_frais
+        pids = [prop_id] if prop_id else list(props.keys())
+        for pid in pids:
+            for f in (get_frais(pid, annee) or []):
+                cat = f.get("categorie", "Autres")
+                frais_bdd[cat] = frais_bdd.get(cat, 0) + float(f.get("montant", 0) or 0)
+    except: pass
+
+    col_a, col_b = st.columns(2)
+
+    with col_a:
+        st.markdown("**Frais & charges**")
+        frais_gestion = st.number_input(
+            "Frais de gestion & d'administration (L.221)",
+            value=frais_bdd.get("Frais de gestion / Compta", 0.0),
+            step=50.0, key="d2044_gestion",
+            help="Honoraires d'agence, frais comptables")
+        frais_assurance = st.number_input(
+            "Primes d'assurance (L.223)",
+            value=frais_bdd.get("Assurances", 0.0),
+            step=50.0, key="d2044_assur")
+        depenses_reparation = st.number_input(
+            "Dépenses de réparation & entretien (L.224)",
+            value=frais_bdd.get("Entretien & réparations", frais_bdd.get("Travaux & réparations", 0.0)),
+            step=100.0, key="d2044_repare",
+            help="Travaux d'entretien, réparations locatives")
+        charges_copro = st.number_input(
+            "Charges de copropriété (L.229)",
+            value=frais_bdd.get("Charges de copropriété", 0.0),
+            step=100.0, key="d2044_copro")
+        taxe_fonciere = st.number_input(
+            "Taxe foncière (L.230)",
+            value=frais_bdd.get("Taxe foncière", 0.0),
+            step=100.0, key="d2044_tf")
+
+    with col_b:
+        st.markdown("**Emprunts & amortissements**")
+        interets_emprunt = st.number_input(
+            "Intérêts d'emprunt (L.250)",
+            value=frais_bdd.get("Intérêts d'emprunt", 0.0),
+            step=100.0, key="d2044_interets",
+            help="Intérêts + assurance emprunteur")
+        frais_divers = st.number_input(
+            "Autres frais déductibles (L.240)",
+            value=frais_bdd.get("Frais divers", 0.0),
+            step=50.0, key="d2044_divers")
+        deficit_anterieur = st.number_input(
+            "Déficit antérieur reportable (L.260)",
+            value=0.0, step=100.0, key="d2044_deficit",
+            help="Déficit des années précédentes non encore imputé")
+
+        total_charges = (frais_gestion + frais_assurance + depenses_reparation +
+                         charges_copro + taxe_fonciere + interets_emprunt +
+                         frais_divers + deficit_anterieur)
+        st.metric("📊 Total Charges", f"{total_charges:,.0f} €")
+
+    st.divider()
+
+    # ── RÉSULTAT FONCIER ──────────────────────────────────────────────
+    st.markdown("### 📊 RÉSULTAT NET FONCIER")
+
+    revenu_foncier_net = total_recettes - total_charges
+
+    # Régime micro-foncier possible si recettes < 15 000 €
+    micro_possible = total_recettes <= 15000
+
+    col_r1, col_r2, col_r3 = st.columns(3)
+    col_r1.metric("📥 Total recettes",  f"{total_recettes:,.0f} €")
+    col_r2.metric("📤 Total charges",   f"{total_charges:,.0f} €")
+    if revenu_foncier_net >= 0:
+        col_r3.metric("✅ Bénéfice foncier net", f"{revenu_foncier_net:,.0f} €",
+                       delta=f"À reporter case 4BA")
+    else:
+        col_r3.metric("🔴 Déficit foncier",  f"{revenu_foncier_net:,.0f} €",
+                       delta=f"À reporter case 4BC ou 4BB",
+                       delta_color="inverse")
+
+    st.divider()
+
+    # ── TABLEAU RÉCAPITULATIF DES CASES ──────────────────────────────
+    st.markdown("### 📋 Cases à reporter — Déclaration 2042")
+
+    # Imputation du déficit
+    deficit_imputable_revenu_global = 0
+    deficit_reportable = 0
+    if revenu_foncier_net < 0:
+        # Déficit imputable sur revenu global : max 10 700 € si pas d'intérêts
+        part_hors_interets = abs(revenu_foncier_net) - interets_emprunt
+        deficit_imputable_revenu_global = min(max(part_hors_interets, 0), 10700)
+        deficit_reportable = abs(revenu_foncier_net) - deficit_imputable_revenu_global
+
+    df_cases = pd.DataFrame([
+        ("4BA", "Revenus fonciers nets (bénéfice)",
+         f"{max(revenu_foncier_net, 0):,.0f} €",
+         "Revenu imposable soumis à l'IR + prélèvements sociaux"),
+        ("4BB", "Déficit imputable sur autres revenus fonciers",
+         f"{min(abs(revenu_foncier_net) if revenu_foncier_net < 0 else 0, interets_emprunt):,.0f} €",
+         "Part du déficit liée aux intérêts d'emprunt"),
+        ("4BC", "Déficit imputable sur revenu global (max 10 700 €)",
+         f"{deficit_imputable_revenu_global:,.0f} €",
+         "Vient réduire le revenu global imposable"),
+        ("4BD", "Déficit antérieur non encore imputé",
+         f"{deficit_anterieur:,.0f} €",
+         "Déficit des années précédentes reporté"),
+    ], columns=["Case", "Libellé", "Montant", "Note"])
+    st.dataframe(df_cases, use_container_width=True, hide_index=True)
+
+    if micro_possible:
+        micro_base = total_recettes * 0.70
+        st.success(
+            f"💡 **Micro-foncier possible** (recettes ≤ 15 000 €) : "
+            f"abattement 30% → base imposable = **{micro_base:,.0f} €** (case 4BE). "
+            f"Comparez avec le régime réel ({max(revenu_foncier_net,0):,.0f} €) "
+            f"pour choisir le plus avantageux."
+        )
+
+    if deficit_reportable > 0:
+        st.warning(
+            f"⚠️ Déficit de **{deficit_reportable:,.0f} €** reportable sur les revenus fonciers "
+            f"des 10 années suivantes (non imputable sur revenu global)."
+        )
+
+    st.divider()
+    st.caption(
+        "⚠️ Simulateur indicatif. La déclaration 2044 concerne uniquement les locations **nues** "
+        "(non meublées). Pour les locations meublées (LMNP), utilisez la **Liasse 2033** "
+        "et la **Déclaration revenus**. Consultez votre expert-comptable."
+    )
+
+
 def _show_amortissements(annee: int, props: dict):
     """Tableau d'amortissement LMNP — calcul par composant."""
     import pandas as pd
@@ -1045,7 +1227,7 @@ def show():
     # Pour LMNP le CA déclaré = recettes brutes encaissées
 
     # ── Onglets ───────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
         "📊 Seuils & Alertes",
         "💶 Estimation fiscale",
         "⚖️ Micro-BIC vs Réel",
@@ -1055,6 +1237,7 @@ def show():
         "📋 Liasse 2033",
         "📄 Export PDF",
         "📐 Amortissements",
+        "🏠 Déclaration 2044",
     ])
 
     # ════════════════════════════════════════════════════════════════════════
@@ -1770,6 +1953,9 @@ de vos revenus du foyer, vous basculez en LMP (Loueur Meublé Professionnel) ave
 
     with tab9:
         _show_amortissements(annee, props)
+
+    with tab10:
+        _show_declaration_2044(df_an, annee, props, b)
 
     st.caption(
         "⚠️ Ce tableau de bord est un outil d'aide à la décision. "
