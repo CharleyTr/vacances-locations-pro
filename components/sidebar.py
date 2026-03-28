@@ -202,10 +202,26 @@ def sidebar() -> str:
                     )
                     with st.expander(f"👥 Voir ({nb})", expanded=False):
                         for s in sessions:
-                            role_icon = "👑" if s.get("user_role") == "admin" else "🏠"
-                            page_s = s.get("page_courante", "")
-                            email_s = s.get("user_email", "anonyme")
-                            st.caption(f"{role_icon} {email_s} — {page_s}")
+                            role = s.get("user_role", "")
+                            role_icon = "👑" if role == "admin" else ("🔑" if role == "gestionnaire" else "🏠")
+                            page_s  = s.get("page_courante", "")
+                            email_s = s.get("user_email", "")
+                            prop_id = s.get("prop_id", 0)
+                            # Afficher email ou rôle+propriété selon le mode de connexion
+                            if email_s and email_s != "anonyme":
+                                label = email_s
+                            else:
+                                label = f"{role or 'utilisateur'}"
+                                if prop_id:
+                                    # Trouver le nom de la propriété
+                                    try:
+                                        from database.proprietes_repo import fetch_all as _fp
+                                        _props = {p["id"]: p["nom"] for p in _fp()}
+                                        prop_nom = _props.get(int(prop_id), f"prop {prop_id}")
+                                        label += f" — {prop_nom}"
+                                    except:
+                                        label += f" — prop {prop_id}"
+                            st.caption(f"{role_icon} {label} › {page_s}")
                 else:
                     st.markdown(
                         "<div style='font-size:11px;color:#9CA3AF;padding:2px 0'>"
