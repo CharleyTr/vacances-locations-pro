@@ -126,7 +126,10 @@ def _show_livret(prop_id: int, props: dict):
     if filtre_plat != "Toutes":
         filtered = [a for a in filtered if a.get("plateforme") == filtre_plat]
     if not afficher_attente:
-        filtered = [a for a in filtered if a.get("token_used") or not a.get("token")]
+        # Masquer uniquement les questionnaires envoyés MAIS pas encore répondus
+        filtered = [a for a in filtered
+                    if a.get("token_used") or not a.get("token")
+                    or a.get("commentaire")]  # Garder si commentaire même sans token_used
     if tri == "Meilleure note":
         filtered = sorted(filtered, key=lambda x: x.get("note", 0), reverse=True)
     elif tri == "Moins bonne note":
@@ -154,7 +157,8 @@ def _render_avis_card(a: dict, props: dict):
     date_str = (a.get("date_sejour") or "")[:10]
     pending  = a.get("token") and not a.get("token_used")
 
-    if pending:
+    if pending and not a.get("note") and not a.get("commentaire"):
+        # Vraiment en attente — pas de réponse du tout
         st.markdown(
             f"<div style='background:#FFF8E1;border-left:4px solid #FFB300;"
             f"padding:10px 16px;border-radius:0 8px 8px 0;margin-bottom:8px;"
