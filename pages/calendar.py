@@ -69,6 +69,28 @@ def show():
         df_f = df_f[df_f["propriete_id"] == prop_choix]
     df_year = df_f[df_f["annee"] == annee]
 
+    # ── Bandeau événements du mois ────────────────────────────────────────
+    try:
+        from database.evenements_repo import get_evenements_mois, COULEURS_TYPE, TYPE_LABELS
+        _evts = get_evenements_mois(annee, mois, prop_choix if prop_choix != 0 else None)
+        if _evts:
+            _evts_html = " &nbsp; ".join([
+                f"<span style='background:{e.get('couleur') or COULEURS_TYPE.get(e.get('type',''),'#FF6B35')};"
+                f"color:white;padding:2px 10px;border-radius:10px;font-size:12px'>"
+                f"{TYPE_LABELS.get(e.get('type',''),'📅')} {e['nom']} "
+                f"({e['date_debut'][8:10]}/{e['date_debut'][5:7]}–{e['date_fin'][8:10]}/{e['date_fin'][5:7]})"
+                f"</span>"
+                for e in _evts
+            ])
+            st.markdown(
+                f"<div style='padding:8px 14px;background:#FFF8E1;border-radius:8px;"
+                f"border-left:4px solid #FFB300;margin:6px 0'>"
+                f"🎪 <b>Événements :</b> {_evts_html}</div>",
+                unsafe_allow_html=True
+            )
+    except Exception:
+        pass
+
     if "📅 Mois" in vue:
         if df_year.empty:
             st.warning("Aucune réservation pour ces filtres.")
