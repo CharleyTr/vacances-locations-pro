@@ -402,6 +402,8 @@ try: from pages import rapport
 except: rapport = None
 try: from pages import tarifs
 except: tarifs = None
+try: from pages import evenements
+except: evenements = None
 try: from pages import avis
 except: avis = None
 try: from pages import import_booking
@@ -486,6 +488,7 @@ elif page == "iCal":               ical_sync.show()       if ical_sync       els
 elif page == "Propriétés":         _page_proprietes.show() if _page_proprietes else st.error("Uploadez pages/proprietes.py")
 elif page == "Rapports":           rapport.show()         if rapport         else st.error("Uploadez pages/rapport.py")
 elif page == "Tarifs":             tarifs.show()          if tarifs          else st.error("Uploadez pages/tarifs.py")
+elif page == "Événements":         evenements.show()      if evenements      else st.error("Uploadez pages/evenements.py")          if tarifs          else st.error("Uploadez pages/tarifs.py")
 elif page == "Livre d'or":         avis.show()            if avis            else st.error("Uploadez pages/avis.py")
 elif page == "Import Booking":     import_booking.show()  if import_booking  else st.error("Uploadez pages/import_booking.py")
 elif page == "Import Airbnb":      import_airbnb.show()   if import_airbnb   else st.error("Uploadez pages/import_airbnb.py")
