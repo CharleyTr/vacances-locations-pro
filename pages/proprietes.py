@@ -86,6 +86,36 @@ def show():
     st.divider()
 
     # ── Gestion des mots de passe ─────────────────────────────────────────
+    # ── Section numéros SMS ──────────────────────────────────────────────────
+    st.subheader("📱 Numéros SMS par propriété")
+    st.caption("Configurez le numéro Twilio utilisé pour chaque propriété.")
+    for p in props:
+        c1, c2, c3 = st.columns([2, 2, 1])
+        with c1:
+            st.markdown(f"**{p['nom']}**")
+            if p.get("tel_sms"):
+                st.caption(f"📱 {p['tel_sms']}")
+            else:
+                st.caption("📱 Aucun numéro SMS")
+        with c2:
+            new_sms = st.text_input("N° SMS", placeholder="+33...",
+                                     key=f"sms_{p['id']}", label_visibility="collapsed")
+            new_exp = st.text_input("Expéditeur", placeholder="NomProp (max 11 car.)",
+                                     key=f"exp_{p['id']}", label_visibility="collapsed")
+        with c3:
+            if st.button("💾", key=f"save_sms_{p['id']}", help="Enregistrer"):
+                updates = {}
+                if new_sms.strip():
+                    updates["tel_sms"] = new_sms.strip()
+                if new_exp.strip():
+                    updates["nom_expediteur"] = new_exp.strip()[:11]
+                if updates:
+                    update_propriete(p["id"], updates)
+                    st.success("✅ Mis à jour")
+                    st.rerun()
+
+    st.divider()
+
     st.subheader("🔐 Mots de passe par propriété")
     st.caption("Protégez l'accès à chaque appartement. Le mot de passe sera demandé à la sélection.")
 
@@ -162,6 +192,10 @@ def show():
             with col_ville2:
                 new_ville = st.text_input("Ville", placeholder="Paris")
             new_tel = st.text_input("Téléphone", placeholder="+33 6 12 34 56 78")
+            new_tel_sms = st.text_input("📱 N° SMS/Twilio", placeholder="+33 6 12 34 56 78",
+                                         help="Numéro Twilio pour envoyer les SMS depuis cette propriété")
+            new_nom_exp = st.text_input("📤 Nom expéditeur SMS", placeholder="VillaTobias",
+                                         help="Nom affiché dans les SMS (max 11 caractères, sans espace)")
         with col2:
             new_ical = st.text_input(
                 "URL iCal (optionnel)",
