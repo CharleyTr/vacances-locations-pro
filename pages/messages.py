@@ -98,6 +98,29 @@ def show():
     if df.empty:
         st.info("Aucune réservation disponible.")
         return
+    # ── Filtre propriété global ───────────────────────────────────────────
+    props_all = {p["id"]: p["nom"] for p in _fa_props()}
+    props_filtre = {0: "🏠 Toutes les propriétés"}
+    props_filtre.update({pid: nom for pid, nom in props_all.items()
+                         if not _fa_props() or True})
+    # Reconstruire depuis fetch_proprietes
+    _all_props = fetch_proprietes()
+    props_filtre = {"all": "🏠 Toutes les propriétés"}
+    props_filtre.update({str(p["id"]): p["nom"] for p in _all_props
+                         if not p.get("mot_de_passe") or is_unlocked(p["id"])})
+
+    prop_filtre_key = st.selectbox(
+        "🏠 Propriété",
+        options=list(props_filtre.keys()),
+        format_func=lambda x: props_filtre[x],
+        key="msg_prop_filtre",
+        label_visibility="collapsed"
+    )
+    if prop_filtre_key != "all":
+        df = df[df["propriete_id"] == int(prop_filtre_key)]
+
+    st.caption(f"**{len(df)} réservation(s)** pour {props_filtre[prop_filtre_key]}")
+
     tab_wa, tab_auto, tab_email, tab_sms, tab_histo = st.tabs([
         "💬 WhatsApp", "🤖 Automatique", "✉️ Email", "📱 SMS", "📊 Historique"
     ])
