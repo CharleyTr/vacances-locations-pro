@@ -526,29 +526,20 @@ def _show_sms_manuel(df: pd.DataFrame):
         else:
             msg = (f"Rappel: paiement de {row.get('prix_net',0):.0f}€ en attente. Merci. - Vacances-Locations")
         st.caption(f"Aperçu : *{msg[:160]}*")
-    # Numéro d'expédition depuis la propriété
-    row_sms   = df[df["id"] == selected_id].iloc[0].to_dict()
-    pid_sms   = int(row_sms.get("propriete_id", 0) or 0)
-    props_sms = {p["id"]: p for p in fetch_proprietes()}
-    prop_sms  = props_sms.get(pid_sms, {})
-    from_sms  = prop_sms.get("tel_sms") or None
-    exp_sms   = prop_sms.get("nom_expediteur") or "VLP"
-    if from_sms:
-        st.caption(f"📤 Expédition depuis : {from_sms} ({exp_sms})")
-
-    if st.button("📱 Envoyer SMS", type="primary"):
-        row["telephone"] = tel
-        if tpl == "Rappel arrivée":
-            result = send_checkin_sms(row)
-        elif tpl == "Rappel paiement":
-            result = send_payment_sms(row)
-        else:
-            from integrations.brevo_client import send_sms
-            result = send_sms(tel, msg, sender=exp_sms, from_number=from_sms)
-        if result.get("ok"):
-            st.success(f"✅ SMS envoyé au {tel}")
-        else:
-            st.error(f"❌ {result.get('error')}")
+    # ── Envoi via SMS natif du téléphone ─────────────────────────────────
+    st.info("💡 Le SMS s'ouvrira dans l'app SMS de votre téléphone — il partira depuis votre numéro personnel.")
+    import urllib.parse as _up_sms
+    _tel_clean = tel.replace(" ","").replace("-","")
+    _sms_url = f"sms:{_tel_clean}?body={_up_sms.quote(msg)}"
+    st.markdown(
+        f"<a href='{_sms_url}'>"
+        f"<div style='background:#1565C0;color:white;text-align:center;"
+        f"padding:14px;border-radius:8px;font-weight:bold;font-size:15px;"
+        f"margin:8px 0;cursor:pointer'>"
+        f"📱 Ouvrir dans l'app SMS</div></a>",
+        unsafe_allow_html=True
+    )
+    st.caption(f"Destinataire : {tel}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HISTORIQUE
