@@ -29,8 +29,20 @@ def show():
                 st.info("Allez dans 📋 Réservations → 📤 Import CSV pour importer vos données.")
                 return
         except Exception as e:
-            st.error(f"Erreur vérification table : {e}")
-            return
+            err_str = str(e)
+            if "JWT" in err_str or "expired" in err_str or "PGRST303" in err_str:
+                # JWT expiré — renouveler le client Supabase
+                try:
+                    from database.supabase_client import _reset_client
+                    _reset_client()
+                except Exception:
+                    pass
+                st.warning("⚠️ Session expirée — rechargement en cours...")
+                import time; time.sleep(1)
+                st.rerun()
+            else:
+                st.error(f"Erreur vérification table : {e}")
+                return
 
     df_all = load_reservations()
     if df_all.empty:
