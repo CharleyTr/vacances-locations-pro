@@ -248,12 +248,14 @@ def _show_envoyer():
                 unsafe_allow_html=True
             )
         else:
-            sms_url = f"sms:{telephone}?body={urllib.parse.quote(msg_final)}"
+            _tel_s = telephone.replace(" ","").replace("-","")
+            sms_url = f"sms:{_tel_s}?body={urllib.parse.quote(msg_final)}"
+            st.info("💡 Le SMS partira depuis votre numéro personnel.")
             st.markdown(
                 f"<a href='{sms_url}'>"
                 f"<div style='background:#1565C0;color:white;text-align:center;"
                 f"padding:12px;border-radius:8px;font-weight:bold;font-size:15px'>"
-                f"💬 Ouvrir SMS</div></a>",
+                f"📱 Ouvrir dans l'app SMS</div></a>",
                 unsafe_allow_html=True
             )
     with c2:
