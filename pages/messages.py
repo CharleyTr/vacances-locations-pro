@@ -526,6 +526,16 @@ def _show_sms_manuel(df: pd.DataFrame):
         else:
             msg = (f"Rappel: paiement de {row.get('prix_net',0):.0f}€ en attente. Merci. - Vacances-Locations")
         st.caption(f"Aperçu : *{msg[:160]}*")
+    # Numéro d'expédition depuis la propriété
+    row_sms   = df[df["id"] == selected_id].iloc[0].to_dict()
+    pid_sms   = int(row_sms.get("propriete_id", 0) or 0)
+    props_sms = {p["id"]: p for p in fetch_proprietes()}
+    prop_sms  = props_sms.get(pid_sms, {})
+    from_sms  = prop_sms.get("tel_sms") or None
+    exp_sms   = prop_sms.get("nom_expediteur") or "VLP"
+    if from_sms:
+        st.caption(f"📤 Expédition depuis : {from_sms} ({exp_sms})")
+
     if st.button("📱 Envoyer SMS", type="primary"):
         row["telephone"] = tel
         if tpl == "Rappel arrivée":
@@ -534,7 +544,7 @@ def _show_sms_manuel(df: pd.DataFrame):
             result = send_payment_sms(row)
         else:
             from integrations.brevo_client import send_sms
-            result = send_sms(tel, msg)
+            result = send_sms(tel, msg, sender=exp_sms, from_number=from_sms)
         if result.get("ok"):
             st.success(f"✅ SMS envoyé au {tel}")
         else:
