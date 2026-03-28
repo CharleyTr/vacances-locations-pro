@@ -72,7 +72,8 @@ def show():
     # ── Bandeau événements du mois ────────────────────────────────────────
     try:
         from database.evenements_repo import get_evenements_mois, COULEURS_TYPE, TYPE_LABELS
-        _evts = get_evenements_mois(annee, mois, prop_choix if prop_choix != 0 else None)
+        _evts = get_evenements_mois(int(annee), int(mois), 
+                                     int(prop_choix) if prop_choix and prop_choix != 0 else None)
         if _evts:
             _evts_html = " &nbsp; ".join([
                 f"<span style='background:{e.get('couleur') or COULEURS_TYPE.get(e.get('type',''),'#FF6B35')};"
@@ -88,8 +89,10 @@ def show():
                 f"🎪 <b>Événements :</b> {_evts_html}</div>",
                 unsafe_allow_html=True
             )
-    except Exception:
-        pass
+        else:
+            st.caption(f"🔍 Aucun événement pour {mois}/{annee}")
+    except Exception as _evt_err:
+        st.caption(f"⚠️ Événements: {_evt_err}")
 
     if "📅 Mois" in vue:
         if df_year.empty:
