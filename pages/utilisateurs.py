@@ -105,13 +105,60 @@ def show():
                         else:
                             st.error("❌ Erreur lors de la sauvegarde.")
 
-    # ── TAB 2 : Inviter un propriétaire ──────────────────────────────────
+    # ── TAB 2 : Ajouter un propriétaire ──────────────────────────────────
     with tab2:
-        st.subheader("➕ Inviter un nouveau propriétaire")
-        st.markdown("""
-Supabase enverra automatiquement un **email d'invitation** avec un lien de connexion.
-Le propriétaire choisira son mot de passe à la première connexion.
+        st.subheader("➕ Ajouter un propriétaire / gestionnaire")
+        st.info("""
+**Comment ajouter un utilisateur :**
+1. Va dans **Supabase → Authentication → Users → Add user**
+2. Saisis l'email + mot de passe → coche **Auto Confirm User** → **Create user**
+3. Reviens ici et clique **🔄 Synchroniser les profils** ci-dessous
         """)
+
+        # ── Synchronisation des profils manquants ────────────────────────
+        st.divider()
+        st.markdown("### 🔄 Synchroniser les profils")
+        st.caption("Crée automatiquement les profils pour les utilisateurs Auth sans profil.")
+
+        if st.button("🔄 Synchroniser les profils depuis Supabase Auth", 
+                     type="primary", use_container_width=True, key="btn_sync_profiles"):
+            import os, requests as _req
+            _surl = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL",""))
+            _skey = st.secrets.get("SUPABASE_SERVICE_KEY", os.environ.get("SUPABASE_SERVICE_KEY",""))
+            from database.supabase_client import get_supabase
+            _sb2 = get_supabase()
+            try:
+                # Récupérer tous les users Auth
+                r = _req.get(f"{_surl}/auth/v1/admin/users",
+                             headers={"apikey": _skey, "Authorization": f"Bearer {_skey}"},
+                             timeout=15)
+                if r.status_code == 200:
+                    auth_users = r.json().get("users", [])
+                    # Récupérer les profils existants
+                    existing_ids = {p["id"] for p in (_sb2.table("profiles").select("id").execute().data or [])}
+                    created = 0
+                    for u in auth_users:
+                        if u["id"] not in existing_ids:
+                            _sb2.table("profiles").insert({
+                                "id":    u["id"],
+                                "email": u["email"],
+                                "role":  "proprietaire",
+                                "nom":   u["email"].split("@")[0],
+                            }).execute()
+                            created += 1
+                    if created:
+                        st.success(f"✅ {created} profil(s) créé(s) !")
+                    else:
+                        st.success("✅ Tous les utilisateurs ont déjà un profil.")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Erreur Auth : {r.status_code}")
+            except Exception as e:
+                st.error(f"❌ {e}")
+
+        st.divider()
+        st.markdown("### ✏️ Configurer un profil existant")
+        st.caption("Modifie le rôle et les propriétés d'un utilisateur déjà créé dans Supabase.")
         # Vérifier si la migration est complète
     from database.supabase_client import get_supabase
     _sb = get_supabase()
@@ -128,85 +175,54 @@ Le propriétaire choisira son mot de passe à la première connexion.
         st.warning("⚠️ Scripts SQL 015 + 016 à exécuter dans Supabase pour activer les invitations.")
 
     props_list = fetch_all()
-    with st.form("form_invite", clear_on_submit=True):
+    with st.form("form_config_profil", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
-            inv_email = st.text_input("Email *", placeholder="proprietaire@email.fr")
-            inv_nom   = st.text_input("Nom (optionnel)", placeholder="Jean Dupont")
+            cfg_email = st.text_input("Email de l'utilisateur *", placeholder="user@email.fr")
+            cfg_nom   = st.text_input("Nom (optionnel)", placeholder="Jean Dupont")
         with col2:
-            inv_role  = st.selectbox("Rôle", ["proprietaire", "gestionnaire", "lecteur"],
+            cfg_role  = st.selectbox("Rôle", ["proprietaire", "gestionnaire", "lecteur"],
                                       format_func=lambda x: {
-                                          "proprietaire": "🏠 Propriétaire (lecture + écriture)",
-                                          "gestionnaire": "🔧 Gestionnaire (tout sauf admin)",
-                                          "lecteur":      "👁️ Lecteur (consultation uniquement)",
+                                          "proprietaire": "🏠 Propriétaire",
+                                          "gestionnaire": "🔧 Gestionnaire",
+                                          "lecteur":      "👁️ Lecteur",
                                       }[x])
-            inv_props = st.multiselect(
+            cfg_props = st.multiselect(
                 "Propriétés accessibles *",
                 options=[p["id"] for p in props_list],
                 format_func=lambda x: next((p["nom"] for p in props_list if p["id"]==x), str(x))
             )
-
-        submitted = st.form_submit_button("📧 Envoyer l'invitation", type="primary",
-                                           use_container_width=True)
-
-        if submitted:
-            if not inv_email or not inv_props:
+        submitted_cfg = st.form_submit_button("💾 Enregistrer la configuration",
+                                               type="primary", use_container_width=True)
+        if submitted_cfg:
+            if not cfg_email or not cfg_props:
                 st.error("Email et au moins une propriété sont obligatoires.")
             else:
                 import os, requests as _req
                 _surl = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL",""))
                 _skey = st.secrets.get("SUPABASE_SERVICE_KEY", os.environ.get("SUPABASE_SERVICE_KEY",""))
-                _anon = st.secrets.get("SUPABASE_KEY", os.environ.get("SUPABASE_KEY",""))
                 from database.supabase_client import get_supabase
-                _sb = get_supabase()
-
-                with st.spinner("Traitement en cours..."):
-                    user_id = None
-
-                    # Étape 1 : Essayer d'inviter
-                    r = _req.post(
-                        f"{_surl}/auth/v1/invite",
-                        headers={"apikey": _skey, "Authorization": f"Bearer {_skey}",
-                                 "Content-Type": "application/json"},
-                        json={"email": inv_email}, timeout=15,
-                    )
-
-                    if r.status_code in (200, 201):
-                        user_id = r.json().get("id")
-                        st.success(f"✅ Invitation envoyée à **{inv_email}** !")
-                    elif "email_exists" in r.text:
-                        # Utilisateur déjà existant — récupérer son UUID
-                        r2 = _req.get(
-                            f"{_surl}/auth/v1/admin/users",
-                            headers={"apikey": _skey, "Authorization": f"Bearer {_skey}"},
-                            timeout=10,
-                        )
-                        if r2.status_code == 200:
-                            users = r2.json().get("users", [])
-                            existing = next((u for u in users
-                                             if u.get("email","").lower() == inv_email.lower()), None)
-                            if existing:
-                                user_id = existing["id"]
-                                st.success(f"✅ Accès configuré pour **{inv_email}** (compte existant).")
-                            else:
-                                st.error("Utilisateur introuvable dans la liste Auth.")
-                        else:
-                            st.error(f"Erreur récupération users: {r2.status_code}")
+                _sb3 = get_supabase()
+                # Trouver l'UUID de l'email
+                try:
+                    r = _req.get(f"{_surl}/auth/v1/admin/users",
+                                 headers={"apikey": _skey, "Authorization": f"Bearer {_skey}"},
+                                 timeout=10)
+                    users = r.json().get("users", []) if r.status_code == 200 else []
+                    user = next((u for u in users if u.get("email","").lower() == cfg_email.lower()), None)
+                    if not user:
+                        st.error(f"❌ Utilisateur {cfg_email} non trouvé dans Supabase Auth. Créez-le d'abord.")
                     else:
-                        st.error(f"❌ Erreur invitation: {r.status_code} — {r.text[:150]}")
-
-                    # Étape 2 : Créer profil + accès si user_id trouvé
-                    if user_id and _sb:
-                        _sb.table("profiles").upsert({
-                            "id": user_id, "email": inv_email, "role": inv_role,
-                            "nom": inv_nom or inv_email.split("@")[0]
-                        }).execute()
-                        for pid in inv_props:
-                            _sb.table("propriete_access").upsert({
-                                "user_id": user_id, "propriete_id": pid, "role": inv_role
+                        uid = user["id"]
+                        _sb3.table("profiles").upsert({
+                            "id": uid, "email": cfg_email,
+                            "role": cfg_role, "nom": cfg_nom or cfg_email.split("@")[0],
+                        }, on_conflict="id").execute()
+                        for pid in cfg_props:
+                            _sb3.table("propriete_access").upsert({
+                                "user_id": uid, "propriete_id": pid, "role": cfg_role
                             }, on_conflict="user_id,propriete_id").execute()
-                        prop_noms = ', '.join(
-                            next((p['nom'] for p in props_list if p['id']==pid), str(pid))
-                            for pid in inv_props
-                        )
-                        st.info(f"Propriétés assignées : {prop_noms}")
+                        st.success(f"✅ Profil configuré pour **{cfg_email}** !")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"❌ {e}")
