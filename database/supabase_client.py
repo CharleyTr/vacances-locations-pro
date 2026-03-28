@@ -37,6 +37,13 @@ def get_supabase() -> Client | None:
         return None
 
 
+def _reset_client():
+    """Force la recréation du client Supabase (utile si JWT expiré)."""
+    global _client, _error
+    _client = None
+    _error = None
+
+
 def is_connected() -> bool:
     return get_supabase() is not None
 
