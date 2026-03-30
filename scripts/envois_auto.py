@@ -11,11 +11,17 @@ import requests
 from datetime import date, timedelta, datetime
 
 # ── Configuration ──────────────────────────────────────────────────────────
-SUPABASE_URL  = os.environ["SUPABASE_URL"]
-SUPABASE_KEY  = os.environ["SUPABASE_SERVICE_KEY"]
-BREVO_KEY     = os.environ["BREVO_API_KEY"]
-EMAIL_FROM    = os.environ.get("EMAIL_FROM", "")
-APP_URL       = os.environ.get("APP_URL", "")
+def _clean(val: str) -> str:
+    """Enlève les guillemets si la valeur a été copiée avec."""
+    if val:
+        val = val.strip().strip('"').strip("'")
+    return val
+
+SUPABASE_URL  = _clean(os.environ["SUPABASE_URL"])
+SUPABASE_KEY  = _clean(os.environ["SUPABASE_SERVICE_KEY"])
+BREVO_KEY     = _clean(os.environ["BREVO_API_KEY"])
+EMAIL_FROM    = _clean(os.environ.get("EMAIL_FROM", ""))
+APP_URL       = _clean(os.environ.get("APP_URL", ""))
 
 TODAY     = date.today()
 DEMAIN    = TODAY + timedelta(days=1)
