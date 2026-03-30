@@ -1,4 +1,4 @@
-name: Envois automatiques VLP
+""": Envois automatiques VLP
 
 on:
   schedule:
