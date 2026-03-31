@@ -11,6 +11,39 @@ from services.proprietes_service import get_proprietes_dict, filter_df, get_prop
 
 
 def show():
+    # ── Bandeau arrivées demain ──────────────────────────────────────────────
+    try:
+        from datetime import date, timedelta
+        import pandas as pd
+        _demain = date.today() + timedelta(days=1)
+        _df_all = load_reservations()
+        if not _df_all.empty:
+            _df_all["date_arrivee"] = pd.to_datetime(_df_all["date_arrivee"])
+            _arr = _df_all[
+                (_df_all["date_arrivee"].dt.date == _demain) &
+                (_df_all["plateforme"] != "Fermeture")
+            ]
+            if not _arr.empty:
+                _lignes = []
+                for _, _r in _arr.iterrows():
+                    _tel = str(_r.get("telephone","") or "")
+                    _lignes.append(
+                        f"<b>{_r.get('nom_client','?')}</b> — "
+                        f"{_r.get('plateforme','?')} — "
+                        f"📱 {_tel if _tel else 'pas de tél'}"
+                    )
+                st.markdown(
+                    f"<div style='background:#E8F5E9;border-left:5px solid #2E7D32;"
+                    f"padding:12px 18px;border-radius:0 8px 8px 0;margin-bottom:16px'>"
+                    f"<b style='color:#2E7D32;font-size:15px'>🏠 Arrivée(s) demain "
+                    f"({_demain.strftime('%d/%m/%Y')}) :</b><br>"
+                    f"{'<br>'.join(_lignes)}"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+    except Exception as _e:
+        st.caption(f"⚠️ Bandeau: {_e}")
+
     st.title("📊 Dashboard")
 
     if is_connected():
