@@ -33,11 +33,11 @@ def show():
                         f"📱 {_tel if _tel else 'pas de tél'}"
                     )
                 st.markdown(
-                    f"<div style='background:#E8F5E9;border-left:5px solid #2E7D32;"
+                    f"<div style='background:#1B5E20;border-left:5px solid #69F0AE;"
                     f"padding:12px 18px;border-radius:0 8px 8px 0;margin-bottom:16px'>"
-                    f"<b style='color:#2E7D32;font-size:15px'>🏠 Arrivée(s) demain "
+                    f"<b style='color:#69F0AE;font-size:15px'>🏠 Arrivée(s) demain "
                     f"({_demain.strftime('%d/%m/%Y')}) :</b><br>"
-                    f"{'<br>'.join(_lignes)}"
+                    f"<span style='color:#FFFFFF'>{'<br>'.join(_lignes)}</span>"
                     f"</div>",
                     unsafe_allow_html=True
                 )
