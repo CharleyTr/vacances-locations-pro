@@ -203,12 +203,12 @@ def _show_stats_pays(df):
 
 
 
-def _show_performances(df_all: "pd.DataFrame", props: dict, annee: int):
+def _show_performances(df_filtered: "pd.DataFrame", props: dict, annee: int):
     """Comparaison N vs N-1 par propriété."""
     import plotly.graph_objects as go
     st.subheader(f"🏆 Performances {annee} vs {annee - 1}")
 
-    df_reel = df_all[df_all["plateforme"] != "Fermeture"].copy()
+    df_reel = df_filtered[df_filtered["plateforme"] != "Fermeture"].copy()
     annee_prec = annee - 1
 
     props_list = [{"id": 0, "nom": "Toutes"}] + [{"id": pid, "nom": nom} for pid, nom in props.items()]
@@ -289,14 +289,14 @@ def _show_performances(df_all: "pd.DataFrame", props: dict, annee: int):
                        f"{row[f'Résas {annee}'] - row[f'Résas {annee_prec}']:+d}", delta_color=col)
 
 
-def _show_previsions(df_all: "pd.DataFrame", props: dict, annee: int):
+def _show_previsions(df_filtered: "pd.DataFrame", props: dict, annee: int):
     """Prévisions de revenus basées sur les réservations futures."""
     st.subheader("🔮 Prévisions de revenus")
 
     from datetime import date
     aujourd_hui = pd.Timestamp(date.today())
 
-    df_reel = df_all[df_all["plateforme"] != "Fermeture"].copy()
+    df_reel = df_filtered[df_filtered["plateforme"] != "Fermeture"].copy()
     df_futur = df_reel[df_reel["date_arrivee"] >= aujourd_hui].copy()
     df_passe = df_reel[df_reel["date_arrivee"] < aujourd_hui].copy()
 
@@ -357,7 +357,7 @@ def _show_previsions(df_all: "pd.DataFrame", props: dict, annee: int):
                   })
 
 
-def _show_saisonnalite(df_all: "pd.DataFrame", props: dict, annee: int):
+def _show_saisonnalite(df_filtered: "pd.DataFrame", props: dict, annee: int):
     """Analyse de saisonnalité et recommandations tarifaires."""
     import plotly.graph_objects as go
     st.subheader("🌡️ Analyse de saisonnalité")
@@ -365,7 +365,7 @@ def _show_saisonnalite(df_all: "pd.DataFrame", props: dict, annee: int):
     MOIS_FR = ["Jan","Fév","Mar","Avr","Mai","Jun",
                "Jul","Aoû","Sep","Oct","Nov","Déc"]
 
-    df_reel = df_all[df_all["plateforme"] != "Fermeture"].copy()
+    df_reel = df_filtered[df_filtered["plateforme"] != "Fermeture"].copy()
     df_reel["mois_num"] = df_reel["date_arrivee"].dt.month
     df_reel["mois_nom"] = df_reel["mois_num"].apply(lambda x: MOIS_FR[x-1] if pd.notna(x) else "")
 
@@ -522,13 +522,14 @@ def show():
         _show_stats_pays(df_pays_filtre)
 
     with tab_perf:
-        _show_performances(df_all, props, int(annee))
+        # df est déjà filtré par propriété — pas d'accès aux autres propriétés
+        _show_performances(df, props, int(annee))
 
     with tab_prev:
-        _show_previsions(df_all, props, int(annee))
+        _show_previsions(df, props, int(annee))
 
     with tab_saison:
-        _show_saisonnalite(df_all, props, int(annee))
+        _show_saisonnalite(df, props, int(annee))
 
     with tab_bilan:
         df_an = df[df["annee"] == annee]
