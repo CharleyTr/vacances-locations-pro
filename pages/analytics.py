@@ -211,80 +211,19 @@ def _show_performances(df_filtered: "pd.DataFrame", props: dict, annee: int):
     df_reel = df_filtered[df_filtered["plateforme"] != "Fermeture"].copy()
     annee_prec = annee - 1
 
-    rows = []
-    for p in props_list:
-        pid = p["id"]
-        df_n   = df_reel[df_reel["annee"] == annee]   if pid == 0 else df_reel[(df_reel["annee"] == annee)   & (df_reel["propriete_id"] == pid)]
-        df_n1  = df_reel[df_reel["annee"] == annee_prec] if pid == 0 else df_reel[(df_reel["annee"] == annee_prec) & (df_reel["propriete_id"] == pid)]
+    # Données uniquement pour cette propriété (df_reel déjà filtré)
+    df_n  = df_reel[df_reel["annee"] == annee]
+    df_n1 = df_reel[df_reel["annee"] == annee_prec]
 
-        ca_n   = float(df_n["prix_net"].fillna(0).sum())
-        ca_n1  = float(df_n1["prix_net"].fillna(0).sum())
-        nuits_n  = float(df_n["nuitees"].fillna(0).sum())
-        nuits_n1 = float(df_n1["nuitees"].fillna(0).sum())
-        res_n  = len(df_n)
-        res_n1 = len(df_n1)
+    ca_n      = float(df_n["prix_net"].fillna(0).sum())
+    ca_n1     = float(df_n1["prix_net"].fillna(0).sum())
+    nuits_n   = float(df_n["nuitees"].fillna(0).sum())
+    nuits_n1  = float(df_n1["nuitees"].fillna(0).sum())
+    res_n     = len(df_n)
+    res_n1    = len(df_n1)
 
-        delta_ca    = ((ca_n - ca_n1) / ca_n1 * 100) if ca_n1 > 0 else 0
-        delta_nuits = ((nuits_n - nuits_n1) / nuits_n1 * 100) if nuits_n1 > 0 else 0
-
-        rows.append({
-            "Propriété": p["nom"],
-            f"CA Net {annee}": ca_n,
-            f"CA Net {annee_prec}": ca_n1,
-            "Évol. CA %": delta_ca,
-            f"Nuits {annee}": int(nuits_n),
-            f"Nuits {annee_prec}": int(nuits_n1),
-            "Évol. Nuits %": delta_nuits,
-            f"Résas {annee}": res_n,
-            f"Résas {annee_prec}": res_n1,
-        })
-
-    df_perf = pd.DataFrame(rows)
-
-    # KPIs globaux
-    row_all = df_perf[df_perf["Propriété"] == "Toutes"].iloc[0]
-    k1, k2, k3 = st.columns(3)
-    k1.metric(f"💶 CA Net {annee}",
-              f"{row_all[f'CA Net {annee}']:,.0f} €",
-              f"{row_all['Évol. CA %']:+.1f}% vs {annee_prec}",
-              delta_color="normal")
-    k2.metric(f"🌙 Nuits {annee}",
-              f"{int(row_all[f'Nuits {annee}'])}",
-              f"{row_all['Évol. Nuits %']:+.1f}% vs {annee_prec}",
-              delta_color="normal")
-    k3.metric(f"📅 Résas {annee}",
-              row_all[f"Résas {annee}"],
-              f"{row_all[f'Résas {annee}'] - row_all[f'Résas {annee_prec}']:+d} vs {annee_prec}",
-              delta_color="normal")
-
-    st.divider()
-
-    # Graphique barres comparatif par propriété
-    df_props = df_perf[df_perf["Propriété"] != "Toutes"]
-    if not df_props.empty:
-        fig = go.Figure()
-        fig.add_trace(go.Bar(name=str(annee_prec), x=df_props["Propriété"],
-                              y=df_props[f"CA Net {annee_prec}"],
-                              marker_color="#90CAF9"))
-        fig.add_trace(go.Bar(name=str(annee), x=df_props["Propriété"],
-                              y=df_props[f"CA Net {annee}"],
-                              marker_color="#1565C0"))
-        fig.update_layout(barmode="group", title=f"CA Net {annee_prec} vs {annee}",
-                           height=350, margin=dict(t=40, b=20))
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Tableau détaillé
-    st.markdown("#### 📋 Détail par propriété")
-    for _, row in df_props.iterrows():
-        col = "normal" if row["Évol. CA %"] >= 0 else "inverse"
-        with st.expander(f"🏠 {row['Propriété']}", expanded=False):
-            c1, c2, c3 = st.columns(3)
-            c1.metric("💶 CA Net", f"{row[f'CA Net {annee}']:,.0f} €",
-                       f"{row['Évol. CA %']:+.1f}%", delta_color=col)
-            c2.metric("🌙 Nuits", str(row[f"Nuits {annee}"]),
-                       f"{row['Évol. Nuits %']:+.1f}%", delta_color=col)
-            c3.metric("📅 Réservations", str(row[f"Résas {annee}"]),
-                       f"{row[f'Résas {annee}'] - row[f'Résas {annee_prec}']:+d}", delta_color=col)
+    delta_ca    = ((ca_n - ca_n1) / ca_n1 * 100) if ca_n1 > 0 else 0
+    delta_nuits = ((nuits_n - nuits_n1) / nuits_n1 * 100) if nuits_n1 > 0 else 0
 
 
 def _show_previsions(df_filtered: "pd.DataFrame", props: dict, annee: int):
