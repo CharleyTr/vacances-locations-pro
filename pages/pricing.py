@@ -98,7 +98,7 @@ Réponds en français, de façon pratique et directe. Maximum 300 mots."""
             data = resp.json()
             return data["content"][0]["text"]
         else:
-            return f"Erreur API ({resp.status_code})"
+            return f"Erreur API ({resp.status_code}) — {resp.text[:200]}"
     except Exception as e:
         return f"Erreur de connexion : {e}"
 MOIS_LONG = ["Janvier","Février","Mars","Avril","Mai","Juin",
