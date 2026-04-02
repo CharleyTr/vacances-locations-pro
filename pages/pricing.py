@@ -89,7 +89,7 @@ Réponds en français, de façon pratique et directe. Maximum 300 mots."""
                 "Content-Type": "application/json",
             },
             json={
-                "model": "claude-3-haiku-20240307",
+                "model": "claude-3-5-haiku-20241022",
                 "max_tokens": 600,
                 "messages": [{"role": "user", "content": prompt}]
             },
