@@ -62,6 +62,7 @@ Historique des performances (données réelles) :
 Concurrents observés :
 {conc_resume if conc_resume else "  Pas de données concurrentes saisies."}
 
+
 Donne une analyse concise en 4 parties :
 1. **Diagnostic** (2-3 phrases sur les performances actuelles)
 2. **Opportunités** (mois ou périodes où le prix pourrait être augmenté)
