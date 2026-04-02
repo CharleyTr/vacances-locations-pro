@@ -521,6 +521,15 @@ def show():
         df_pays_filtre = df if annee_pays == "Toutes" else df[df["annee"] == int(annee_pays)]
         _show_stats_pays(df_pays_filtre)
 
+    with tab_perf:
+        _show_performances(df_all, props, int(annee))
+
+    with tab_prev:
+        _show_previsions(df_all, props, int(annee))
+
+    with tab_saison:
+        _show_saisonnalite(df_all, props, int(annee))
+
     with tab_bilan:
         df_an = df[df["annee"] == annee]
         if df_an.empty:
