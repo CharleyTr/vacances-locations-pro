@@ -24,7 +24,6 @@ from database.pricing_repo import (
 MOIS_FR = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
 
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Analyse IA (Claude)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -89,7 +88,7 @@ Réponds en français, de façon pratique et directe. Maximum 300 mots."""
                 "Content-Type": "application/json",
             },
             json={
-                "model": "claude-3-5-haiku-20241022",
+                "model": "claude-haiku-4-5-20251001",
                 "max_tokens": 600,
                 "messages": [{"role": "user", "content": prompt}]
             },
@@ -99,7 +98,7 @@ Réponds en français, de façon pratique et directe. Maximum 300 mots."""
             data = resp.json()
             return data["content"][0]["text"]
         else:
-            return f"Erreur API ({resp.status_code}) — {resp.text[:200]}"
+            return f"Erreur API ({resp.status_code})"
     except Exception as e:
         return f"Erreur de connexion : {e}"
 MOIS_LONG = ["Janvier","Février","Mars","Avril","Mai","Juin",
