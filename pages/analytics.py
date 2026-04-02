@@ -211,8 +211,6 @@ def _show_performances(df_filtered: "pd.DataFrame", props: dict, annee: int):
     df_reel = df_filtered[df_filtered["plateforme"] != "Fermeture"].copy()
     annee_prec = annee - 1
 
-    props_list = [{"id": 0, "nom": "Toutes"}] + [{"id": pid, "nom": nom} for pid, nom in props.items()]
-
     rows = []
     for p in props_list:
         pid = p["id"]
@@ -441,7 +439,10 @@ def _show_saisonnalite(df_filtered: "pd.DataFrame", props: dict, annee: int):
     # Événements locaux si disponibles
     try:
         from database.evenements_repo import get_evenements
-        evts = get_evenements()
+        # Récupérer les propriétés uniques dans df_filtered
+        prop_ids = df_filtered["propriete_id"].dropna().unique().tolist()
+        prop_id_evt = int(prop_ids[0]) if len(prop_ids) == 1 else None
+        evts = get_evenements(propriete_id=prop_id_evt)
         if evts:
             st.divider()
             st.markdown("### 🎪 Événements à prendre en compte")
