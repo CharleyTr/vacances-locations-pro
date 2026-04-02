@@ -62,7 +62,6 @@ Historique des performances (données réelles) :
 Concurrents observés :
 {conc_resume if conc_resume else "  Pas de données concurrentes saisies."}
 
-
 Donne une analyse concise en 4 parties :
 1. **Diagnostic** (2-3 phrases sur les performances actuelles)
 2. **Opportunités** (mois ou périodes où le prix pourrait être augmenté)
@@ -72,9 +71,22 @@ Donne une analyse concise en 4 parties :
 Réponds en français, de façon pratique et directe. Maximum 300 mots."""
 
     try:
+        import os as _os
+        try:
+            import streamlit as _st
+            api_key = _st.secrets.get("ANTHROPIC_API_KEY",
+                       _os.environ.get("ANTHROPIC_API_KEY", ""))
+        except Exception:
+            api_key = _os.environ.get("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            return "Erreur API (401) — ANTHROPIC_API_KEY manquante dans les Secrets"
         resp = requests.post(
             "https://api.anthropic.com/v1/messages",
-            headers={"Content-Type": "application/json"},
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
             json={
                 "model": "claude-3-5-sonnet-20241022",
                 "max_tokens": 600,
