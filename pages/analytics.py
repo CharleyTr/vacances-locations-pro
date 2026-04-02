@@ -225,6 +225,44 @@ def _show_performances(df_filtered: "pd.DataFrame", props: dict, annee: int):
     delta_ca    = ((ca_n - ca_n1) / ca_n1 * 100) if ca_n1 > 0 else 0
     delta_nuits = ((nuits_n - nuits_n1) / nuits_n1 * 100) if nuits_n1 > 0 else 0
 
+    # KPIs
+    k1, k2, k3 = st.columns(3)
+    k1.metric(f"💶 CA Net {annee}", f"{ca_n:,.0f} €",
+              f"{delta_ca:+.1f}% vs {annee_prec}", delta_color="normal")
+    k2.metric(f"🌙 Nuits {annee}", f"{int(nuits_n)}",
+              f"{delta_nuits:+.1f}% vs {annee_prec}", delta_color="normal")
+    k3.metric(f"📅 Réservations {annee}", res_n,
+              f"{res_n - res_n1:+d} vs {annee_prec}", delta_color="normal")
+
+    st.divider()
+
+    # Graphique mensuel N vs N-1
+    MOIS_FR = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
+    df_n["mois"]  = df_n["date_arrivee"].dt.month
+    df_n1["mois"] = df_n1["date_arrivee"].dt.month
+    m_n  = df_n.groupby("mois")["prix_net"].sum().reindex(range(1,13), fill_value=0)
+    m_n1 = df_n1.groupby("mois")["prix_net"].sum().reindex(range(1,13), fill_value=0)
+
+    import plotly.graph_objects as go
+    fig = go.Figure()
+    fig.add_trace(go.Bar(name=str(annee_prec), x=MOIS_FR, y=m_n1.values, marker_color="#90CAF9"))
+    fig.add_trace(go.Bar(name=str(annee), x=MOIS_FR, y=m_n.values, marker_color="#1565C0"))
+    fig.update_layout(barmode="group", title=f"CA Net mensuel {annee_prec} vs {annee}",
+                       height=350, margin=dict(t=40, b=20))
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Tableau mensuel
+    st.markdown("#### 📋 Détail mensuel")
+    rows_detail = []
+    for m in range(1, 13):
+        rows_detail.append({
+            "Mois": MOIS_FR[m-1],
+            f"CA {annee_prec}": f"{m_n1[m]:,.0f} €",
+            f"CA {annee}": f"{m_n[m]:,.0f} €",
+            "Évolution": f"{((m_n[m]-m_n1[m])/m_n1[m]*100):+.1f}%" if m_n1[m] > 0 else "—",
+        })
+    st.dataframe(pd.DataFrame(rows_detail), use_container_width=True, hide_index=True)
+
 
 def _show_previsions(df_filtered: "pd.DataFrame", props: dict, annee: int):
     """Prévisions de revenus basées sur les réservations futures."""
