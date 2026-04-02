@@ -75,7 +75,7 @@ Réponds en français, de façon pratique et directe. Maximum 300 mots."""
             "https://api.anthropic.com/v1/messages",
             headers={"Content-Type": "application/json"},
             json={
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-3-5-sonnet-20241022",
                 "max_tokens": 600,
                 "messages": [{"role": "user", "content": prompt}]
             },
