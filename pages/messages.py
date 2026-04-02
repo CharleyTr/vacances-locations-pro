@@ -500,46 +500,115 @@ def _show_email_manuel(df: pd.DataFrame):
 # ─────────────────────────────────────────────────────────────────────────────
 def _show_sms_manuel(df: pd.DataFrame):
     st.subheader("📱 Envoyer un SMS")
-    if not BREVO_API_KEY:
-        st.error("⛔ BREVO_API_KEY non configurée.")
-        return
+    st.caption("Le SMS partira depuis votre numéro personnel via l'app SMS de votre téléphone.")
+
     df_tel = df[df["telephone"].notna()]
     if df_tel.empty:
         st.warning("Aucune réservation avec téléphone.")
         return
-    options = {row["id"]: f"#{row['id']} — {row['nom_client']} ({row.get('telephone','')})"
-               for _, row in df_tel.sort_values("date_arrivee", ascending=False).iterrows()}
+
+    # ── Sélection réservation ─────────────────────────────────────────────
+    options = {
+        row["id"]: (
+            f"{row['nom_client']} — "
+            f"{row['plateforme']} — "
+            f"{row['date_arrivee'].strftime('%d/%m/%Y') if hasattr(row['date_arrivee'], 'strftime') else str(row['date_arrivee'])[:10]} — "
+            f"📱 {row.get('telephone','')}"
+        )
+        for _, row in df_tel.sort_values("date_arrivee", ascending=False).iterrows()
+    }
     selected_id = st.selectbox("Réservation", list(options.keys()),
                                 format_func=lambda x: options[x], key="sms_sel")
     row = df[df["id"] == selected_id].iloc[0].to_dict()
-    col1, col2 = st.columns(2)
+    tel = str(row.get("telephone", "") or "").replace(" ","").replace("-","")
+
+    # ── Sélection template WhatsApp ───────────────────────────────────────
+    tpls_sms = get_templates(canal="whatsapp")  # Utilise les templates WhatsApp
+    tpl_options = {"__perso__": "✏️ Message personnalisé"}
+    tpl_options.update({
+        t["id"]: f"{t['nom']}  ({MOMENTS.get(t.get('moment',''), '')})"
+        for t in tpls_sms
+    })
+
+    # Propriété pour appliquer le template
+    props_map = {p["id"]: p for p in fetch_proprietes()}
+    prop_id   = int(row.get("propriete_id", 0) or 0)
+    prop_data = props_map.get(prop_id, {})
+    prop_nom  = prop_data.get("nom", "")
+    ville     = prop_data.get("adresse", "") or prop_data.get("ville", "")
+    signataire = prop_data.get("signataire", "") or ""
+
+    col1, col2 = st.columns([3, 1])
     with col1:
-        tpl = st.selectbox("Template", ["Rappel arrivée", "Rappel paiement", "Personnalisé"], key="sms_tpl")
+        tpl_id = st.selectbox("Template message", list(tpl_options.keys()),
+                               format_func=lambda x: tpl_options[x], key="sms_tpl")
     with col2:
-        tel = st.text_input("Téléphone", value=str(row.get("telephone", "") or ""))
-    if tpl == "Personnalisé":
-        msg = st.text_area("Message (160 car. max)", max_chars=160)
+        tel_input = st.text_input("Téléphone", value=tel, key="sms_tel")
+
+    # ── Générer le message ────────────────────────────────────────────────
+    if tpl_id == "__perso__":
+        msg = st.text_area("Message", height=150, key="sms_custom",
+                            placeholder="Tapez votre message...")
     else:
-        if tpl == "Rappel arrivée":
-            msg = (f"Bonjour {row.get('nom_client','').split()[0]}, votre arrivée est le "
-                   f"{row.get('date_arrivee','')}. A bientôt ! - Vacances-Locations")
+        tpl_obj = next((t for t in tpls_sms if t["id"] == tpl_id), None)
+        if tpl_obj:
+            msg = apply_template(tpl_obj["contenu"], row,
+                                  propriete_nom=prop_nom, ville=ville,
+                                  signataire=signataire)
         else:
-            msg = (f"Rappel: paiement de {row.get('prix_net',0):.0f}€ en attente. Merci. - Vacances-Locations")
-        st.caption(f"Aperçu : *{msg[:160]}*")
-    # ── Envoi via SMS natif du téléphone ─────────────────────────────────
-    st.info("💡 Le SMS s'ouvrira dans l'app SMS de votre téléphone — il partira depuis votre numéro personnel.")
-    import urllib.parse as _up_sms
-    _tel_clean = tel.replace(" ","").replace("-","")
-    _sms_url = f"sms:{_tel_clean}?body={_up_sms.quote(msg)}"
-    st.markdown(
-        f"<a href='{_sms_url}'>"
-        f"<div style='background:#1565C0;color:white;text-align:center;"
-        f"padding:14px;border-radius:8px;font-weight:bold;font-size:15px;"
-        f"margin:8px 0;cursor:pointer'>"
-        f"📱 Ouvrir dans l'app SMS</div></a>",
-        unsafe_allow_html=True
-    )
-    st.caption(f"Destinataire : {tel}")
+            msg = ""
+
+        # Traduction automatique si pays détecté
+        pays_client = str(row.get("pays", "") or "")
+        try:
+            from services.traduction_service import get_langue_from_pays
+            _lg = get_langue_from_pays(pays_client)
+        except Exception:
+            _lg = None
+        if _lg and msg:
+            _, _nom_lg = _lg
+            _c1, _c2, _c3 = st.columns([3, 1, 1])
+            with _c1:
+                st.info(f"🌍 **{pays_client}** — traduction **{_nom_lg}** disponible")
+            with _c2:
+                _bilingue = st.checkbox("Bilingue", value=True, key=f"sms_bilingue_{selected_id}")
+            with _c3:
+                if st.button(f"🌐 Traduire", key=f"btn_trad_sms_{selected_id}"):
+                    with st.spinner(f"Traduction..."):
+                        try:
+                            from services.traduction_service import traduire_message
+                            _r = traduire_message(msg, pays_client, bilingue=_bilingue)
+                            if _r["traduit"]:
+                                msg = _r["message_final"]
+                                st.success("✅ Traduit !")
+                        except Exception as _e:
+                            st.error(f"❌ {_e}")
+
+        st.text_area("Aperçu du message", value=msg, height=200,
+                      disabled=True, key="sms_preview")
+
+        nb = len(msg)
+        nb_sms = max(1, (nb + 159) // 160)
+        color = "#4CAF50" if nb <= 160 else "#FF9800" if nb <= 320 else "#F44336"
+        st.markdown(f"<small style='color:{color}'>{nb} caractères — {nb_sms} SMS</small>",
+                    unsafe_allow_html=True)
+
+    # ── Bouton SMS natif ──────────────────────────────────────────────────
+    if msg and tel_input:
+        import urllib.parse as _up_sms
+        _tel_clean = tel_input.replace(" ","").replace("-","")
+        _sms_url = f"sms:{_tel_clean}?body={_up_sms.quote(msg)}"
+        st.markdown(
+            f"<a href='{_sms_url}'>"
+            f"<div style='background:#1565C0;color:white;text-align:center;"
+            f"padding:14px;border-radius:8px;font-weight:bold;font-size:16px;"
+            f"margin:12px 0'>"
+            f"📱 Ouvrir dans l'app SMS</div></a>",
+            unsafe_allow_html=True
+        )
+        st.caption(f"📤 Depuis votre téléphone → {tel_input}")
+    else:
+        st.button("📱 Ouvrir dans l'app SMS", disabled=True, use_container_width=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HISTORIQUE
