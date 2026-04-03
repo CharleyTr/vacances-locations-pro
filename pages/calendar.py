@@ -404,7 +404,8 @@ def _show_month_summary(df: pd.DataFrame, annee: int, mois: int, props: dict = N
     nb_jours = cal_lib.monthrange(annee, mois)[1]
     me_exclu = ms + pd.offsets.MonthBegin(1)
 
-    props = get_proprietes_dict()
+    # props est passé en paramètre depuis show() — déjà filtré par _auth
+    # NE PAS appeler get_proprietes_dict() ici
 
     # Taux occupation côte à côte par propriété
     if len(props) > 1:
