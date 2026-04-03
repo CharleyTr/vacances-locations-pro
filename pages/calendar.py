@@ -41,6 +41,13 @@ def show():
     prop_choix = get_propriete_selectionnee()
     props      = get_proprietes_dict()
 
+    # Si l'utilisateur n'est autorisé que sur une propriété → forcer ce filtre
+    if prop_choix == 0 and len(_auth) == 1:
+        prop_choix = _auth[0]
+
+    # Limiter props aux propriétés autorisées uniquement
+    props = {k: v for k, v in props.items() if k in _auth}
+
     if prop_choix != 0:
         st.info(f"🏠 {props.get(prop_choix, f'Propriété {prop_choix}')} - changer dans la sidebar")
     else:
