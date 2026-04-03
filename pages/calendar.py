@@ -72,6 +72,7 @@ def show():
                         horizontal=True, key="cal_vue")
 
     df_f = df_all.copy()
+    st.caption(f"DEBUG google_cal props: {df['propriete_id'].unique().tolist()} | {len(df)} lignes")
     if prop_choix != 0:
         df_f = df_f[df_f["propriete_id"] == prop_choix]
     df_year = df_f[df_f["annee"] == annee]
