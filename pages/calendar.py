@@ -32,14 +32,12 @@ def show():
 
     df_all = load_reservations()
     _auth = [p["id"] for p in _fa_props() if not p.get("mot_de_passe") or is_unlocked(p["id"])]
-    st.caption(f"DEBUG _auth: {_auth} | prop_choix: {get_propriete_selectionnee()}")
     df_all = df_all[df_all["propriete_id"].isin(_auth)]
     if df_all.empty:
         st.info("Aucune réservation à afficher.")
         return
 
     df_all["propriete_id"] = df_all["propriete_id"].fillna(0).astype(int)
-    st.caption(f"DEBUG propriete_ids dans df: {df_all['propriete_id'].unique().tolist()}")
     prop_choix = get_propriete_selectionnee()
     props      = get_proprietes_dict()
 
@@ -107,7 +105,6 @@ def show():
         if df_year.empty:
             st.warning("Aucune réservation pour ces filtres.")
         else:
-            st.caption(f"DEBUG df_year propriete_ids: {df_year['propriete_id'].unique().tolist()} | nb lignes: {len(df_year)}")
             _show_google_calendar(df_year, annee, mois)
             _show_month_summary(df_year, annee, mois, props=props)
 
@@ -287,7 +284,10 @@ PLATEAU.forEach(day => {{
 }});
 </script>"""
 
-    components.html(html, height=520, scrolling=True)
+    # Forcer le rechargement de l'iframe quand les données changent
+    import hashlib as _hl
+    _key = _hl.md5(plateau_json.encode()).hexdigest()[:8]
+    components.html(f"<!-- {_key} -->" + html, height=520, scrolling=True)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
