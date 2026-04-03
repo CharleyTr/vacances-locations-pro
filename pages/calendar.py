@@ -106,7 +106,7 @@ def show():
             st.warning("Aucune réservation pour ces filtres.")
         else:
             _show_google_calendar(df_year, annee, mois)
-            _show_month_summary(df_year, annee, mois)
+            _show_month_summary(df_year, annee, mois, props=props)
 
     elif "🗓️ Semaine" in vue:
         _show_week_view(df_year, annee, mois, props, prop_choix)
@@ -396,7 +396,7 @@ def _show_week_view(df: pd.DataFrame, annee: int, mois: int, props: dict, prop_c
 # TAUX OCCUPATION PAR PROPRIETE (Vue annuelle)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _show_month_summary(df: pd.DataFrame, annee: int, mois: int):
+def _show_month_summary(df: pd.DataFrame, annee: int, mois: int, props: dict = None):
     import calendar as cal_lib
     from datetime import date as ddate
 
