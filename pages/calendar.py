@@ -107,6 +107,7 @@ def show():
         if df_year.empty:
             st.warning("Aucune réservation pour ces filtres.")
         else:
+            st.caption(f"DEBUG df_year propriete_ids: {df_year['propriete_id'].unique().tolist()} | nb lignes: {len(df_year)}")
             _show_google_calendar(df_year, annee, mois)
             _show_month_summary(df_year, annee, mois, props=props)
 
