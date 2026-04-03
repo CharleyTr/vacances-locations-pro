@@ -31,7 +31,7 @@ def show():
     st.title("📅 Calendrier des réservations")
 
     df_all = load_reservations()
-    _auth = [p["id"] for p in _fa_props() if not p.get("mot_de_passe") or is_unlocked(p["id"])]
+    
     df_all = df_all[df_all["propriete_id"].isin(_auth)]
     if df_all.empty:
         st.info("Aucune réservation à afficher.")
@@ -133,6 +133,7 @@ def _show_google_calendar(df: pd.DataFrame, annee: int, mois: int):
     st.subheader(f"📅 {MOIS_FR[mois]} {annee}")
 
     df = df.copy()
+    _auth = [p["id"] for p in _fa_props() if not p.get("mot_de_passe") or is_unlocked(p["id"])]
     df["date_arrivee"] = pd.to_datetime(df["date_arrivee"])
     df["date_depart"]  = pd.to_datetime(df["date_depart"])
 
