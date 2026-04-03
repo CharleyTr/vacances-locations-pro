@@ -74,7 +74,17 @@ def show():
     df_f = df_all.copy()
     if prop_choix != 0:
         df_f = df_f[df_f["propriete_id"] == prop_choix]
-    df_year = df_f[df_f["annee"] == annee]
+
+    # Inclure les réservations qui CHEVAUCHENT l'année sélectionnée
+    # (pas seulement celles qui commencent dans cette année)
+    df_f["date_arrivee"] = pd.to_datetime(df_f["date_arrivee"])
+    df_f["date_depart"]  = pd.to_datetime(df_f["date_depart"])
+    annee_debut = pd.Timestamp(f"{annee}-01-01")
+    annee_fin   = pd.Timestamp(f"{annee}-12-31")
+    df_year = df_f[
+        (df_f["date_arrivee"] <= annee_fin) &
+        (df_f["date_depart"]  >= annee_debut)
+    ]
 
     # ── Bandeau événements du mois ────────────────────────────────────────
     try:
