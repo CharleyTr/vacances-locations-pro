@@ -39,6 +39,7 @@ def show():
         return
 
     df_all["propriete_id"] = df_all["propriete_id"].fillna(0).astype(int)
+    st.caption(f"DEBUG propriete_ids dans df: {df_all['propriete_id'].unique().tolist()}")
     prop_choix = get_propriete_selectionnee()
     props      = get_proprietes_dict()
 
