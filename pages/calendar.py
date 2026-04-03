@@ -505,7 +505,12 @@ def _show_month_summary(df: pd.DataFrame, annee: int, mois: int, props: dict = N
                   else (_ca_mois(r, "menage") if "menage" in r.index else "—"), axis=1)
     df_display["Payé"]       = df_display["paye"].apply(lambda v: "✅" if v else "⏳")
 
-    cols_show = ["nom_client","plateforme","Arrivée","Départ","Nuits mois",
+    # Ajouter colonne propriété pour debug
+    props_map_debug = {p["id"]: p["nom"] for p in _fa_props()}
+    df_display["Propriété"] = df_display["propriete_id"].map(
+        lambda x: props_map_debug.get(int(x), f"#{x}"))
+
+    cols_show = ["Propriété","nom_client","plateforme","Arrivée","Départ","Nuits mois",
                  "CA Brut","Commission","Ménage","CA Net","Payé"]
     rename_map = {"nom_client":"Client","plateforme":"Plateforme"}
     df_table = df_display[cols_show].rename(columns=rename_map).sort_values("Arrivée")
