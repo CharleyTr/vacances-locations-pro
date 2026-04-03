@@ -32,6 +32,7 @@ def show():
 
     df_all = load_reservations()
     _auth = [p["id"] for p in _fa_props() if not p.get("mot_de_passe") or is_unlocked(p["id"])]
+    st.caption(f"DEBUG _auth: {_auth} | prop_choix: {get_propriete_selectionnee()}")
     df_all = df_all[df_all["propriete_id"].isin(_auth)]
     if df_all.empty:
         st.info("Aucune réservation à afficher.")
