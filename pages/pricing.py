@@ -493,18 +493,68 @@ def show():
             df_conc["mois"] = df_conc["mois"].fillna(df_conc["date_releve"].dt.month)
 
             if df_conc["mois"].notna().any():
+                MOIS_ORDRE = ["Jan","Fév","Mar","Avr","Mai","Jun",
+                               "Jul","Aoû","Sep","Oct","Nov","Déc"]
+
                 df_mois_conc = df_conc.groupby(["mois","concurrent"])["prix_nuit"].mean().reset_index()
                 df_mois_conc["mois_nom"] = df_mois_conc["mois"].apply(
                     lambda x: MOIS_FR_SHORT[int(x)-1] if pd.notna(x) else "?")
-                # Trier par mois
                 df_mois_conc = df_mois_conc.sort_values("mois")
-                df_pivot = df_mois_conc.pivot(index="mois_nom", columns="concurrent", values="prix_nuit")
+
+                # Pivot : lignes = établissements, colonnes = mois
+                df_pivot = df_mois_conc.pivot(
+                    index="concurrent", columns="mois_nom", values="prix_nuit"
+                )
                 df_pivot.columns.name = None
+                df_pivot.index.name = "Établissement"
+
+                # Réordonner les colonnes dans l'ordre des mois
+                cols_ordonnes = [m for m in MOIS_ORDRE if m in df_pivot.columns]
+                df_pivot = df_pivot[cols_ordonnes]
+
+                # Ligne Moyenne concurrents
+                moy_row = df_pivot.mean(numeric_only=True)
+
+                # Ligne Tarif suggéré (moyenne * 0.95 si on veut être légèrement en dessous
+                # ou prix_base ajusté selon historique)
+                tarif_row = {}
+                for m_nom in cols_ordonnes:
+                    m_idx = MOIS_ORDRE.index(m_nom) + 1
+                    # Stats historiques pour ce mois
+                    stats_m = stats[(stats["mois"] == m_idx)] if not stats.empty else pd.DataFrame()
+                    taux_hist = float(stats_m["taux_occ"].mean()) if not stats_m.empty else 50
+                    moy_conc = moy_row.get(m_nom, prix_base)
+                    # Tarif suggéré : si taux occ > 80% → prix conc + 5%, sinon prix conc - 5%
+                    if taux_hist > 80:
+                        tarif = moy_conc * 1.05
+                    elif taux_hist > 60:
+                        tarif = moy_conc
+                    else:
+                        tarif = moy_conc * 0.95
+                    tarif_row[m_nom] = round(tarif)
+
                 # Formater en €
-                for col in df_pivot.columns:
-                    df_pivot[col] = df_pivot[col].apply(
+                df_display = df_pivot.copy()
+                for col in cols_ordonnes:
+                    df_display[col] = df_display[col].apply(
                         lambda x: f"{int(x)} €" if pd.notna(x) else "—")
-                st.dataframe(df_pivot, use_container_width=True)
+
+                # Ajouter lignes Moyenne et Tarif suggéré
+                moy_fmt   = {m: f"{int(moy_row[m])} €" if pd.notna(moy_row.get(m)) else "—"
+                              for m in cols_ordonnes}
+                tarif_fmt = {m: f"**{tarif_row[m]} €**" for m in cols_ordonnes}
+
+                import pandas as _pd2
+                df_moy    = _pd2.DataFrame([moy_fmt],   index=["📊 Moyenne concurrents"])
+                df_tarif  = _pd2.DataFrame([tarif_fmt], index=["💡 Tarif suggéré"])
+                df_final  = _pd2.concat([df_display, df_moy, df_tarif])
+                df_final.index.name = "Établissement"
+
+                st.dataframe(df_final, use_container_width=True)
+                st.caption(
+                    "💡 Le **tarif suggéré** est calculé selon la moyenne des concurrents "
+                    "ajustée par votre taux d'occupation historique (+5% si > 80%, -5% si < 60%)."
+                )
             else:
                 st.caption("Ajoutez des relevés pour voir l'évolution mensuelle.")
 
