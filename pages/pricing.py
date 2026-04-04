@@ -539,24 +539,70 @@ def show():
             st.info("Aucun relevé concurrent. Ajoutez des prix ci-dessous.")
 
         st.divider()
-        with st.expander("➕ Ajouter un relevé concurrent", expanded=not concurrents):
-            with st.form("form_conc", clear_on_submit=True):
-                c_col1, c_col2 = st.columns(2)
-                with c_col1:
-                    c_nom   = st.text_input("Nom du concurrent *", placeholder="Ex: Studio Port Vieux")
-                    c_plat  = st.selectbox("Plateforme", ["Airbnb","Booking","Abritel","Direct","Autre"])
-                    c_prix  = st.number_input("Prix/nuit observé (€)", min_value=0.0, step=5.0)
-                with c_col2:
-                    c_date  = st.date_input("Date du relevé", value=date.today())
-                    c_lien  = st.text_input("Lien (optionnel)")
-                    c_notes = st.text_input("Notes (dates concernées, type logement...)")
-                if st.form_submit_button("➕ Ajouter", type="primary", use_container_width=True):
-                    if c_nom and c_prix > 0:
-                        if save_concurrent({"propriete_id": prop_id, "concurrent": c_nom,
-                                            "plateforme": c_plat, "date_releve": str(c_date),
-                                            "prix_nuit": float(c_prix), "lien": c_lien,
-                                            "notes": c_notes}):
-                            st.success("✅ Relevé ajouté !"); st.rerun()
+        _MOIS_NOM2 = ["Jan","Fév","Mar","Avr","Mai","Jun",
+                       "Jul","Aoû","Sep","Oct","Nov","Déc"]
+
+        with st.expander("➕ Saisir les prix d'un concurrent (mois par mois)", expanded=not concurrents):
+            with st.form("form_conc_mois", clear_on_submit=True):
+                fc1, fc2, fc3 = st.columns(3)
+                with fc1:
+                    c_nom  = st.text_input("Nom *", placeholder="Ex: Studio Vue Mer")
+                with fc2:
+                    c_plat = st.selectbox("Plateforme",
+                                           ["Airbnb","Booking","Abritel","Direct","Autre"])
+                with fc3:
+                    c_annee = st.number_input("Année", value=date.today().year,
+                                               min_value=2020, max_value=2030, step=1)
+
+                st.markdown("**Prix par mois (€/nuit) — 0 = non renseigné :**")
+                _row1 = st.columns(6)
+                _row2 = st.columns(6)
+                _prix_m = {}
+                for _i in range(6):
+                    with _row1[_i]:
+                        _prix_m[_i+1] = st.number_input(
+                            _MOIS_NOM2[_i], min_value=0, max_value=5000,
+                            step=5, value=0, key=f"pm1_{_i}")
+                for _i in range(6):
+                    with _row2[_i]:
+                        _prix_m[_i+7] = st.number_input(
+                            _MOIS_NOM2[_i+6], min_value=0, max_value=5000,
+                            step=5, value=0, key=f"pm2_{_i}")
+
+                if st.form_submit_button("💾 Enregistrer", type="primary",
+                                          use_container_width=True):
+                    if not c_nom.strip():
+                        st.error("Le nom est obligatoire.")
+                    else:
+                        _ok = 0
+                        # Sauvegarder dans prix_concurrents_mois
+                        _data_mois = {
+                            "propriete_id": prop_id,
+                            "concurrent":   c_nom.strip(),
+                            "plateforme":   c_plat,
+                            "annee":        int(c_annee),
+                        }
+                        for _i, col in enumerate(COLS_MOIS):
+                            _data_mois[col] = float(_prix_m[_i+1])
+                        if save_concurrent_mois(_data_mois):
+                            _ok += 1
+                        # Aussi sauvegarder dans l'ancienne table pour compatibilité
+                        for _m, _prix in _prix_m.items():
+                            if _prix > 0:
+                                save_concurrent({
+                                    "propriete_id": prop_id,
+                                    "concurrent":   c_nom.strip(),
+                                    "plateforme":   c_plat,
+                                    "date_releve":  str(date(int(c_annee), _m, 15)),
+                                    "prix_nuit":    float(_prix),
+                                    "mois":         _m,
+                                    "annee":        int(c_annee),
+                                })
+                        if _ok:
+                            st.success(f"✅ Prix enregistrés pour **{c_nom}** {int(c_annee)} !")
+                            st.rerun()
+                        else:
+                            st.error("❌ Erreur — vérifiez que la table prix_concurrents_mois existe (SQL 027)")
 
     # ════════════════════════════════════════════════════════════════════════
     with tab3:
