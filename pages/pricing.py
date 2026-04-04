@@ -472,7 +472,7 @@ def show():
             st.plotly_chart(fig_conc, use_container_width=True)
 
             # Tableau récap par concurrent
-            st.markdown("#### Récapitulatif")
+            st.markdown("#### Récapitulatif par concurrent")
             recap_conc = df_conc.groupby(["concurrent","plateforme"])["prix_nuit"].agg(
                 Relevés="count", Min="min", Moy="mean", Max="max"
             ).reset_index()
@@ -482,6 +482,19 @@ def show():
             st.dataframe(recap_conc.rename(columns={
                 "concurrent":"Concurrent","plateforme":"Plateforme"
             }), use_container_width=True, hide_index=True)
+
+            # Vue par mois
+            st.markdown("#### 📅 Prix par mois")
+            MOIS_FR_SHORT = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
+            if "mois" in df_conc.columns and df_conc["mois"].notna().any():
+                df_mois_conc = df_conc.groupby(["mois","concurrent"])["prix_nuit"].mean().reset_index()
+                df_mois_conc["mois_nom"] = df_mois_conc["mois"].apply(
+                    lambda x: MOIS_FR_SHORT[int(x)-1] if pd.notna(x) else "?")
+                df_pivot = df_mois_conc.pivot(index="mois_nom", columns="concurrent", values="prix_nuit")
+                df_pivot = df_pivot.round(0).astype("Int64", errors="ignore")
+                st.dataframe(df_pivot, use_container_width=True)
+            else:
+                st.caption("Ajoutez des relevés pour voir l'évolution mensuelle.")
 
             # Suppression
             with st.expander("🗑️ Supprimer un relevé"):
