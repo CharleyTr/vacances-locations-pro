@@ -652,4 +652,3 @@ def show():
                 "💡 La **projection** est basée sur la moyenne des 3 dernières années pour chaque mois. "
                 "Plus vous avez d'historique, plus la projection est fiable."
             )
-            
