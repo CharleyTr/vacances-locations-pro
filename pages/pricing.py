@@ -486,12 +486,24 @@ def show():
             # Vue par mois
             st.markdown("#### 📅 Prix par mois")
             MOIS_FR_SHORT = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
-            if "mois" in df_conc.columns and df_conc["mois"].notna().any():
+            # Calculer mois depuis date_releve si colonne mois absente ou vide
+            df_conc["date_releve"] = pd.to_datetime(df_conc["date_releve"], errors="coerce")
+            if "mois" not in df_conc.columns or df_conc["mois"].isna().all():
+                df_conc["mois"] = df_conc["date_releve"].dt.month
+            df_conc["mois"] = df_conc["mois"].fillna(df_conc["date_releve"].dt.month)
+
+            if df_conc["mois"].notna().any():
                 df_mois_conc = df_conc.groupby(["mois","concurrent"])["prix_nuit"].mean().reset_index()
                 df_mois_conc["mois_nom"] = df_mois_conc["mois"].apply(
                     lambda x: MOIS_FR_SHORT[int(x)-1] if pd.notna(x) else "?")
+                # Trier par mois
+                df_mois_conc = df_mois_conc.sort_values("mois")
                 df_pivot = df_mois_conc.pivot(index="mois_nom", columns="concurrent", values="prix_nuit")
-                df_pivot = df_pivot.round(0).astype("Int64", errors="ignore")
+                df_pivot.columns.name = None
+                # Formater en €
+                for col in df_pivot.columns:
+                    df_pivot[col] = df_pivot[col].apply(
+                        lambda x: f"{int(x)} €" if pd.notna(x) else "—")
                 st.dataframe(df_pivot, use_container_width=True)
             else:
                 st.caption("Ajoutez des relevés pour voir l'évolution mensuelle.")
@@ -640,3 +652,4 @@ def show():
                 "💡 La **projection** est basée sur la moyenne des 3 dernières années pour chaque mois. "
                 "Plus vous avez d'historique, plus la projection est fiable."
             )
+            
