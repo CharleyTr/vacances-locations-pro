@@ -272,10 +272,11 @@ def show():
 
     stats = _stats_historiques(df_prop, prop_id)
 
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "💡 Pricing dynamique",
         "🏆 Benchmark concurrents",
         "🔮 Prévisions de revenus",
+        "🎯 Simulation CA",
     ])
 
     # ════════════════════════════════════════════════════════════════════════
@@ -717,3 +718,157 @@ def show():
                 "💡 La **projection** est basée sur la moyenne des 3 dernières années pour chaque mois. "
                 "Plus vous avez d'historique, plus la projection est fiable."
             )
+
+    # ════════════════════════════════════════════════════════════════════════
+    with tab4:
+        st.subheader(f"🎯 Simulation de CA — {prop_nom}")
+        st.caption("Modifiez le taux d'occupation et le prix moyen par mois pour simuler votre CA théorique.")
+
+        MOIS_LONG_SIM = ["Janvier","Février","Mars","Avril","Mai","Juin",
+                          "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+
+        # Récupérer les données de base
+        concurrents_mois_sim = get_concurrents_mois(prop_id, date.today().year)
+
+        # Construire les valeurs par défaut par mois
+        import calendar as _cal
+        _sim_rows = []
+        for _m in range(1, 13):
+            _nb_jours = _cal.monthrange(date.today().year, _m)[1]
+
+            # Taux occ historique
+            _stats_m = stats[(stats["mois"] == _m)] if not stats.empty else pd.DataFrame()
+            _taux_hist = float(_stats_m["taux_occ"].mean()) if not _stats_m.empty else 50.0
+
+            # Prix suggéré (depuis benchmark concurrents ou stats)
+            _prix_sugg = 0.0
+            if concurrents_mois_sim:
+                _col = COLS_MOIS[_m - 1]
+                _vals_conc = [float(_c.get(_col, 0) or 0) for _c in concurrents_mois_sim
+                               if float(_c.get(_col, 0) or 0) > 0]
+                if _vals_conc:
+                    _moy_conc = sum(_vals_conc) / len(_vals_conc)
+                    _prix_sugg = round(_moy_conc * 1.05 if _taux_hist > 80
+                                       else _moy_conc if _taux_hist > 60
+                                       else _moy_conc * 0.95)
+            if _prix_sugg == 0 and not _stats_m.empty:
+                _prix_sugg = float(_stats_m["rev_nuit"].mean())
+
+            _sim_rows.append({
+                "mois": _m,
+                "mois_nom": MOIS_LONG_SIM[_m - 1],
+                "nb_jours": _nb_jours,
+                "taux_occ": _taux_hist,
+                "prix_moyen": round(_prix_sugg) if _prix_sugg > 0 else prix_base,
+            })
+
+        st.markdown("### ✏️ Paramètres de simulation")
+        st.caption("Modifiez le taux d'occupation (%) et le prix moyen (€/nuit) pour chaque mois.")
+
+        # Tableau interactif avec st.form
+        with st.form("form_simulation"):
+            _cols_header = st.columns([2, 1, 1, 1, 1])
+            _cols_header[0].markdown("**Mois**")
+            _cols_header[1].markdown("**Nb jours**")
+            _cols_header[2].markdown("**Taux occ. %**")
+            _cols_header[3].markdown("**Prix €/nuit**")
+            _cols_header[4].markdown("**CA théorique**")
+
+            _taux_vals = {}
+            _prix_vals = {}
+
+            for _r in _sim_rows:
+                _m = _r["mois"]
+                _cols_row = st.columns([2, 1, 1, 1, 1])
+                _cols_row[0].markdown(f"**{_r['mois_nom']}**")
+                _cols_row[1].markdown(f"{_r['nb_jours']} j")
+
+                _t = _cols_row[2].text_input(
+                    f"taux_{_m}", value=str(int(_r["taux_occ"])),
+                    label_visibility="collapsed", key=f"sim_taux_{_m}")
+                _p = _cols_row[3].text_input(
+                    f"prix_{_m}", value=str(int(_r["prix_moyen"])),
+                    label_visibility="collapsed", key=f"sim_prix_{_m}")
+
+                _taux_v = float(_t) if _t.strip().replace(".","").isdigit() else _r["taux_occ"]
+                _prix_v = float(_p) if _p.strip().replace(".","").isdigit() else _r["prix_moyen"]
+                _taux_vals[_m] = min(100.0, max(0.0, _taux_v))
+                _prix_vals[_m] = _prix_v
+
+                _nuits_sim = round(_r["nb_jours"] * _taux_v / 100, 1)
+                _ca_sim = round(_nuits_sim * _prix_v)
+                _cols_row[4].markdown(f"**{_ca_sim:,.0f} €**")
+
+            _submitted = st.form_submit_button("🔄 Calculer la simulation", 
+                                                type="primary", use_container_width=True)
+
+        # Résultats de simulation
+        st.divider()
+        st.markdown("### 📊 Résultats de la simulation")
+
+        _total_nuits = 0
+        _total_ca = 0
+        _result_rows = []
+
+        for _r in _sim_rows:
+            _m = _r["mois"]
+            _taux_v = _taux_vals.get(_m, _r["taux_occ"])
+            _prix_v = _prix_vals.get(_m, _r["prix_moyen"])
+            _nuits_sim = round(_r["nb_jours"] * _taux_v / 100, 1)
+            _ca_sim = round(_nuits_sim * _prix_v)
+            _total_nuits += _nuits_sim
+            _total_ca += _ca_sim
+
+            # Comparaison avec historique
+            _stats_m = stats[(stats["mois"] == _m)] if not stats.empty else pd.DataFrame()
+            _ca_hist = float(_stats_m["ca_net"].mean()) if not _stats_m.empty else 0
+
+            _delta = _ca_sim - _ca_hist
+            _delta_str = f"+{_delta:,.0f} €" if _delta >= 0 else f"{_delta:,.0f} €"
+
+            _result_rows.append({
+                "Mois": _r["mois_nom"],
+                "Jours": _r["nb_jours"],
+                "Taux occ.": f"{_taux_v:.0f}%",
+                "Nuits": f"{_nuits_sim:.0f}",
+                "Prix/nuit": f"{_prix_v:.0f} €",
+                "CA théorique": f"{_ca_sim:,.0f} €",
+                "vs historique": _delta_str,
+            })
+
+        # KPIs globaux
+        _k1, _k2, _k3, _k4 = st.columns(4)
+        _k1.metric("🌙 Nuits totales", f"{_total_nuits:.0f}")
+        _k2.metric("💶 CA théorique", f"{_total_ca:,.0f} €")
+        _taux_moy = sum(_taux_vals.values()) / 12
+        _k3.metric("🏡 Taux moy.", f"{_taux_moy:.0f}%")
+        _prix_moy = sum(_prix_vals.values()) / 12
+        _k4.metric("💰 Prix moy.", f"{_prix_moy:.0f} €/nuit")
+
+        # Tableau résultat
+        _df_result = pd.DataFrame(_result_rows)
+        st.dataframe(_df_result, use_container_width=True, hide_index=True)
+
+        # Graphique
+        import plotly.graph_objects as _go2
+        _fig_sim = _go2.Figure()
+        _ca_vals_sim = [round(_sim_rows[_m-1]["nb_jours"] * _taux_vals.get(_m, _sim_rows[_m-1]["taux_occ"]) / 100
+                              * _prix_vals.get(_m, _sim_rows[_m-1]["prix_moyen"]))
+                        for _m in range(1, 13)]
+        _ca_vals_hist = [float(stats[(stats["mois"] == _m)]["ca_net"].mean())
+                          if not stats.empty and len(stats[stats["mois"] == _m]) > 0
+                          else 0 for _m in range(1, 13)]
+
+        _fig_sim.add_trace(_go2.Bar(
+            name="CA historique", x=MOIS_FR, y=_ca_vals_hist,
+            marker_color="#90CAF9", opacity=0.7))
+        _fig_sim.add_trace(_go2.Bar(
+            name="CA simulé", x=MOIS_FR, y=_ca_vals_sim,
+            marker_color="#1565C0"))
+        _fig_sim.update_layout(
+            barmode="group", height=350,
+            title="CA simulé vs historique",
+            margin=dict(t=40, b=10),
+            legend=dict(orientation="h", y=1.1)
+        )
+        st.plotly_chart(_fig_sim, use_container_width=True)
