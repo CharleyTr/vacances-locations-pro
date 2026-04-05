@@ -767,26 +767,39 @@ def show():
 
         # Tableau interactif avec st.form
         with st.form("form_simulation"):
-            _cols_header = st.columns([2, 1, 1, 1, 1])
+            _cols_header = st.columns([2, 1, 1, 1, 1, 1, 1, 1])
             _cols_header[0].markdown("**Mois**")
-            _cols_header[1].markdown("**Nb jours**")
-            _cols_header[2].markdown("**Taux occ. %**")
-            _cols_header[3].markdown("**Prix €/nuit**")
-            _cols_header[4].markdown("**CA théorique**")
+            _cols_header[1].markdown("**Jours**")
+            _cols_header[2].markdown("**Nuits réelles**")
+            _cols_header[3].markdown("**CA réalisé**")
+            _cols_header[4].markdown("**Prix moy. réel**")
+            _cols_header[5].markdown("**Taux sim. %**")
+            _cols_header[6].markdown("**Prix sim. €**")
+            _cols_header[7].markdown("**CA simulé**")
 
             _taux_vals = {}
             _prix_vals = {}
 
             for _r in _sim_rows:
                 _m = _r["mois"]
-                _cols_row = st.columns([2, 1, 1, 1, 1])
+                _cols_row = st.columns([2, 1, 1, 1, 1, 1, 1, 1])
                 _cols_row[0].markdown(f"**{_r['mois_nom']}**")
-                _cols_row[1].markdown(f"{_r['nb_jours']} j")
+                _cols_row[1].markdown(f"{_r['nb_jours']}")
 
-                _t = _cols_row[2].text_input(
+                # Données réelles historiques
+                _stats_m_r = stats[(stats["mois"] == _m)] if not stats.empty else pd.DataFrame()
+                _nuits_reel = float(_stats_m_r["nuitees"].mean()) if not _stats_m_r.empty else 0
+                _ca_reel    = float(_stats_m_r["ca_net"].mean())  if not _stats_m_r.empty else 0
+                _prix_reel  = round(_ca_reel / _nuits_reel, 0) if _nuits_reel > 0 else 0
+                _cols_row[2].markdown(f"{_nuits_reel:.0f}")
+                _cols_row[3].markdown(f"{_ca_reel:,.0f} €")
+                _cols_row[4].markdown(f"{_prix_reel:.0f} €")
+
+                # Champs modifiables simulation
+                _t = _cols_row[5].text_input(
                     f"taux_{_m}", value=str(int(_r["taux_occ"])),
                     label_visibility="collapsed", key=f"sim_taux_{_m}")
-                _p = _cols_row[3].text_input(
+                _p = _cols_row[6].text_input(
                     f"prix_{_m}", value=str(int(_r["prix_moyen"])),
                     label_visibility="collapsed", key=f"sim_prix_{_m}")
 
@@ -797,24 +810,37 @@ def show():
 
                 _nuits_sim = round(_r["nb_jours"] * _taux_v / 100, 1)
                 _ca_sim = round(_nuits_sim * _prix_v)
-                _cols_row[4].markdown(f"**{_ca_sim:,.0f} €**")
+                _cols_row[7].markdown(f"**{_ca_sim:,.0f} €**")
 
             # Ligne TOTAL dans le formulaire
-            _cols_total = st.columns([2, 1, 1, 1, 1])
+            _cols_total = st.columns([2, 1, 1, 1, 1, 1, 1, 1])
             _cols_total[0].markdown("**TOTAL / MOY.**")
-            _cols_total[1].markdown(f"**{sum(_r['nb_jours'] for _r in _sim_rows)} j**")
+            _cols_total[1].markdown(f"**{sum(_r['nb_jours'] for _r in _sim_rows)}**")
+
+            # Totaux réels
+            _nuits_reel_tot = sum(
+                float(stats[stats["mois"]==_r["mois"]]["nuitees"].mean())
+                if not stats.empty and len(stats[stats["mois"]==_r["mois"]]) > 0 else 0
+                for _r in _sim_rows)
+            _ca_reel_tot = sum(
+                float(stats[stats["mois"]==_r["mois"]]["ca_net"].mean())
+                if not stats.empty and len(stats[stats["mois"]==_r["mois"]]) > 0 else 0
+                for _r in _sim_rows)
+            _prix_reel_moy = round(_ca_reel_tot / _nuits_reel_tot) if _nuits_reel_tot > 0 else 0
+            _cols_total[2].markdown(f"**{_nuits_reel_tot:.0f}**")
+            _cols_total[3].markdown(f"**{_ca_reel_tot:,.0f} €**")
+            _cols_total[4].markdown(f"**{_prix_reel_moy:.0f} €**")
+
+            # Totaux simulés
             _taux_moy_form = sum(_taux_vals.get(_r['mois'], _r['taux_occ']) for _r in _sim_rows) / 12
             _prix_moy_form = sum(_prix_vals.get(_r['mois'], _r['prix_moyen']) for _r in _sim_rows) / 12
             _ca_total_form = sum(
                 round(_r['nb_jours'] * _taux_vals.get(_r['mois'], _r['taux_occ']) / 100
                       * _prix_vals.get(_r['mois'], _r['prix_moyen']))
                 for _r in _sim_rows)
-            _nuits_total_form = sum(
-                round(_r['nb_jours'] * _taux_vals.get(_r['mois'], _r['taux_occ']) / 100, 1)
-                for _r in _sim_rows)
-            _cols_total[2].markdown(f"**{_taux_moy_form:.0f}%**")
-            _cols_total[3].markdown(f"**{_prix_moy_form:.0f} €**")
-            _cols_total[4].markdown(f"**{_ca_total_form:,.0f} €**")
+            _cols_total[5].markdown(f"**{_taux_moy_form:.0f}%**")
+            _cols_total[6].markdown(f"**{_prix_moy_form:.0f} €**")
+            _cols_total[7].markdown(f"**{_ca_total_form:,.0f} €**")
 
             _submitted = st.form_submit_button("🔄 Calculer la simulation", 
                                                 type="primary", use_container_width=True)
