@@ -554,20 +554,20 @@ def show():
                     c_annee = st.number_input("Année", value=date.today().year,
                                                min_value=2020, max_value=2030, step=1)
 
-                st.markdown("**Prix par mois (€/nuit) — 0 = non renseigné :**")
+                st.markdown("**Prix par mois (€/nuit) — laisser vide si inconnu :**")
                 _row1 = st.columns(6)
                 _row2 = st.columns(6)
                 _prix_m = {}
                 for _i in range(6):
                     with _row1[_i]:
-                        _prix_m[_i+1] = st.number_input(
-                            _MOIS_NOM2[_i], min_value=0, max_value=5000,
-                            step=5, value=0, key=f"pm1_{_i}")
+                        _v = st.text_input(_MOIS_NOM2[_i], value="", placeholder="0",
+                                            key=f"pm1_{_i}")
+                        _prix_m[_i+1] = int(_v) if _v.strip().isdigit() else 0
                 for _i in range(6):
                     with _row2[_i]:
-                        _prix_m[_i+7] = st.number_input(
-                            _MOIS_NOM2[_i+6], min_value=0, max_value=5000,
-                            step=5, value=0, key=f"pm2_{_i}")
+                        _v = st.text_input(_MOIS_NOM2[_i+6], value="", placeholder="0",
+                                            key=f"pm2_{_i}")
+                        _prix_m[_i+7] = int(_v) if _v.strip().isdigit() else 0
 
                 if st.form_submit_button("💾 Enregistrer", type="primary",
                                           use_container_width=True):
