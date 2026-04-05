@@ -799,6 +799,23 @@ def show():
                 _ca_sim = round(_nuits_sim * _prix_v)
                 _cols_row[4].markdown(f"**{_ca_sim:,.0f} €**")
 
+            # Ligne TOTAL dans le formulaire
+            _cols_total = st.columns([2, 1, 1, 1, 1])
+            _cols_total[0].markdown("**TOTAL / MOY.**")
+            _cols_total[1].markdown(f"**{sum(_r['nb_jours'] for _r in _sim_rows)} j**")
+            _taux_moy_form = sum(_taux_vals.get(_r['mois'], _r['taux_occ']) for _r in _sim_rows) / 12
+            _prix_moy_form = sum(_prix_vals.get(_r['mois'], _r['prix_moyen']) for _r in _sim_rows) / 12
+            _ca_total_form = sum(
+                round(_r['nb_jours'] * _taux_vals.get(_r['mois'], _r['taux_occ']) / 100
+                      * _prix_vals.get(_r['mois'], _r['prix_moyen']))
+                for _r in _sim_rows)
+            _nuits_total_form = sum(
+                round(_r['nb_jours'] * _taux_vals.get(_r['mois'], _r['taux_occ']) / 100, 1)
+                for _r in _sim_rows)
+            _cols_total[2].markdown(f"**{_taux_moy_form:.0f}%**")
+            _cols_total[3].markdown(f"**{_prix_moy_form:.0f} €**")
+            _cols_total[4].markdown(f"**{_ca_total_form:,.0f} €**")
+
             _submitted = st.form_submit_button("🔄 Calculer la simulation", 
                                                 type="primary", use_container_width=True)
 
