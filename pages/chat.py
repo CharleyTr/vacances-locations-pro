@@ -64,20 +64,30 @@ def show():
 
     prop_opts = {"all": "🌐 Général"} | {str(k): v for k, v in _props.items()}
 
-    col_chan, col_name = st.columns([3, 1])
-    with col_chan:
-        _canal_labels = list(prop_opts.values())
-        _canal_keys   = list(prop_opts.keys())
-        _canal_idx    = st.radio("Canal", range(len(_canal_labels)),
-                                  format_func=lambda i: _canal_labels[i],
-                                  horizontal=True, key="pg_chat_v3_chat_radio_canal")
-        prop_key = _canal_keys[_canal_idx]
+    # Canal sélectionné via session_state — pas de widget radio pour éviter les conflits
+    if "chat_canal" not in st.session_state:
+        st.session_state["chat_canal"] = "all"
+
+    col_name, col_refresh = st.columns([3, 1])
     with col_name:
-        new_name = st.text_input("Mon nom", value=auteur, key="pg_chat_v3_chat_user_name_inp")
+        new_name = st.text_input("Mon nom dans le chat", value=auteur,
+                                  key="pg_chat_v3_name")
         if new_name and new_name != auteur:
             st.session_state["user_name"] = new_name
             auteur = new_name
 
+    # Boutons canal
+    _btn_cols = st.columns(len(prop_opts))
+    for _i, (_k, _label) in enumerate(prop_opts.items()):
+        with _btn_cols[_i]:
+            _active = st.session_state["chat_canal"] == _k
+            if st.button(_label, key=f"chat_canal_btn_{_i}",
+                          type="primary" if _active else "secondary",
+                          use_container_width=True):
+                st.session_state["chat_canal"] = _k
+                st.rerun()
+
+    prop_key = st.session_state["chat_canal"]
     prop_id = int(prop_key) if prop_key != "all" else None
 
     # Charger et marquer comme lus
