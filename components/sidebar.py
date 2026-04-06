@@ -12,6 +12,7 @@ PAGES = {
     "💳 Paiements":      "Paiements",
     "🧹 Ménage":         "Ménage",
     "📧 Messages":       "Messages",
+    "💬 Chat":            "Chat",
     "🔄 Sync iCal":      "iCal",
     "🕳️ Créneaux":      "Créneaux",
     "🏠 Propriétés":     "Propriétés",
