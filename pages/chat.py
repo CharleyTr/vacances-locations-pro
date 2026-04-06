@@ -61,12 +61,15 @@ def show():
               </div>
             </div>"""
 
-        st.markdown(
+        import streamlit.components.v1 as _cv_chat
+        _cv_chat.html(
             f"<div style='height:460px;overflow-y:auto;padding:14px;"
             f"background:#111827;border-radius:12px;border:1px solid #2D3748'>"
             f"{chat_html}"
-            f"</div>",
-            unsafe_allow_html=True
+            f"<div id='chat-end'></div>"
+            f"</div>"
+            f"<script>document.getElementById('chat-end').scrollIntoView();</script>",
+            height=480
         )
 
     st.markdown("")
