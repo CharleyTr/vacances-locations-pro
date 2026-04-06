@@ -30,11 +30,37 @@ def show():
     st.caption("Messagerie entre membres de l'équipe.")
 
     # Nom auteur depuis session
-    auteur = st.session_state.get("chat_auteur_nom") or \
-             st.session_state.get("user_name") or "Utilisateur"
+    auteur = st.session_state.get("chat_auteur_nom") or              st.session_state.get("user_name") or "Utilisateur"
 
-    # Charger messages
-    messages = _get_messages()
+    # Sélection canal/propriété
+    from database.proprietes_repo import fetch_all as _fa
+    _props = {p["id"]: p["nom"] for p in _fa()
+              if not p.get("mot_de_passe") or is_unlocked(p["id"])}
+    _canal_opts = {"__general__": "🌐 Général"} | {str(k): v for k, v in _props.items()}
+    _canal_labels = list(_canal_opts.values())
+    _canal_keys   = list(_canal_opts.keys())
+
+    # Stocker le canal sélectionné en session
+    if "chat_canal_sel" not in st.session_state:
+        st.session_state["chat_canal_sel"] = "__general__"
+
+    st.markdown("**Canal :**")
+    _btn_cols = st.columns(len(_canal_opts))
+    for _i, (_k, _lbl) in enumerate(_canal_opts.items()):
+        with _btn_cols[_i]:
+            _active = st.session_state["chat_canal_sel"] == _k
+            _label_btn = f"{'✅ ' if _active else ''}{_lbl}"
+            if st.button(_label_btn, key=f"pg_chat_canal_{_i}",
+                          use_container_width=True,
+                          type="primary" if _active else "secondary"):
+                st.session_state["chat_canal_sel"] = _k
+                st.rerun()
+
+    _canal = st.session_state["chat_canal_sel"]
+    _prop_id = int(_canal) if _canal != "__general__" else None
+
+    # Charger messages du canal sélectionné
+    messages = _get_messages(_prop_id)
 
     # Affichage chat
     if not messages:
@@ -97,7 +123,7 @@ def show():
             st.session_state["chat_auteur_nom"] = _nom
             if not msg_input.strip():
                 st.warning("Message vide.")
-            elif _send_message(_nom, msg_input.strip()):
+            elif _send_message(_nom, msg_input.strip(), _prop_id):
                 st.session_state["chat_form_id"] = st.session_state.get("chat_form_id", 0) + 1
                 st.rerun()
             else:
