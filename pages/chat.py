@@ -72,7 +72,10 @@ def show():
     st.markdown("")
 
     # Formulaire envoi — tous les widgets sont dans le form, pas de conflit possible
-    with st.form("chat_form_send", clear_on_submit=True):
+    if "chat_form_id" not in st.session_state:
+        st.session_state["chat_form_id"] = 0
+    _form_key = f"chat_form_{st.session_state['chat_form_id']}"
+    with st.form(_form_key, clear_on_submit=True):
         f_c1, f_c2, f_c3 = st.columns([2, 4, 1])
         with f_c1:
             nom_saisi = st.text_input("Nom", value=auteur,
@@ -92,6 +95,7 @@ def show():
             if not msg_input.strip():
                 st.warning("Message vide.")
             elif _send_message(_nom, msg_input.strip()):
+                st.session_state["chat_form_id"] = st.session_state.get("chat_form_id", 0) + 1
                 st.rerun()
             else:
                 st.error("❌ Erreur — vérifiez que la table messages_internes existe (SQL 030).")
