@@ -167,6 +167,10 @@ def _show_whatsapp(df: pd.DataFrame):
     with col1:
         selected_id = st.selectbox("Réservation", list(options.keys()),
                                     format_func=lambda x: options[x], key="wa_sel")
+    if selected_id is None:
+        with col2:
+            st.selectbox("Modèle", [], key="wa_tpl_empty")
+        return
     row = df[df["id"] == selected_id].iloc[0].to_dict()
     telephone = str(row.get("telephone", "") or "")
     with col2:
