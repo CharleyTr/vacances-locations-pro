@@ -407,6 +407,11 @@ def _show_email_manuel(df: pd.DataFrame):
     if not options:
         st.info("Aucune réservation trouvée.")
         return
+
+    if not search_email:
+        st.info("🔎 Tapez un nom pour rechercher un client.")
+        return
+
     selected_id = st.selectbox("Réservation", list(options.keys()),
                                 format_func=lambda x: options[x], key="email_sel")
     row = df[df["id"] == selected_id].iloc[0].to_dict()
@@ -512,6 +517,10 @@ def _show_sms_manuel(df: pd.DataFrame):
     df_tel_filtre = df_tel.sort_values("date_arrivee", ascending=False)
     if search_sms:
         df_tel_filtre = df_tel_filtre[df_tel_filtre["nom_client"].str.contains(search_sms, case=False, na=False)]
+
+    if not search_sms:
+        st.info("🔎 Tapez un nom pour rechercher un client.")
+        return
 
     if df_tel_filtre.empty:
         st.info("Aucun client trouvé.")
