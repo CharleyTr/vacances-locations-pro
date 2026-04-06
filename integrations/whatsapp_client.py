@@ -8,43 +8,33 @@ import requests
 from urllib.parse import quote
 from config import TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM
 
-
 # ── Mode 1 : lien wa.me (pas d'API) ──────────────────────────────────────────
-
 def build_wa_link(telephone: str, message: str) -> str:
     """
     Génère un lien wa.me qui ouvre WhatsApp avec le message pré-rempli.
-    Fonctionne sans aucune API — s'ouvre dans WhatsApp Web ou l'app mobile.
+    wa.me requiert le numéro SANS le signe + (ex: 33612345678)
     """
     phone = _clean_phone(telephone)
     if not phone:
         return ""
-    return f"https://wa.me/{phone}?text={quote(message)}"
-
+    # Supprimer le + pour wa.me
+    phone_wa = phone.lstrip("+")
+    return f"https://wa.me/{phone_wa}?text={quote(message)}"
 
 # ── Mode 2 : Twilio API (envoi automatique) ───────────────────────────────────
-
 def send_whatsapp(telephone: str, message: str) -> dict:
-    """
-    Envoie un message WhatsApp via Twilio.
-    Retourne {"ok": bool, "error": str|None, "sid": str|None}
-    """
     if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN:
-        return {"ok": False, "error": "Twilio non configuré (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN manquants)"}
-
+        return {"ok": False, "error": "Twilio non configuré"}
     phone = _clean_phone(telephone)
     if not phone:
         return {"ok": False, "error": f"Numéro invalide : {telephone}"}
-
     url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json"
-    from_wa = TWILIO_WHATSAPP_FROM or "whatsapp:+14155238886"  # sandbox Twilio par défaut
-
+    from_wa = TWILIO_WHATSAPP_FROM or "whatsapp:+14155238886"
     payload = {
         "From": from_wa if from_wa.startswith("whatsapp:") else f"whatsapp:{from_wa}",
         "To":   f"whatsapp:{phone}",
         "Body": message[:1600],
     }
-
     try:
         r = requests.post(url, data=payload,
                           auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN), timeout=10)
@@ -55,14 +45,12 @@ def send_whatsapp(telephone: str, message: str) -> dict:
     except Exception as e:
         return {"ok": False, "error": str(e), "sid": None}
 
-
 def _clean_phone(telephone: str) -> str:
     """Normalise un numéro : supprime espaces/tirets, ajoute + si absent."""
     if not telephone:
         return ""
     phone = re.sub(r"[\s\-\.\(\)]", "", str(telephone))
     if not phone.startswith("+"):
-        # Numéro français sans indicatif
         if phone.startswith("0") and len(phone) == 10:
             phone = "+33" + phone[1:]
         else:
