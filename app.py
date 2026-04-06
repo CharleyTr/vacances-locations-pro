@@ -463,7 +463,7 @@ if st.session_state.get("nav_page"):
     _nav = st.session_state.pop("nav_page")
     if _nav == "Chat":
         page = "Chat"
-        elif page == "Chat": chat.show()
+elif page == "Chat": chat.show()
 
 # ── Vérification propriété ────────────────────────────────────────────────────
 _is_admin = st.session_state.get("is_admin", False)
