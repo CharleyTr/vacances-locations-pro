@@ -68,13 +68,10 @@ def show():
     if "chat_canal" not in st.session_state:
         st.session_state["chat_canal"] = "all"
 
-    col_name, col_refresh = st.columns([3, 1])
-    with col_name:
-        new_name = st.text_input("Mon nom dans le chat", value=auteur,
-                                  key="pg_chat_v3_name")
-        if new_name and new_name != auteur:
-            st.session_state["user_name"] = new_name
-            auteur = new_name
+    # Nom stocké en session — pas de widget persistent pour éviter les conflits
+    if "chat_auteur_nom" not in st.session_state:
+        st.session_state["chat_auteur_nom"] = auteur
+    auteur = st.session_state["chat_auteur_nom"]
 
     # Boutons canal
     _btn_cols = st.columns(len(prop_opts))
@@ -132,24 +129,29 @@ def show():
     st.markdown("")
 
     # Formulaire envoi
-    with st.form("form_chat", clear_on_submit=True):
-        cols = st.columns([5, 1])
-        with cols[0]:
+    with st.form("form_chat_send", clear_on_submit=True):
+        f_c1, f_c2, f_c3 = st.columns([2, 4, 1])
+        with f_c1:
+            nom_saisi = st.text_input("Nom", value=auteur,
+                                       placeholder="Votre nom",
+                                       label_visibility="collapsed")
+        with f_c2:
             msg_input = st.text_input(
-                "msg", placeholder=f"Écrire à l'équipe... (en tant que {auteur})",
-                label_visibility="collapsed", key="pg_chat_v3_chat_msg_input"
-            )
-        with cols[1]:
+                "msg", placeholder="Écrire un message...",
+                label_visibility="collapsed")
+        with f_c3:
             submitted = st.form_submit_button("📤", use_container_width=True, type="primary")
 
         if submitted:
+            _nom_final = nom_saisi.strip() or auteur
+            st.session_state["chat_auteur_nom"] = _nom_final
             if not msg_input.strip():
                 st.warning("Message vide.")
-            elif _send_message(auteur, msg_input.strip(), prop_id):
+            elif _send_message(_nom_final, msg_input.strip(), prop_id):
                 st.rerun()
             else:
                 st.error("❌ Erreur d'envoi — vérifiez la table messages_internes (SQL 030).")
 
     # Bouton rafraîchir
-    if st.button("🔄 Rafraîchir", use_container_width=False, key="pg_chat_v3_chat_btn_refresh"):
+    if st.button("🔄 Rafraîchir", use_container_width=False):
         st.rerun()
