@@ -66,11 +66,15 @@ def show():
 
     col_chan, col_name = st.columns([3, 1])
     with col_chan:
-        prop_key = st.selectbox("Canal", list(prop_opts.keys()),
-                                 format_func=lambda x: prop_opts[x], key="chat_canal_prop")
+        _canal_labels = list(prop_opts.values())
+        _canal_keys   = list(prop_opts.keys())
+        _canal_idx    = st.radio("Canal", range(len(_canal_labels)),
+                                  format_func=lambda i: _canal_labels[i],
+                                  horizontal=True, key="chat_radio_canal")
+        prop_key = _canal_keys[_canal_idx]
     with col_name:
-        new_name = st.text_input("Mon nom", value=auteur, key="chat_user_name")
-        if new_name != auteur:
+        new_name = st.text_input("Mon nom", value=auteur, key="chat_user_name_inp")
+        if new_name and new_name != auteur:
             st.session_state["user_name"] = new_name
             auteur = new_name
 
