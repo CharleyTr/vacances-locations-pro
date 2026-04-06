@@ -1,358 +1,141 @@
 """
-Page Chat interne — messagerie en temps réel entre utilisateurs.
+Page Chat interne — messagerie entre utilisateurs de l'app.
 """
 import streamlit as st
-from datetime import datetime, timezone
-from database.chat_repo import (get_messages, send_message, mark_read, delete_message,
-    upload_fichier, get_download_url, send_message_with_file
-)
-from services.proprietes_service import get_proprietes_autorises
+from datetime import datetime
+from database.supabase_client import get_supabase
+from services.auth_service import is_unlocked
 
-
-def _get_user_info() -> tuple[str, str]:
-    """Retourne (email, nom) de l'utilisateur connecté."""
-    email = st.session_state.get("auth_user_email", "")
-    if not email:
-        # Mode PIN — identifier par la propriété
-        prop_id = st.session_state.get("prop_id", 0)
-        props = get_proprietes_autorises()
-        nom = props.get(prop_id, f"Utilisateur #{prop_id}") if prop_id else "Administrateur"
-        email = f"pin_{prop_id}@local"
-        return email, nom
-    nom = email.split("@")[0].replace(".", " ").title()
-    return email, nom
-
-
-def _fmt_time(ts: str) -> str:
-    """Formate la date relative."""
+def _get_messages(propriete_id=None):
+    sb = get_supabase()
+    if sb is None: return []
     try:
-        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        now = datetime.now(timezone.utc)
-        diff = (now - dt).total_seconds()
-        if diff < 60:     return "à l'instant"
-        if diff < 3600:   return f"il y a {int(diff/60)} min"
-        if diff < 86400:  return f"il y a {int(diff/3600)} h"
-        return dt.strftime("%d/%m %H:%M")
-    except:
-        return ts[:16].replace("T", " ")
+        q = sb.table("messages_internes").select("*").order("created_at", desc=False)
+        if propriete_id:
+            q = q.or_(f"propriete_id.eq.{propriete_id},propriete_id.is.null")
+        return q.limit(100).execute().data or []
+    except: return []
 
+def _send_message(auteur, contenu, propriete_id=None):
+    sb = get_supabase()
+    if sb is None: return False
+    try:
+        sb.table("messages_internes").insert({
+            "auteur": auteur,
+            "contenu": contenu,
+            "propriete_id": propriete_id,
+        }).execute()
+        return True
+    except Exception as e:
+        print(f"chat error: {e}"); return False
+
+def _mark_read(propriete_id=None):
+    sb = get_supabase()
+    if sb is None: return
+    try:
+        q = sb.table("messages_internes").update({"lu": True}).eq("lu", False)
+        if propriete_id:
+            q = q.or_(f"propriete_id.eq.{propriete_id},propriete_id.is.null")
+        q.execute()
+    except: pass
+
+def _count_unread(propriete_id=None):
+    sb = get_supabase()
+    if sb is None: return 0
+    try:
+        q = sb.table("messages_internes").select("id", count="exact").eq("lu", False)
+        if propriete_id:
+            q = q.or_(f"propriete_id.eq.{propriete_id},propriete_id.is.null")
+        return q.execute().count or 0
+    except: return 0
 
 def show():
     st.title("💬 Chat interne")
-    st.caption("Messagerie en temps réel entre tous les utilisateurs de l'application.")
+    st.caption("Messagerie entre membres de l'équipe.")
 
-    # Keep-alive WebSocket via rerun automatique (sans meta refresh qui déconnecte)
-    import streamlit.components.v1 as _cv_chat
-    _cv_chat.html("""
-    <script>
-    (function() {
-        // Maintenir le WebSocket Streamlit actif pendant la saisie
-        // en simulant des micro-événements sur le window parent
-        var _ping = setInterval(function() {
-            try {
-                // Déclencher un mousemove synthétique pour réveiller le WebSocket
-                var evt = new MouseEvent('mousemove', {bubbles: true, cancelable: true});
-                window.parent.document.dispatchEvent(evt);
-            } catch(e) {}
-        }, 15000);
-        window.addEventListener('beforeunload', function() { clearInterval(_ping); });
-    })();
-    </script>
-    """, height=0)
+    # Nom utilisateur depuis session
+    auteur = st.session_state.get("user_name") or \
+             st.session_state.get("user_email") or "Utilisateur"
 
-    user_email, user_nom = _get_user_info()
-    is_admin = st.session_state.get("is_admin", False)
+    # Canaux disponibles
+    from database.proprietes_repo import fetch_all as _fa
+    _props = {p["id"]: p["nom"] for p in _fa()
+              if not p.get("mot_de_passe") or is_unlocked(p["id"])}
 
-    # Détecter les nouveaux messages depuis la dernière visite
-    _last_seen_key = f"chat_last_seen_{user_email}"
-    _last_seen_count = st.session_state.get(_last_seen_key, 0)
+    prop_opts = {"all": "🌐 Général"} | {str(k): v for k, v in _props.items()}
 
-    # Marquer les messages comme lus
-    mark_read(user_email)
+    col_chan, col_name = st.columns([3, 1])
+    with col_chan:
+        prop_key = st.selectbox("Canal", list(prop_opts.keys()),
+                                 format_func=lambda x: prop_opts[x], key="chat_prop")
+    with col_name:
+        new_name = st.text_input("Mon nom", value=auteur, key="chat_name")
+        if new_name != auteur:
+            st.session_state["user_name"] = new_name
+            auteur = new_name
 
-    # ── Sélecteur de canal ────────────────────────────────────────────────
-    props = get_proprietes_autorises()
-    canaux = {"0": "💬 Général (tous)"}
-    canaux.update({str(k): f"🏠 {v}" for k, v in props.items()})
+    prop_id = int(prop_key) if prop_key != "all" else None
 
-    canal_choix = st.selectbox(
-        "Canal",
-        options=list(canaux.keys()),
-        format_func=lambda x: canaux[x],
-        key="chat_canal",
-        label_visibility="collapsed"
-    )
-    prop_filter = int(canal_choix) if canal_choix != "0" else None
+    # Charger et marquer comme lus
+    messages = _get_messages(prop_id)
+    _mark_read(prop_id)
 
-    st.divider()
+    # Affichage chat
+    if not messages:
+        st.info("Aucun message. Soyez le premier à écrire !")
+    else:
+        chat_html = ""
+        for msg in messages:
+            _auteur  = msg.get("auteur", "?")
+            _contenu = msg.get("contenu", "").replace("<", "&lt;").replace(">", "&gt;")
+            _date    = msg.get("created_at", "")[:16].replace("T", " ")
+            _is_me   = (_auteur == auteur)
+            _bg      = "#1565C0" if _is_me else "#37474F"
+            _radius  = "18px 18px 4px 18px" if _is_me else "18px 18px 18px 4px"
+            _justify = "flex-end" if _is_me else "flex-start"
 
-    # ── Auto-refresh toutes les 5 secondes ────────────────────────────────
-    if "chat_refresh" not in st.session_state:
-        st.session_state["chat_refresh"] = 0
-    refresh_count = st.session_state["chat_refresh"]
+            chat_html += f"""
+            <div style='display:flex;justify-content:{_justify};margin-bottom:10px'>
+              <div style='max-width:78%;background:{_bg};color:white;
+                          padding:10px 14px;border-radius:{_radius};
+                          font-size:13px;line-height:1.5;word-break:break-word'>
+                {"" if _is_me else f'<div style="font-size:11px;font-weight:bold;opacity:0.8;margin-bottom:3px">{_auteur}</div>'}
+                {_contenu.replace(chr(10), "<br>")}
+                <div style='font-size:10px;opacity:0.55;margin-top:5px;text-align:right'>{_date}</div>
+              </div>
+            </div>"""
 
-    col_r, col_t, col_p = st.columns([1, 3, 2])
-    with col_r:
-        if st.button("🔄 Actualiser", key="btn_refresh_chat"):
-            st.session_state["chat_refresh"] += 1
-            st.rerun()
-    with col_t:
-        # Auto-refresh toutes les 30 secondes si page Chat ouverte
-        import time as _time
-        _last = st.session_state.get("chat_last_refresh_time", 0)
-        _now  = _time.time()
-        if _now - _last > 20:
-            st.session_state["chat_last_refresh_time"] = _now
-            st.session_state["chat_refresh"] += 1
-            st.rerun()
-        _secs_left = max(0, int(20 - (_now - _last)))
-        st.caption(f"🔄 Actualisation dans {_secs_left}s")
-    with col_p:
         st.markdown(
-            "<a href='https://CharleyTr.github.io/vlp-auth/chat-paste.html' target='_blank' "
-            "style='background:#1565C0;color:white;padding:6px 12px;border-radius:6px;"
-            "text-decoration:none;font-size:13px;font-weight:bold'>📋 Coller une capture</a>",
+            f"<div style='height:460px;overflow-y:auto;padding:14px;"
+            f"background:#111827;border-radius:12px;border:1px solid #2D3748'>"
+            f"{chat_html}"
+            f"<div id='chat-bottom'></div>"
+            f"</div>"
+            f"<script>document.getElementById('chat-bottom')?.scrollIntoView({{behavior:'smooth'}});</script>",
             unsafe_allow_html=True
         )
 
-    # ── Messages ──────────────────────────────────────────────────────────
-    messages = get_messages(limit=100, propriete_id=prop_filter)
+    st.markdown("")
 
-    # Alerte nouveaux messages
-    _new_msgs = [m for m in messages
-                 if user_email not in (m.get("lu_par") or [])
-                 and m.get("user_email") != user_email]
-    if _new_msgs:
-        _nb_new = len(_new_msgs)
-        _derniers = [m.get("user_nom") or m.get("user_email","?").split("@")[0]
-                     for m in _new_msgs[-3:]]
-        _noms = ", ".join(set(_derniers))
-        st.markdown(f"""
-        <div style='background:#E53935;color:white;border-radius:10px;
-                    padding:12px 18px;margin-bottom:12px;font-weight:bold;
-                    display:flex;align-items:center;gap:10px'>
-            <span style='font-size:20px'>🔔</span>
-            <span>{_nb_new} nouveau(x) message(s) de <strong>{_noms}</strong></span>
-        </div>
-        <audio autoplay>
-          <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJiVlIBwaWp0kZCOf2deaYyMi4BxaXF9io+Le3FxdImQjYJ3cXSCjJCKgXZzeImTkIt/dnaAi5OTjIJ4d3+Mk5SOg3l4foqUlI2DenqBjZWVjoR8e4KOlpWOhH17g46XlY+FfXyEj5iWj4Z+foWQmJeQh39/hpGZl5CIgH+HkpmakoqChIiTmZuTjIaGipSbnZSNiImLlZ2elZCLi4yWnp+WkY2NjpefoJeSkY+PmJ+glpOSkZCZoaGXlJSSkpqioZiVlZSTm6KimJaXlJSco6OZl5iWlZ2ko5mYmZeXnqWkmZqbmZmenKWlmpybmpmfnaWlm5ydm5qgn6Wlm52em5uhoPX19fX19fX19fX19Q==" type="audio/wav">
-        </audio>
-        """, unsafe_allow_html=True)
-        st.session_state[_last_seen_key] = len(messages)
-
-    if not messages:
-        st.markdown("""
-        <div style='text-align:center;padding:3rem;color:#888'>
-            <div style='font-size:48px'>💬</div>
-            <p>Aucun message — soyez le premier à écrire !</p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        # Afficher les messages dans un conteneur scrollable
-        st.markdown("""
-        <script>
-        function copyMsg(id, btn) {
-            var el = document.getElementById('msg-' + id);
-            if (!el) return;
-            // Copier tout sauf les spans enfants (tooltips)
-            var clone = el.cloneNode(true);
-            var tips = clone.querySelectorAll('.tooltip');
-            tips.forEach(function(t){ t.remove(); });
-            var text = (clone.innerText || clone.textContent || '').trim();
-            // Méthode 1 : execCommand (fonctionne dans iframes)
-            var ta = document.createElement('textarea');
-            ta.value = text;
-            ta.setAttribute('readonly', '');
-            ta.style.cssText = 'position:fixed;top:0;left:0;width:2px;height:2px;opacity:0;border:none;padding:0';
-            document.body.appendChild(ta);
-            ta.focus();
-            ta.select();
-            var ok = false;
-            try { ok = document.execCommand('copy'); } catch(e) {}
-            document.body.removeChild(ta);
-            // Feedback visuel
-            if (btn) {
-                var orig = btn.textContent;
-                btn.textContent = ok ? '✅' : '⚠️';
-                setTimeout(function(){ btn.textContent = orig; }, 1800);
-            }
-        }
-        </script>
-        <style>
-        .chat-container { max-height: 450px; overflow-y: auto; padding: 1rem 0; }
-        .msg-mine   { display:flex; justify-content:flex-end; margin:6px 0; }
-        .msg-other  { display:flex; justify-content:flex-start; margin:6px 0; }
-        .bubble-mine  { background:#1565C0; color:white; padding:10px 16px; border-radius:18px 18px 4px 18px; max-width:70%; font-size:14px; }
-        .bubble-other { background:var(--bg-info,#E3F2FD); color:var(--text-primary,#222); padding:10px 16px; border-radius:18px 18px 18px 4px; max-width:70%; font-size:14px; }
-        @media (prefers-color-scheme: dark) {
-            .bubble-other { background:#1E2D3D !important; color:#E8EAF0 !important; }
-            .msg-meta     { color:#888 !important; }
-            .chat-container { border-color:#2D3748; }
-        }
-        .msg-meta   { font-size:11px; color:#999; margin:2px 4px; }
-        </style>
-        <div class="chat-container" id="chat-bottom">
-        """, unsafe_allow_html=True)
-
-        for msg in messages:
-            is_mine = (msg.get("user_email") == user_email)
-            nom     = msg.get("user_nom") or msg.get("user_email","?").split("@")[0]
-            temps   = _fmt_time(msg.get("created_at",""))
-            contenu = msg.get("contenu","").replace("<","&lt;").replace(">","&gt;")
-            prop_id = msg.get("propriete_id")
-            prop_label = f" · {props.get(prop_id,'?')}" if prop_id and not prop_filter else ""
-
-            fichier_path = msg.get("fichier_path","")
-            fichier_nom  = msg.get("fichier_nom","")
-            fichier_type = msg.get("fichier_type","")
-            fichier_mime = msg.get("fichier_mime","")
-
-            msg_id_str = str(msg.get("id",""))
-            if is_mine:
-                st.markdown(f"""
-                <div class="msg-mine">
-                  <div>
-                    <div class="bubble-mine" id="msg-{msg_id_str}">{contenu}</div>
-                    <div class="msg-meta" style="text-align:right">
-                      <span onclick="copyMsg('{msg_id_str}', this)" title="Copier le message"
-                        style="cursor:pointer;margin-right:6px;opacity:0.7;user-select:none">📋</span>
-                      {temps}{prop_label}
-                    </div>
-                  </div>
-                </div>""", unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div class="msg-other">
-                  <div>
-                    <div class="bubble-other" id="msg-{msg_id_str}"><strong>{nom}</strong><br>{contenu}</div>
-                    <div class="msg-meta">
-                      <span onclick="copyMsg('{msg_id_str}', this)" title="Copier le message"
-                        style="cursor:pointer;margin-right:6px;opacity:0.7;user-select:none">📋</span>
-                      {temps}{prop_label}
-                    </div>
-                  </div>
-                </div>""", unsafe_allow_html=True)
-
-            # Afficher la pièce jointe sous la bulle
-            if fichier_path:
-                url = get_download_url(fichier_path)
-                if url:
-                    if fichier_type == "image":
-                        try:
-                            st.image(url, caption=fichier_nom, width=300)
-                        except:
-                            st.link_button(f"🖼️ {fichier_nom}", url)
-                    else:
-                        ext = fichier_nom.rsplit(".",1)[-1].upper() if "." in fichier_nom else "?"
-                        st.markdown(
-                            f"<a href='{url}' target='_blank' style='display:inline-block;"
-                            f"padding:6px 12px;background:var(--bg-info,#E3F2FD);border-radius:8px;"
-                            f"color:#1565C0;text-decoration:none;font-size:13px'>"
-                            f"📎 {fichier_nom} <span style='opacity:0.6;font-size:11px'>({ext})</span></a>",
-                            unsafe_allow_html=True
-                        )
-
-            # Bouton suppression admin
-            if is_admin and st.button("🗑️", key=f"del_msg_{msg['id']}",
-                                       help="Supprimer ce message"):
-                delete_message(msg["id"], fichier_path)
-                st.rerun()
-
-        st.markdown("</div>", unsafe_allow_html=True)
-        # Scroll auto vers le bas
-        st.markdown("""
-        <script>
-        var c = document.getElementById('chat-bottom');
-        if(c) c.scrollTop = c.scrollHeight;
-        </script>""", unsafe_allow_html=True)
-
-    st.divider()
-
-    # ── Coller depuis le presse-papier (Ctrl+C sur une image → bouton) ────
-    try:
-        from streamlit_paste_button import paste_image_button
-        paste_result = paste_image_button(
-            label="📋 Coller une image (Ctrl+C → clic ici)",
-            background_color="#E3F2FD",
-            hover_background_color="#BBDEFB",
-            key="chat_paste_btn"
-        )
-        if paste_result.image_data is not None:
-            import io
-            buf = io.BytesIO()
-            paste_result.image_data.save(buf, format="PNG")
-            img_bytes = buf.getvalue()
-            with st.form("form_paste_img", clear_on_submit=True):
-                legende = st.text_input("Légende (optionnel)", key="paste_legende",
-                                         placeholder="Description de l'image...")
-                envoyer_img = st.form_submit_button("📤 Envoyer l'image",
-                                                     type="primary",
-                                                     use_container_width=True)
-            if envoyer_img:
-                f_path = upload_fichier(img_bytes, "capture.png", "image/png", user_email)
-                if f_path:
-                    result = send_message_with_file(
-                        contenu=legende.strip() or "📸 Capture d'écran",
-                        user_email=user_email,
-                        user_nom=user_nom,
-                        propriete_id=prop_filter,
-                        fichier_nom="capture.png",
-                        fichier_path=f_path,
-                        fichier_type="image",
-                        fichier_mime="image/png",
-                    )
-                    if result:
-                        st.session_state["chat_refresh"] += 1
-                        st.rerun()
-    except ImportError:
-        st.caption("💡 Pour coller des captures : ajoutez `streamlit-paste-button` dans requirements.txt")
-    except Exception as e:
-        pass
-
-    st.divider()
-
-    # ── Formulaire d'envoi ────────────────────────────────────────────────
-    with st.form("form_chat_send", clear_on_submit=True):
-        texte = st.text_input(
-            "Message",
-            placeholder=f"Écrivez un message... (canal : {canaux[canal_choix]})",
-            label_visibility="collapsed",
-            key="chat_input"
-        )
-        col_f, col_btn = st.columns([3, 1])
-        with col_f:
-            fichier = st.file_uploader(
-                "📎 Image ou document",
-                type=["jpg","jpeg","png","gif","webp","pdf","docx","xlsx","txt","csv"],
-                key="chat_file",
-                label_visibility="visible"
+    # Formulaire envoi
+    with st.form("form_chat", clear_on_submit=True):
+        cols = st.columns([5, 1])
+        with cols[0]:
+            msg_input = st.text_input(
+                "msg", placeholder=f"Écrire à l'équipe... (en tant que {auteur})",
+                label_visibility="collapsed", key="chat_input"
             )
-        with col_btn:
-            st.markdown("<div style='margin-top:28px'></div>", unsafe_allow_html=True)
-            envoyer = st.form_submit_button("📤 Envoyer", type="primary",
-                                             use_container_width=True)
+        with cols[1]:
+            submitted = st.form_submit_button("📤", use_container_width=True, type="primary")
 
-    if envoyer and (texte.strip() or fichier):
-        # Upload fichier si présent
-        f_path = f_nom = f_type = f_mime = ""
-        if fichier:
-            f_mime = fichier.type or "application/octet-stream"
-            f_nom  = fichier.name
-            f_type = "image" if f_mime.startswith("image/") else "document"
-            f_path = upload_fichier(fichier.read(), f_nom, f_mime, user_email) or ""
+        if submitted:
+            if not msg_input.strip():
+                st.warning("Message vide.")
+            elif _send_message(auteur, msg_input.strip(), prop_id):
+                st.rerun()
+            else:
+                st.error("❌ Erreur d'envoi — vérifiez la table messages_internes (SQL 030).")
 
-        result = send_message_with_file(
-            contenu=texte.strip(),
-            user_email=user_email,
-            user_nom=user_nom,
-            propriete_id=prop_filter,
-            fichier_nom=f_nom,
-            fichier_path=f_path,
-            fichier_type=f_type,
-            fichier_mime=f_mime,
-        )
-        if result:
-            st.session_state["chat_refresh"] += 1
-            st.rerun()
-        else:
-            st.error("❌ Erreur lors de l'envoi.")
+    # Bouton rafraîchir
+    if st.button("🔄 Rafraîchir", use_container_width=False, key="chat_refresh"):
+        st.rerun()
