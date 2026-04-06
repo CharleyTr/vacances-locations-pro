@@ -67,9 +67,9 @@ def show():
     col_chan, col_name = st.columns([3, 1])
     with col_chan:
         prop_key = st.selectbox("Canal", list(prop_opts.keys()),
-                                 format_func=lambda x: prop_opts[x], key="chat_prop")
+                                 format_func=lambda x: prop_opts[x], key="chat_canal_prop")
     with col_name:
-        new_name = st.text_input("Mon nom", value=auteur, key="chat_name")
+        new_name = st.text_input("Mon nom", value=auteur, key="chat_user_name")
         if new_name != auteur:
             st.session_state["user_name"] = new_name
             auteur = new_name
@@ -123,7 +123,7 @@ def show():
         with cols[0]:
             msg_input = st.text_input(
                 "msg", placeholder=f"Écrire à l'équipe... (en tant que {auteur})",
-                label_visibility="collapsed", key="chat_input"
+                label_visibility="collapsed", key="chat_msg_input"
             )
         with cols[1]:
             submitted = st.form_submit_button("📤", use_container_width=True, type="primary")
@@ -137,5 +137,5 @@ def show():
                 st.error("❌ Erreur d'envoi — vérifiez la table messages_internes (SQL 030).")
 
     # Bouton rafraîchir
-    if st.button("🔄 Rafraîchir", use_container_width=False, key="chat_refresh"):
+    if st.button("🔄 Rafraîchir", use_container_width=False, key="chat_btn_refresh"):
         st.rerun()
