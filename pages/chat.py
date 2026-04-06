@@ -70,10 +70,10 @@ def show():
         _canal_keys   = list(prop_opts.keys())
         _canal_idx    = st.radio("Canal", range(len(_canal_labels)),
                                   format_func=lambda i: _canal_labels[i],
-                                  horizontal=True, key="chat_radio_canal")
+                                  horizontal=True, key="pg_chat_v3_chat_radio_canal")
         prop_key = _canal_keys[_canal_idx]
     with col_name:
-        new_name = st.text_input("Mon nom", value=auteur, key="chat_user_name_inp")
+        new_name = st.text_input("Mon nom", value=auteur, key="pg_chat_v3_chat_user_name_inp")
         if new_name and new_name != auteur:
             st.session_state["user_name"] = new_name
             auteur = new_name
@@ -127,7 +127,7 @@ def show():
         with cols[0]:
             msg_input = st.text_input(
                 "msg", placeholder=f"Écrire à l'équipe... (en tant que {auteur})",
-                label_visibility="collapsed", key="chat_msg_input"
+                label_visibility="collapsed", key="pg_chat_v3_chat_msg_input"
             )
         with cols[1]:
             submitted = st.form_submit_button("📤", use_container_width=True, type="primary")
@@ -141,5 +141,5 @@ def show():
                 st.error("❌ Erreur d'envoi — vérifiez la table messages_internes (SQL 030).")
 
     # Bouton rafraîchir
-    if st.button("🔄 Rafraîchir", use_container_width=False, key="chat_btn_refresh"):
+    if st.button("🔄 Rafraîchir", use_container_width=False, key="pg_chat_v3_chat_btn_refresh"):
         st.rerun()
