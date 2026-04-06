@@ -2,94 +2,39 @@
 Page Chat interne — messagerie entre utilisateurs de l'app.
 """
 import streamlit as st
-from datetime import datetime
 from database.supabase_client import get_supabase
 from services.auth_service import is_unlocked
 
-def _get_messages(propriete_id=None):
+def _get_messages():
     sb = get_supabase()
     if sb is None: return []
     try:
-        q = sb.table("messages_internes").select("*").order("created_at", desc=False)
-        if propriete_id:
-            q = q.or_(f"propriete_id.eq.{propriete_id},propriete_id.is.null")
-        return q.limit(100).execute().data or []
+        return sb.table("messages_internes").select("*")\
+            .order("created_at", desc=False).limit(100).execute().data or []
     except: return []
 
-def _send_message(auteur, contenu, propriete_id=None):
+def _send_message(auteur, contenu):
     sb = get_supabase()
     if sb is None: return False
     try:
         sb.table("messages_internes").insert({
             "auteur": auteur,
             "contenu": contenu,
-            "propriete_id": propriete_id,
         }).execute()
         return True
     except Exception as e:
         print(f"chat error: {e}"); return False
 
-def _mark_read(propriete_id=None):
-    sb = get_supabase()
-    if sb is None: return
-    try:
-        q = sb.table("messages_internes").update({"lu": True}).eq("lu", False)
-        if propriete_id:
-            q = q.or_(f"propriete_id.eq.{propriete_id},propriete_id.is.null")
-        q.execute()
-    except: pass
-
-def _count_unread(propriete_id=None):
-    sb = get_supabase()
-    if sb is None: return 0
-    try:
-        q = sb.table("messages_internes").select("id", count="exact").eq("lu", False)
-        if propriete_id:
-            q = q.or_(f"propriete_id.eq.{propriete_id},propriete_id.is.null")
-        return q.execute().count or 0
-    except: return 0
-
 def show():
     st.title("💬 Chat interne")
     st.caption("Messagerie entre membres de l'équipe.")
 
-    # Nom utilisateur depuis session
-    auteur = st.session_state.get("user_name") or \
-             st.session_state.get("user_email") or "Utilisateur"
+    # Nom auteur depuis session
+    auteur = st.session_state.get("chat_auteur_nom") or \
+             st.session_state.get("user_name") or "Utilisateur"
 
-    # Canaux disponibles
-    from database.proprietes_repo import fetch_all as _fa
-    _props = {p["id"]: p["nom"] for p in _fa()
-              if not p.get("mot_de_passe") or is_unlocked(p["id"])}
-
-    prop_opts = {"all": "🌐 Général"} | {str(k): v for k, v in _props.items()}
-
-    # Canal sélectionné via session_state — pas de widget radio pour éviter les conflits
-    if "chat_canal" not in st.session_state:
-        st.session_state["chat_canal"] = "all"
-
-    # Nom stocké en session — pas de widget persistent pour éviter les conflits
-    if "chat_auteur_nom" not in st.session_state:
-        st.session_state["chat_auteur_nom"] = auteur
-    auteur = st.session_state["chat_auteur_nom"]
-
-    # Boutons canal
-    _btn_cols = st.columns(len(prop_opts))
-    for _i, (_k, _label) in enumerate(prop_opts.items()):
-        with _btn_cols[_i]:
-            _active = st.session_state["chat_canal"] == _k
-            if st.button(_label, key=f"chat_canal_btn_{_i}",
-                          type="primary" if _active else "secondary",
-                          use_container_width=True):
-                st.session_state["chat_canal"] = _k
-                st.rerun()
-
-    prop_key = st.session_state["chat_canal"]
-    prop_id = int(prop_key) if prop_key != "all" else None
-
-    # Charger et marquer comme lus
-    messages = _get_messages(prop_id)
-    _mark_read(prop_id)
+    # Charger messages
+    messages = _get_messages()
 
     # Affichage chat
     if not messages:
@@ -120,38 +65,36 @@ def show():
             f"<div style='height:460px;overflow-y:auto;padding:14px;"
             f"background:#111827;border-radius:12px;border:1px solid #2D3748'>"
             f"{chat_html}"
-            f"<div id='chat-bottom'></div>"
-            f"</div>"
-            f"<script>document.getElementById('chat-bottom')?.scrollIntoView({{behavior:'smooth'}});</script>",
+            f"</div>",
             unsafe_allow_html=True
         )
 
     st.markdown("")
 
-    # Formulaire envoi
-    with st.form("form_chat_send", clear_on_submit=True):
+    # Formulaire envoi — tous les widgets sont dans le form, pas de conflit possible
+    with st.form("chat_form_send", clear_on_submit=True):
         f_c1, f_c2, f_c3 = st.columns([2, 4, 1])
         with f_c1:
             nom_saisi = st.text_input("Nom", value=auteur,
                                        placeholder="Votre nom",
-                                       label_visibility="collapsed")
+                                       label_visibility="visible")
         with f_c2:
-            msg_input = st.text_input(
-                "msg", placeholder="Écrire un message...",
-                label_visibility="collapsed")
+            msg_input = st.text_input("Message", placeholder="Écrire un message...",
+                                       label_visibility="visible")
         with f_c3:
-            submitted = st.form_submit_button("📤", use_container_width=True, type="primary")
+            st.markdown("<br>", unsafe_allow_html=True)
+            submitted = st.form_submit_button("📤 Envoyer", type="primary",
+                                               use_container_width=True)
 
         if submitted:
-            _nom_final = nom_saisi.strip() or auteur
-            st.session_state["chat_auteur_nom"] = _nom_final
+            _nom = nom_saisi.strip() or auteur
+            st.session_state["chat_auteur_nom"] = _nom
             if not msg_input.strip():
                 st.warning("Message vide.")
-            elif _send_message(_nom_final, msg_input.strip(), prop_id):
+            elif _send_message(_nom, msg_input.strip()):
                 st.rerun()
             else:
-                st.error("❌ Erreur d'envoi — vérifiez la table messages_internes (SQL 030).")
+                st.error("❌ Erreur — vérifiez que la table messages_internes existe (SQL 030).")
 
-    # Bouton rafraîchir
-    if st.button("🔄 Rafraîchir", use_container_width=False):
+    if st.button("🔄 Rafraîchir les messages"):
         st.rerun()
