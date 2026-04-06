@@ -526,6 +526,10 @@ def _show_sms_manuel(df: pd.DataFrame):
         st.info("🔎 Tapez un nom pour rechercher un client.")
         return
 
+    if not search_sms:
+        st.info("Tapez un nom pour rechercher un client.")
+        return
+
     if df_tel_filtre.empty:
         st.info("Aucun client trouvé.")
         return
