@@ -507,7 +507,16 @@ def _show_sms_manuel(df: pd.DataFrame):
         st.warning("Aucune réservation avec téléphone.")
         return
 
-    # ── Sélection réservation ─────────────────────────────────────────────
+    # ── Recherche + Sélection réservation ────────────────────────────────
+    search_sms = st.text_input("🔎 Rechercher un client", placeholder="Tapez un nom...", key="sms_search")
+    df_tel_filtre = df_tel.sort_values("date_arrivee", ascending=False)
+    if search_sms:
+        df_tel_filtre = df_tel_filtre[df_tel_filtre["nom_client"].str.contains(search_sms, case=False, na=False)]
+
+    if df_tel_filtre.empty:
+        st.info("Aucun client trouvé.")
+        return
+
     options = {
         row["id"]: (
             f"{row['nom_client']} — "
@@ -515,7 +524,7 @@ def _show_sms_manuel(df: pd.DataFrame):
             f"{row['date_arrivee'].strftime('%d/%m/%Y') if hasattr(row['date_arrivee'], 'strftime') else str(row['date_arrivee'])[:10]} — "
             f"📱 {row.get('telephone','')}"
         )
-        for _, row in df_tel.sort_values("date_arrivee", ascending=False).iterrows()
+        for _, row in df_tel_filtre.iterrows()
     }
     selected_id = st.selectbox("Réservation", list(options.keys()),
                                 format_func=lambda x: options[x], key="sms_sel")
