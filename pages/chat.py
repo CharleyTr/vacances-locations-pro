@@ -77,29 +77,39 @@ def show():
     # Nom auteur
     auteur = st.session_state.get("chat_auteur_nom") or st.session_state.get("user_name") or "Utilisateur"
 
-    # Sélection canal
+    # Canal selon le rôle
+    _is_admin = st.session_state.get("is_admin", False)
+    _prop_id_session = st.session_state.get("prop_id", 0) or None
+
     from database.proprietes_repo import fetch_all as _fa
-    _props = {p["id"]: p["nom"] for p in _fa() if not p.get("mot_de_passe") or is_unlocked(p["id"])}
-    _canal_opts = {"__general__": "🌐 Général"}
-    _canal_opts.update({str(k): v for k, v in _props.items()})
+    _all_props = {p["id"]: p["nom"] for p in _fa()}
 
-    if "chat_canal_sel" not in st.session_state:
-        st.session_state["chat_canal_sel"] = "__general__"
+    if _is_admin:
+        # Admin : peut choisir parmi tous les canaux
+        _canal_opts = {"__general__": "🌐 Général"}
+        _canal_opts.update({str(k): v for k, v in _all_props.items()})
 
-    st.markdown("**Canal :**")
-    _btn_cols = st.columns(len(_canal_opts))
-    for _i, (_k, _lbl) in enumerate(_canal_opts.items()):
-        with _btn_cols[_i]:
-            _active = (st.session_state["chat_canal_sel"] == _k)
-            if st.button(("✅ " if _active else "") + _lbl,
-                          key=f"pg_chat_canal_btn_{_i}",
-                          use_container_width=True,
-                          type="primary" if _active else "secondary"):
-                st.session_state["chat_canal_sel"] = _k
-                st.rerun()
+        if "chat_canal_sel" not in st.session_state:
+            st.session_state["chat_canal_sel"] = "__general__"
 
-    _canal = st.session_state["chat_canal_sel"]
-    _prop_id = int(_canal) if _canal != "__general__" else None
+        st.markdown("**Canal :**")
+        _btn_cols = st.columns(len(_canal_opts))
+        for _i, (_k, _lbl) in enumerate(_canal_opts.items()):
+            with _btn_cols[_i]:
+                _active = (st.session_state["chat_canal_sel"] == _k)
+                if st.button(("✅ " if _active else "") + _lbl,
+                              key=f"pg_chat_canal_btn_{_i}",
+                              use_container_width=True,
+                              type="primary" if _active else "secondary"):
+                    st.session_state["chat_canal_sel"] = _k
+                    st.rerun()
+        _canal = st.session_state["chat_canal_sel"]
+        _prop_id = int(_canal) if _canal != "__general__" else None
+    else:
+        # Propriétaire : uniquement son canal propriété
+        _prop_id = _prop_id_session
+        _prop_nom = _all_props.get(_prop_id, "Ma propriété") if _prop_id else "Général"
+        st.info(f"🏠 Canal : **{_prop_nom}** — échanges avec l'administrateur")
 
     # Charger messages et marquer comme lus
     messages = _get_messages(_prop_id)
