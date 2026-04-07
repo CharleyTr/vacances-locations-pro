@@ -74,8 +74,18 @@ def show():
     st.title("💬 Chat interne")
     st.caption("Messagerie entre membres de l'équipe.")
 
-    # Nom auteur
-    auteur = st.session_state.get("chat_auteur_nom") or st.session_state.get("user_name") or "Utilisateur"
+    # Nom auteur = signataire de la propriété ou email admin
+    _prop_id_auth = st.session_state.get("prop_id", 0) or None
+    try:
+        from database.proprietes_repo import fetch_all as _fa_auth
+        _props_auth = {p["id"]: p for p in _fa_auth()}
+        if _prop_id_auth and _prop_id_auth in _props_auth:
+            auteur = _props_auth[_prop_id_auth].get("signataire") or                      _props_auth[_prop_id_auth].get("nom") or "Utilisateur"
+        else:
+            # Admin : utiliser email ou "Administration"
+            auteur = st.session_state.get("auth_user_email") or "Administration"
+    except:
+        auteur = st.session_state.get("chat_auteur_nom") or "Utilisateur"
 
     # Canal selon le rôle
     _is_admin = st.session_state.get("is_admin", False)
@@ -157,7 +167,8 @@ def show():
     with st.form(f"chat_form_{st.session_state['chat_form_id']}", clear_on_submit=True):
         f_c1, f_c2, f_c3 = st.columns([2, 4, 1])
         with f_c1:
-            nom_saisi = st.text_input("Nom", value=auteur, placeholder="Votre nom")
+            st.markdown(f"**{auteur}**", unsafe_allow_html=False)
+            nom_saisi = auteur
         with f_c2:
             msg_input = st.text_input("Message", placeholder="Écrire un message...")
         with f_c3:
