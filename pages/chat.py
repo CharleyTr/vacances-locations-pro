@@ -21,6 +21,41 @@ def _get_messages(propriete_id=None):
     except: return []
 
 
+def _count_unread(auteur, propriete_id=None):
+    """Compte les messages non lus par cet auteur dans ce canal."""
+    sb = get_supabase()
+    if sb is None: return 0
+    try:
+        q = sb.table("messages_internes").select("id, lu_par")
+        if propriete_id:
+            q = q.eq("propriete_id", propriete_id)
+        else:
+            q = q.is_("propriete_id", None)
+        rows = q.execute().data or []
+        return sum(1 for r in rows
+                   if auteur not in (r.get("lu_par") or [])
+                   and r.get("auteur") != auteur)
+    except: return 0
+
+def _mark_all_read(auteur, propriete_id=None):
+    """Marque tous les messages du canal comme lus par cet auteur."""
+    sb = get_supabase()
+    if sb is None: return
+    try:
+        q = sb.table("messages_internes").select("id, lu_par")
+        if propriete_id:
+            q = q.eq("propriete_id", propriete_id)
+        else:
+            q = q.is_("propriete_id", None)
+        rows = q.execute().data or []
+        for r in rows:
+            lu_par = r.get("lu_par") or []
+            if auteur not in lu_par:
+                lu_par.append(auteur)
+                sb.table("messages_internes").update({"lu_par": lu_par})                  .eq("id", r["id"]).execute()
+    except: pass
+
+
 def _send_message(auteur, contenu, propriete_id=None):
     sb = get_supabase()
     if sb is None: return False
@@ -66,8 +101,9 @@ def show():
     _canal = st.session_state["chat_canal_sel"]
     _prop_id = int(_canal) if _canal != "__general__" else None
 
-    # Charger messages
+    # Charger messages et marquer comme lus
     messages = _get_messages(_prop_id)
+    _mark_all_read(auteur, _prop_id)
 
     # Affichage
     if not messages:
