@@ -11,12 +11,13 @@ def _get_messages(propriete_id=None):
     sb = get_supabase()
     if sb is None: return []
     try:
-        q = sb.table("messages_internes").select("*").order("created_at", desc=False)
-        if propriete_id:
-            q = q.eq("propriete_id", propriete_id)
+        data = sb.table("messages_internes").select("*")            .order("created_at", desc=False).limit(200).execute().data or []
+        if propriete_id is None:
+            # Canal général : uniquement les messages sans propriété
+            return [m for m in data if not m.get("propriete_id")]
         else:
-            q = q.is_("propriete_id", "null")
-        return q.limit(100).execute().data or []
+            # Canal propriété : uniquement les messages de cette propriété
+            return [m for m in data if m.get("propriete_id") == propriete_id]
     except: return []
 
 
