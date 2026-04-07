@@ -129,26 +129,33 @@ def sidebar() -> str:
         )
         # ── Badge non-lus Chat ───────────────────────────────────────────
         try:
-            from database.chat_repo import count_unread
-            _email = st.session_state.get("auth_user_email", "")
-            if not _email:
-                _pid = st.session_state.get("prop_id", 0)
-                _email = f"pin_{_pid}@local"
-            _unread = count_unread(_email)
-            if _unread > 0:
-                st.markdown(
-                    f"<div style='background:#E53935;color:white;border-radius:12px;"
-                    f"padding:4px 12px;font-size:12px;font-weight:bold;text-align:center;"
-                    f"margin-bottom:6px'>💬 {_unread} nouveau(x) message(s)</div>",
-                    unsafe_allow_html=True
-                )
-                # Auto-navigation : si l'utilisateur n'est pas sur le Chat, proposer d'y aller
-                _current_page = st.session_state.get("current_page", "")
-                if _current_page != "Chat":
-                    if st.button("💬 Voir les messages", key="btn_goto_chat",
-                                  use_container_width=True, type="primary"):
-                        st.session_state["nav_page"] = "Chat"
-                        st.rerun()
+            from database.supabase_client import get_supabase as _get_sb
+            _auteur = st.session_state.get("auth_user_email") or                       st.session_state.get("chat_auteur_nom") or                       f"pin_{st.session_state.get('prop_id', 0)}"
+            _prop_id_sb = st.session_state.get("prop_id", 0) or None
+            _sb = _get_sb()
+            if _sb and _auteur:
+                _q = _sb.table("messages_internes").select("id, lu_par, auteur")
+                if _prop_id_sb:
+                    _q = _q.eq("propriete_id", _prop_id_sb)
+                else:
+                    _q = _q.is_("propriete_id", None)
+                _rows = _q.execute().data or []
+                _unread = sum(1 for r in _rows
+                              if _auteur not in (r.get("lu_par") or [])
+                              and r.get("auteur") != _auteur)
+                if _unread > 0:
+                    st.markdown(
+                        f"<div style='background:#E53935;color:white;border-radius:12px;"
+                        f"padding:4px 12px;font-size:12px;font-weight:bold;text-align:center;"
+                        f"margin-bottom:6px'>💬 {_unread} nouveau(x) message(s)</div>",
+                        unsafe_allow_html=True
+                    )
+                    _current_page = st.session_state.get("current_page", "")
+                    if _current_page != "Chat":
+                        if st.button("💬 Voir les messages", key="btn_goto_chat",
+                                      use_container_width=True, type="primary"):
+                            st.session_state["nav_page"] = "Chat"
+                            st.rerun()
         except: pass
 
         st.divider()
