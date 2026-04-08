@@ -263,6 +263,21 @@ def _show_formulaire_ajout():
             result = repo.insert_reservation(data)
             st.success(f"✅ Réservation ajoutée ! (ID: {result.get('id', '—')})")
             st.balloons()
+            # Notification push
+            try:
+                from services.pushover_service import notify_nouvelle_reservation
+                from database.proprietes_repo import fetch_dict as _fd
+                _props = _fd()
+                _prop_nom = _props.get(int(data.get("propriete_id", 0) or 0), "")
+                notify_nouvelle_reservation(
+                    nom_client  = data.get("nom_client", ""),
+                    plateforme  = data.get("plateforme", ""),
+                    date_arrivee= str(data.get("date_arrivee", ""))[:10],
+                    date_depart = str(data.get("date_depart", ""))[:10],
+                    prix_net    = float(data.get("prix_net", 0) or 0),
+                    prop_nom    = _prop_nom,
+                )
+            except Exception: pass
         except Exception as e:
             st.error(f"Erreur : {e}")
 
