@@ -32,6 +32,19 @@ def show():
                         f"{_r.get('plateforme','?')} — "
                         f"📱 {_tel if _tel else 'pas de tél'}"
                     )
+                # Notification push J-1 (une seule fois par session)
+                _notif_key = f"push_j1_{_demain.strftime('%Y%m%d')}"
+                if not st.session_state.get(_notif_key):
+                    try:
+                        from services.pushover_service import notify_arrivee_demain
+                        for _, _r in _arr.iterrows():
+                            notify_arrivee_demain(
+                                nom_client = _r.get("nom_client", ""),
+                                telephone  = str(_r.get("telephone","") or ""),
+                                prop_nom   = str(_r.get("propriete_id",""))
+                            )
+                        st.session_state[_notif_key] = True
+                    except Exception: pass
                 st.markdown(
                     f"<div style='background:#1B5E20;border-left:5px solid #69F0AE;"
                     f"padding:12px 18px;border-radius:0 8px 8px 0;margin-bottom:16px'>"
