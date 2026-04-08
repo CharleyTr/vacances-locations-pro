@@ -37,11 +37,15 @@ def show():
                 if not st.session_state.get(_notif_key):
                     try:
                         from services.pushover_service import notify_arrivee_demain
+                        from database.proprietes_repo import fetch_dict as _fd_push
+                        _props_push = _fd_push()
                         for _, _r in _arr.iterrows():
+                            _pid_push = int(_r.get("propriete_id", 0) or 0)
+                            _prop_nom_push = _props_push.get(_pid_push, f"Propriété {_pid_push}")
                             notify_arrivee_demain(
                                 nom_client = _r.get("nom_client", ""),
                                 telephone  = str(_r.get("telephone","") or ""),
-                                prop_nom   = str(_r.get("propriete_id",""))
+                                prop_nom   = _prop_nom_push
                             )
                         st.session_state[_notif_key] = True
                     except Exception: pass
