@@ -119,7 +119,7 @@ def sidebar() -> str:
         st.divider()
 
         # Pages admin uniquement (Villa Tobias)
-        PAGES_ADMIN_ONLY = {"🏠 Propriétés", "📐 Barèmes fiscaux", "👥 Utilisateurs", "📋 Journal", "💾 Sauvegarde", "🔧 Corrections"}
+        PAGES_ADMIN_ONLY = {"📐 Barèmes fiscaux", "👥 Utilisateurs", "📋 Journal", "💾 Sauvegarde", "🔧 Corrections"}
         PAGES_DEMO_HIDDEN = {"🔄 Sync iCal", "📥 Import Booking", "📥 Import Airbnb", "💾 Sauvegarde", "🔧 Corrections", "👥 Utilisateurs", "📋 Journal"}
         is_admin = st.session_state.get("is_admin", False)
 
