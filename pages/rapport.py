@@ -97,6 +97,49 @@ def _show_export(df: pd.DataFrame, prop_nom: str):
             use_container_width=True,
         )
         st.caption(f"Fichier : **{filename}** — 4 onglets inclus")
+
+        # ── Export PDF mensuel ───────────────────────────────────────────
+        st.divider()
+        st.subheader("📄 Rapport PDF mensuel")
+        st.markdown("Génère un rapport PDF professionnel pour un mois donné.")
+
+        col_pdf1, col_pdf2 = st.columns(2)
+        with col_pdf1:
+            mois_noms = ["Janvier","Février","Mars","Avril","Mai","Juin",
+                         "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+            mois_sel = st.selectbox("Mois", range(1,13),
+                                     format_func=lambda m: mois_noms[m-1],
+                                     index=datetime.now().month-1,
+                                     key="rpt_pdf_mois")
+        with col_pdf2:
+            annee_pdf = st.selectbox("Année PDF", annees, key="rpt_pdf_annee")
+
+        if st.button("📄 Générer le PDF", type="primary", use_container_width=True, key="btn_pdf"):
+            try:
+                from services.pdf_rapport import generer_rapport_pdf
+                from datetime import datetime as _dt
+                _resas_all = df.to_dict("records")
+                _resas_n1  = df[df["annee"] == annee_pdf - 1].to_dict("records")
+                pdf_bytes = generer_rapport_pdf(
+                    prop_nom  = prop_nom,
+                    mois      = mois_sel,
+                    annee     = annee_pdf,
+                    reservations    = _resas_all,
+                    reservations_n1 = _resas_n1,
+                )
+                safe_nom_pdf = prop_nom.replace(" ", "_").replace("/", "-")
+                filename_pdf = f"Rapport_{safe_nom_pdf}_{annee_pdf}_{mois_sel:02d}.pdf"
+                st.download_button(
+                    label=f"⬇️ Télécharger le PDF — {mois_noms[mois_sel-1]} {annee_pdf}",
+                    data=pdf_bytes,
+                    file_name=filename_pdf,
+                    mime="application/pdf",
+                    type="primary",
+                    use_container_width=True,
+                    key="btn_dl_pdf"
+                )
+            except Exception as e_pdf:
+                st.error(f"Erreur PDF : {e_pdf}")
     except Exception as e:
         st.error(f"❌ Erreur génération : {e}")
 
