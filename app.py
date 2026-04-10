@@ -63,10 +63,7 @@ if _token:
     st.stop()
 
 # ── MODE NORMAL ────────────────────────────────────────────────────────────────
-# Branding adaptatif (démo vs production)
-_is_demo = st.session_state.get("prop_id") == 5
-_app_name = "LodgePro" if _is_demo else "Vacances-Locations PRO"
-st.set_page_config(page_title=_app_name, page_icon="🏖️", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Vacances-Locations PRO", page_icon="🏖️", layout="wide", initial_sidebar_state="expanded")
 
 # ── CSS Dark Mode global ──────────────────────────────────────────────────────
 st.markdown("""
