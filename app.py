@@ -218,7 +218,7 @@ def _show_splash_login():
     import os
     st.markdown("""<style>[data-testid="stSidebar"],[data-testid="stSidebarNav"],[data-testid="collapsedControl"],#MainMenu,footer{display:none!important}.main .block-container{max-width:420px;margin:3rem auto;padding:2rem}</style>""", unsafe_allow_html=True)
     st.markdown("""<div style='text-align:center;padding:1.5rem 0 1.5rem 0'><div style='font-size:64px'>🏖️</div><h1 style='font-size:2rem;margin:0.5rem 0 0.2rem 0;color:#1565C0'>Vacances-Locations Pro</h1><p style='color:#666;font-size:0.9rem;margin:0'>Gestion locative</p></div>""", unsafe_allow_html=True)
-    props = [p for p in _fetch_props() if p.get("actif")]
+    props = [p for p in _fetch_props(force_refresh=True) if p.get("actif")]
     if not props or all(not p.get("mot_de_passe") for p in props):
         st.session_state["global_logged_in"]=True; st.session_state["is_admin"]=True; st.rerun(); return
     admin_prop_id = int(st.secrets.get("ADMIN_PROP_ID", os.environ.get("ADMIN_PROP_ID", 2)))
