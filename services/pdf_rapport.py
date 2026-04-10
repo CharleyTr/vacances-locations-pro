@@ -91,7 +91,20 @@ def generer_rapport_pdf(
     story.append(Spacer(1, 0.5*cm))
 
     # ── Calculs KPIs ──────────────────────────────────────────────────────
-    resas = [r for r in reservations if r.get("date_arrivee","")[:7] == f"{annee}-{mois:02d}"
+    def _date_str(val):
+        if val is None: return ""
+        try: return str(val)[:10]
+        except: return ""
+
+    # Normaliser les dates en string
+    resas_norm = []
+    for r in reservations:
+        r2 = dict(r)
+        r2["date_arrivee"] = _date_str(r.get("date_arrivee",""))
+        r2["date_depart"]  = _date_str(r.get("date_depart",""))
+        resas_norm.append(r2)
+
+    resas = [r for r in resas_norm if r.get("date_arrivee","")[:7] == f"{annee}-{mois:02d}"
              or r.get("date_depart","")[:7] == f"{annee}-{mois:02d}"]
 
     ca_brut      = sum(float(r.get("prix_brut",0) or 0) for r in resas)
@@ -109,7 +122,7 @@ def generer_rapport_pdf(
         mois_n1 = mois
         annee_n1 = annee - 1
         resas_n1 = [r for r in reservations_n1
-                    if r.get("date_arrivee","")[:7] == f"{annee_n1}-{mois_n1:02d}"]
+                    if _date_str(r.get("date_arrivee",""))[:7] == f"{annee_n1}-{mois_n1:02d}"]
         ca_net_n1 = sum(float(r.get("prix_net",0) or 0) for r in resas_n1)
 
     delta_pct = ((ca_net - ca_net_n1) / ca_net_n1 * 100) if ca_net_n1 > 0 else None
