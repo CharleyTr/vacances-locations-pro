@@ -39,7 +39,24 @@ PAGES = {
 
 def sidebar() -> str:
     with st.sidebar:
-        st.title("🏖️ Vacances-Locations")
+        _is_demo_mode = st.session_state.get("prop_id", 0) == 5
+        if _is_demo_mode:
+            st.markdown("""
+            <div style='background:linear-gradient(135deg,#1565C0,#0B1F3A);
+                        border-radius:12px;padding:14px;margin-bottom:8px;text-align:center'>
+              <div style='font-size:22px;font-weight:900;color:white;
+                          font-family:Georgia,serif'>🏖️ LodgePro</div>
+              <div style='font-size:10px;color:#F0B429;font-weight:600;
+                          letter-spacing:2px;margin-top:2px'>DÉMONSTRATION</div>
+            </div>
+            <div style='background:#F0B429;color:#0B1F3A;border-radius:8px;
+                        padding:8px 12px;font-size:11px;font-weight:600;
+                        text-align:center;margin-bottom:8px'>
+              ✨ Bienvenue sur LodgePro !<br>
+              <span style='font-weight:400'>Explorez toutes les fonctionnalités</span>
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.title("🏖️ Vacances-Locations")
         st.caption("PRO — Gestion locative")
 
         if is_connected():
@@ -103,6 +120,7 @@ def sidebar() -> str:
 
         # Pages admin uniquement (Villa Tobias)
         PAGES_ADMIN_ONLY = {"🏠 Propriétés", "📐 Barèmes fiscaux", "👥 Utilisateurs", "📋 Journal", "👤 Mon profil", "💾 Sauvegarde", "🔧 Corrections"}
+        PAGES_DEMO_HIDDEN = {"🔄 Sync iCal", "📥 Import Booking", "📥 Import Airbnb", "💾 Sauvegarde", "🔧 Corrections", "👥 Utilisateurs", "📋 Journal"}
         is_admin = st.session_state.get("is_admin", False)
 
         _user_role = st.session_state.get("user_role", "proprietaire")
@@ -121,6 +139,11 @@ def sidebar() -> str:
             # Propriétaire : tout sauf pages admin
             pages_visibles = {k: v for k, v in PAGES.items()
                               if k not in PAGES_ADMIN_ONLY}
+
+        # Mode démo : cacher les pages techniques
+        if st.session_state.get("prop_id", 0) == 5:
+            pages_visibles = {k: v for k, v in pages_visibles.items()
+                              if k not in PAGES_DEMO_HIDDEN}
 
         choice = st.radio(
             "Navigation",
