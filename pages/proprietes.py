@@ -25,7 +25,21 @@ def show():
         st.error("⛔ Connexion Supabase requise.")
         return
 
-    props = fetch_all(force_refresh=True)
+    _is_admin = st.session_state.get("is_admin", False)
+    _prop_id  = st.session_state.get("prop_id", 0) or 0
+
+    all_props = fetch_all(force_refresh=True)
+
+    # Filtrer : admin voit tout, propriétaire voit uniquement sa propriété
+    if _is_admin:
+        props = all_props
+    else:
+        props = [p for p in all_props if p["id"] == _prop_id]
+
+    if not props:
+        st.warning("Aucune propriété associée à votre compte.")
+        return
+
     st.subheader(f"📋 {len(props)} propriété(s)")
 
     for prop in props:
