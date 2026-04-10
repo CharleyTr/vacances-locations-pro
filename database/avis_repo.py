@@ -127,3 +127,36 @@ def delete_avis(avis_id: int) -> bool:
     except Exception as e:
         print(f"[AvisRepo] delete: {e}")
         return False
+
+
+def create_token_questionnaire(reservation: dict, propriete: dict,
+                                jours_validite: int = 30) -> str | None:
+    """
+    Crée un avis avec token pour le questionnaire post-séjour.
+    Retourne le token généré ou None en cas d'erreur.
+    """
+    import uuid
+    from datetime import datetime, timezone, timedelta
+
+    if not is_connected():
+        return None
+    try:
+        token = str(uuid.uuid4()).replace("-", "")
+        expires = datetime.now(timezone.utc) + timedelta(days=jours_validite)
+
+        data = {
+            "reservation_id":  reservation.get("id"),
+            "propriete_id":    reservation.get("propriete_id"),
+            "nom_client":      reservation.get("nom_client", ""),
+            "plateforme":      reservation.get("plateforme", ""),
+            "date_sejour":     str(reservation.get("date_arrivee", ""))[:10],
+            "_prop_nom":       propriete.get("nom", ""),
+            "token":           token,
+            "token_used":      False,
+            "token_expires_at": expires.isoformat(),
+        }
+        get_supabase().table(TABLE).insert(data).execute()
+        return token
+    except Exception as e:
+        print(f"[AvisRepo] create_token: {e}")
+        return None
