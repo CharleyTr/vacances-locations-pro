@@ -39,9 +39,7 @@ PAGES = {
 
 def sidebar() -> str:
     with st.sidebar:
-        _pid_demo = st.session_state.get("prop_id", 0)
-        _sidebar_title = "🏖️ LodgePro" if _pid_demo == 5 else "🏖️ Vacances-Locations"
-        st.title(_sidebar_title)
+        st.title("🏖️ Vacances-Locations")
         st.caption("PRO — Gestion locative")
 
         if is_connected():
@@ -253,8 +251,6 @@ def sidebar() -> str:
         </a>
         """, unsafe_allow_html=True)
 
-        _pid_footer = st.session_state.get("prop_id", 0)
-        _footer_txt = "LodgePro · 2026" if _pid_footer == 5 else "v3.2 — 2026 · © Charley Trigano"
-        st.caption(_footer_txt)
+        st.caption("v3.2 — 2026 · © Charley Trigano")
 
     return pages_visibles[choice]
