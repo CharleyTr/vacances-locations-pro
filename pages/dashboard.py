@@ -10,6 +10,127 @@ from services.proprietes_service import get_proprietes_dict, filter_df, get_prop
 
 
 
+
+def _show_admin_overview():
+    """Vue globale multi-propriétés pour l'admin."""
+    from database.proprietes_repo import fetch_all as _fa
+    from database.supabase_client import get_supabase as _gsb
+    from datetime import date, timedelta
+    import pandas as pd
+
+    st.title("📊 Vue d'ensemble — Toutes les propriétés")
+
+    try:
+        sb = _gsb()
+        if sb is None:
+            return
+
+        # Charger toutes les réservations
+        result = sb.table("reservations").select("*").neq("plateforme","Fermeture").execute()
+        all_resas = result.data or []
+        if not all_resas:
+            st.info("Aucune réservation trouvée.")
+            return
+
+        df = pd.DataFrame(all_resas)
+        df["date_arrivee"] = pd.to_datetime(df["date_arrivee"], errors="coerce")
+        df["date_depart"]  = pd.to_datetime(df["date_depart"],  errors="coerce")
+        df["prix_net"]     = pd.to_numeric(df.get("prix_net", 0), errors="coerce").fillna(0)
+        df["prix_brut"]    = pd.to_numeric(df.get("prix_brut",0), errors="coerce").fillna(0)
+        df["nuitees"]      = pd.to_numeric(df.get("nuitees",  0), errors="coerce").fillna(0)
+        df["paye"]         = df.get("paye", False).fillna(False)
+
+        props = {p["id"]: p["nom"] for p in _fa()}
+        df["prop_nom"] = df["propriete_id"].map(props).fillna("?")
+
+        annee_sel = st.selectbox("Année", sorted(df["date_arrivee"].dt.year.dropna().unique().tolist(), reverse=True), key="admin_ov_annee")
+        df_y = df[df["date_arrivee"].dt.year == annee_sel]
+
+        # ── KPIs globaux ────────────────────────────────────────────────
+        ca_total  = df_y["prix_net"].sum()
+        nuits_tot = int(df_y["nuitees"].sum())
+        nb_resas  = len(df_y)
+        impaye    = df_y[df_y["paye"] == False]["prix_net"].sum()
+
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("💰 CA Net total",    f"{ca_total:,.0f} €")
+        k2.metric("📅 Réservations",    nb_resas)
+        k3.metric("🌙 Nuits totales",   nuits_tot)
+        k4.metric("⚠️ Impayés",         f"{impaye:,.0f} €",
+                   delta=f"-{impaye:,.0f} €" if impaye > 0 else None,
+                   delta_color="inverse")
+
+        st.markdown("")
+
+        # ── Tableau comparatif par propriété ────────────────────────────
+        st.markdown("#### 🏠 Comparatif par propriété")
+        rows = []
+        for pid, pnom in sorted(props.items()):
+            df_p = df_y[df_y["propriete_id"] == pid]
+            if df_p.empty:
+                continue
+            taux = min(100, int(df_p["nuitees"].sum()) / 365 * 100)
+            rows.append({
+                "Propriété":      pnom,
+                "Réservations":   len(df_p),
+                "CA Net (€)":     f"{df_p['prix_net'].sum():,.0f}",
+                "Nuits":          int(df_p["nuitees"].sum()),
+                "Taux occ.":      f"{taux:.1f}%",
+                "Impayés (€)":    f"{df_p[df_p['paye']==False]['prix_net'].sum():,.0f}",
+            })
+
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+        # ── Arrivées et départs du jour ──────────────────────────────────
+        today = date.today()
+        demain = today + timedelta(days=1)
+
+        arr_demain = df[df["date_arrivee"].dt.date == demain]
+        dep_auj    = df[df["date_depart"].dt.date == today]
+
+        col_a, col_d = st.columns(2)
+        with col_a:
+            st.markdown(f"#### 🏠 Arrivées demain ({len(arr_demain)})")
+            if not arr_demain.empty:
+                for _, r in arr_demain.iterrows():
+                    st.markdown(f"- **{r.get('nom_client','?')}** — {r.get('prop_nom','?')} — {r.get('plateforme','?')}")
+            else:
+                st.caption("Aucune arrivée demain")
+
+        with col_d:
+            st.markdown(f"#### 🚪 Départs aujourd'hui ({len(dep_auj)})")
+            if not dep_auj.empty:
+                for _, r in dep_auj.iterrows():
+                    st.markdown(f"- **{r.get('nom_client','?')}** — {r.get('prop_nom','?')}")
+            else:
+                st.caption("Aucun départ aujourd'hui")
+
+        # ── Réservations à venir (30 jours) ─────────────────────────────
+        st.markdown("#### 📅 Prochaines réservations (30 jours)")
+        df_futur = df[
+            (df["date_arrivee"].dt.date >= today) &
+            (df["date_arrivee"].dt.date <= today + timedelta(days=30))
+        ].sort_values("date_arrivee")
+
+        if not df_futur.empty:
+            df_show = df_futur[["prop_nom","nom_client","date_arrivee","date_depart","nuitees","prix_net","plateforme","paye"]].copy()
+            df_show["date_arrivee"] = df_show["date_arrivee"].dt.strftime("%d/%m/%Y")
+            df_show["date_depart"]  = df_show["date_depart"].dt.strftime("%d/%m/%Y")
+            df_show["prix_net"]     = df_show["prix_net"].apply(lambda x: f"{x:,.0f} €")
+            df_show["paye"]         = df_show["paye"].apply(lambda x: "✅" if x else "❌")
+            st.dataframe(df_show.rename(columns={
+                "prop_nom":"Propriété","nom_client":"Client",
+                "date_arrivee":"Arrivée","date_depart":"Départ",
+                "nuitees":"Nuits","prix_net":"CA Net","plateforme":"Plateforme","paye":"Payé"
+            }), use_container_width=True, hide_index=True)
+        else:
+            st.info("Aucune réservation dans les 30 prochains jours.")
+
+    except Exception as e:
+        st.error(f"Erreur vue admin : {e}")
+
+
 def show():
     # ── Bandeau arrivées demain ──────────────────────────────────────────────
     try:
@@ -60,6 +181,13 @@ def show():
                 )
     except Exception as _e:
         st.caption(f"⚠️ Bandeau: {_e}")
+
+    _is_admin = st.session_state.get("is_admin", False)
+
+    # ── Vue multi-propriétés pour l'admin ─────────────────────────────────
+    if _is_admin:
+        _show_admin_overview()
+        st.divider()
 
     st.title("📊 Dashboard")
 
