@@ -117,7 +117,7 @@ def _show_export(df: pd.DataFrame, prop_nom: str):
         if st.button("📄 Générer le PDF", type="primary", use_container_width=True, key="btn_pdf"):
             try:
                 from services.pdf_rapport import generer_rapport_pdf
-                from datetime import date, datetimetime as _dt
+                
                 _resas_all = df.to_dict("records")
                 _resas_n1  = df[df["annee"] == annee_pdf - 1].to_dict("records")
                 pdf_bytes = generer_rapport_pdf(
