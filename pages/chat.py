@@ -181,6 +181,18 @@ def show():
             if not msg_input.strip():
                 st.warning("Message vide.")
             elif _send_message(_nom, msg_input.strip(), _prop_id):
+                # Notification Pushover
+                try:
+                    from services.pushover_service import send_notification
+                    from database.proprietes_repo import fetch_all as _fa_chat
+                    _props_chat = {p["id"]: p["nom"] for p in _fa_chat()}
+                    _canal_nom  = _props_chat.get(_prop_id, "Général") if _prop_id else "Général"
+                    send_notification(
+                        title   = f"💬 Nouveau message — {_canal_nom}",
+                        message = f"{_nom} : {msg_input.strip()[:100]}",
+                        priority = 0
+                    )
+                except: pass
                 st.session_state["chat_form_id"] += 1
                 st.rerun()
             else:
