@@ -119,6 +119,13 @@ def show():
                         f_porte    = st.text_input("Code porte / boîte à clé",
                                                     value=prop.get("code_acces_porte") or "",
                                                     placeholder="Ex: 1234#")
+                        st.markdown("**🧹 Équipe ménage**")
+                        f_tel_menage = st.text_input("Tél. WhatsApp ménage",
+                                                      value=prop.get("tel_menage") or "",
+                                                      placeholder="+33612345678")
+                        f_nom_menage = st.text_input("Nom équipe ménage",
+                                                      value=prop.get("nom_menage") or "",
+                                                      placeholder="Ex: Martine, Société XYZ")
                     f_desc = st.text_area("Description courte",
                         value=prop.get("description_courte") or "", height=80)
                     f_infos = st.text_area("Infos pratiques (accès, parking...)",
@@ -142,6 +149,8 @@ def show():
                                 "description_courte":f_desc.strip() or None,
                                 "infos_pratiques":   f_infos.strip() or None,
                                 "photos_urls":       _photos or None,
+                                "tel_menage":        f_tel_menage.strip() or None,
+                                "nom_menage":        f_nom_menage.strip() or None,
                             })
                             st.success("✅ Fiche mise à jour !")
                             st.rerun()
