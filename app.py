@@ -66,6 +66,16 @@ if _token:
 st.set_page_config(page_title="Vacances-Locations PRO", page_icon="🏖️", layout="wide", initial_sidebar_state="expanded")
 
 # ── CSS Dark Mode global ──────────────────────────────────────────────────────
+# Cacher le menu hamburger en mode démo (prop_id == 5)
+if st.session_state.get("prop_id", 0) == 5:
+    st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden !important;}
+    header [data-testid="stToolbar"] {display: none !important;}
+    footer {visibility: hidden !important;}
+    </style>
+    """, unsafe_allow_html=True)
+
 st.markdown("""
 <style>
 @media (prefers-color-scheme: dark) {
