@@ -66,8 +66,8 @@ if _token:
 st.set_page_config(page_title="Vacances-Locations PRO", page_icon="🏖️", layout="wide", initial_sidebar_state="expanded")
 
 # ── CSS Dark Mode global ──────────────────────────────────────────────────────
-# Cacher le menu hamburger en mode démo (prop_id == 5)
-if st.session_state.get("prop_id", 0) == 5:
+# Cacher le menu hamburger pour tous sauf admin
+if not st.session_state.get("is_admin", False):
     st.markdown("""
     <style>
     #MainMenu {visibility: hidden !important;}
