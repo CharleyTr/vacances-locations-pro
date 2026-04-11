@@ -78,15 +78,34 @@ if not st.session_state.get("is_admin", False):
 
 st.markdown("""
 <style>
-/* Cacher Manage et menu pour non-admin — toujours appliqué, filtré par JS */
 [data-testid="manage-app-button"],
 .stDeployButton,
-[data-testid="stToolbarActions"] button[title="Manage app"],
-a[href*="share.streamlit.io"] {
-    display: none !important;
-    visibility: hidden !important;
-}
+[data-testid="stAppViewBlockContainer"] ~ div button[kind="header"],
+iframe ~ div [data-testid="stToolbarActions"] { display: none !important; }
 </style>
+<script>
+(function hideManage() {
+    function remove() {
+        var selectors = [
+            '[data-testid="manage-app-button"]',
+            '.stDeployButton',
+            'a[href*="share.streamlit.io"]',
+            'button[title="Manage app"]',
+            'a[title="Manage app"]'
+        ];
+        selectors.forEach(function(sel) {
+            document.querySelectorAll(sel).forEach(function(el) {
+                el.style.display = 'none';
+                el.style.visibility = 'hidden';
+            });
+        });
+    }
+    remove();
+    setInterval(remove, 500);
+    var obs = new MutationObserver(remove);
+    obs.observe(document.body, {childList: true, subtree: true});
+})();
+</script>
 """, unsafe_allow_html=True)
 
 st.markdown("""
