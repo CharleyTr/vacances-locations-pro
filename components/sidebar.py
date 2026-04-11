@@ -54,6 +54,18 @@ def sidebar() -> str:
                         text-align:center;margin-bottom:8px'>
               ✨ Bienvenue sur LodgePro !<br>
               <span style='font-weight:400'>Explorez toutes les fonctionnalités</span>
+            </div>
+            <div style='background:#0B1F3A;border:1px solid #F0B429;border-radius:8px;
+                        padding:10px 12px;text-align:center;margin-bottom:8px'>
+              <div style='color:rgba(255,255,255,0.6);font-size:10px;margin-bottom:6px'>
+                Convaincu ? Passez à l'abonnement
+              </div>
+              <a href="https://lodgepro.eu#tarifs" target="_blank"
+                 style='display:block;background:#F0B429;color:#0B1F3A;
+                        padding:8px;border-radius:6px;font-weight:700;
+                        font-size:12px;text-decoration:none'>
+                💳 Voir les tarifs →
+              </a>
             </div>""", unsafe_allow_html=True)
         else:
             st.title("🏖️ Vacances-Locations")
