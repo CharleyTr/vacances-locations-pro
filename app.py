@@ -66,13 +66,15 @@ if _token:
 st.set_page_config(page_title="Vacances-Locations PRO", page_icon="🏖️", layout="wide", initial_sidebar_state="expanded")
 
 # ── CSS Dark Mode global ──────────────────────────────────────────────────────
-# Cacher le menu hamburger pour tous sauf admin
+# Cacher le menu hamburger et le bouton Manage pour tous sauf admin
 if not st.session_state.get("is_admin", False):
     st.markdown("""
     <style>
     #MainMenu {visibility: hidden !important;}
     header [data-testid="stToolbar"] {display: none !important;}
     footer {visibility: hidden !important;}
+    [data-testid="manage-app-button"] {display: none !important;}
+    .stDeployButton {display: none !important;}
     </style>
     """, unsafe_allow_html=True)
 
