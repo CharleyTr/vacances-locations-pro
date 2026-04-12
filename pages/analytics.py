@@ -529,7 +529,7 @@ def show():
         _show_score(df, int(annee))
 
     with tab_top:
-        _show_top_mois(df)
+        _show_top_mois(df_all[df_all['propriete_id'] == prop_id] if prop_id != 0 else df_all)
 
     with tab_duree:
         _show_duree_plateforme(df[df["annee"] == annee])
