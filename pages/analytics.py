@@ -843,11 +843,12 @@ def _show_top_mois(df):
         df2["prix_net"] = pd.to_numeric(df2["prix_net"], errors="coerce").fillna(0)
         df2["annee"]    = pd.to_numeric(df2["annee"],    errors="coerce")
         df2["mois"]     = pd.to_numeric(df2["mois"],     errors="coerce")
-        grp = df2.groupby(["annee","mois"]).agg(
+        grp = df2.groupby(["annee","mois"], as_index=False).agg(
             ca_net=("prix_net","sum"), nb=("id","count")
-        ).reset_index()
+        )
         grp["periode"] = grp.apply(
-            lambda r: f"{MOIS_FR[int(r['mois'])-1]} {int(r['annee'])}", axis=1
+            lambda r: f"{MOIS_FR[int(r['mois'])-1]} {int(r['annee'])}"
+            if 1 <= int(r['mois']) <= 12 else "?", axis=1
         )
         grp = grp.sort_values("ca_net", ascending=False).head(12)
         fig = px.bar(grp, x="periode", y="ca_net", color="ca_net",
