@@ -841,21 +841,28 @@ def _show_top_mois(df):
     try:
         df2 = df[df["plateforme"] != "Fermeture"].copy()
         df2["prix_net"] = pd.to_numeric(df2["prix_net"], errors="coerce").fillna(0)
-        df2["annee"]    = pd.to_numeric(df2["annee"],    errors="coerce")
-        df2["mois"]     = pd.to_numeric(df2["mois"],     errors="coerce")
-        grp = df2.groupby(["annee","mois"], as_index=False).agg(
-            ca_net=("prix_net","sum"), nb=("id","count")
-        )
-        grp["periode"] = grp.apply(
-            lambda r: f"{MOIS_FR[int(r['mois'])-1]} {int(r['annee'])}"
-            if 1 <= int(r['mois']) <= 12 else "?", axis=1
-        )
-        grp = grp.sort_values("ca_net", ascending=False).head(12)
-        fig = px.bar(grp, x="periode", y="ca_net", color="ca_net",
-                     color_continuous_scale="Blues", text="ca_net",
+        df2["annee"]    = pd.to_numeric(df2["annee"],    errors="coerce").astype("Int64")
+        df2["mois"]     = pd.to_numeric(df2["mois"],     errors="coerce").astype("Int64")
+        df2 = df2.dropna(subset=["annee","mois"])
+
+        rows = []
+        for (annee, mois), grp in df2.groupby(["annee","mois"]):
+            rows.append({
+                "periode": f"{MOIS_FR[int(mois)-1]} {int(annee)}" if 1 <= int(mois) <= 12 else "?",
+                "ca_net":  grp["prix_net"].sum(),
+                "nb":      len(grp),
+            })
+        if not rows:
+            st.info("Pas de données."); return
+
+        result = pd.DataFrame(rows).sort_values("ca_net", ascending=False).head(12)
+        result["ca_label"] = result["ca_net"].apply(lambda x: f"{x:,.0f} €")
+
+        fig = px.bar(result, x="periode", y="ca_net", color="ca_net",
+                     color_continuous_scale="Blues", text="ca_label",
                      labels={"ca_net":"CA Net (€)","periode":"Mois"})
-        fig.update_traces(texttemplate="%{text:,.0f} €", textposition="outside")
-        fig.update_layout(height=350, margin=dict(t=10,b=10),
+        fig.update_traces(textposition="outside")
+        fig.update_layout(height=350, margin=dict(t=10,b=30),
                           coloraxis_showscale=False)
         st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
