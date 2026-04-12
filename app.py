@@ -110,6 +110,135 @@ iframe ~ div [data-testid="stToolbarActions"] { display: none !important; }
 
 st.markdown("""
 <style>
+/* ── RESPONSIVE MOBILE ─────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+    /* Réduire les marges globales */
+    .main .block-container {
+        padding: 0.5rem 0.75rem 2rem !important;
+        max-width: 100% !important;
+    }
+
+    /* Sidebar plus compacte */
+    [data-testid="stSidebar"] {
+        min-width: 240px !important;
+        max-width: 240px !important;
+    }
+
+    /* Empiler les colonnes */
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap !important;
+        gap: 0.5rem !important;
+    }
+    [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"] {
+        min-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+
+    /* KPI metrics plus compacts */
+    [data-testid="stMetric"] {
+        padding: 0.5rem !important;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 11px !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 18px !important;
+    }
+
+    /* Tableaux scrollables horizontalement */
+    [data-testid="stDataFrame"] {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    [data-testid="stDataFrame"] table {
+        font-size: 11px !important;
+    }
+
+    /* Boutons full width sur mobile */
+    [data-testid="stButton"] > button {
+        width: 100% !important;
+        min-height: 44px !important;
+        font-size: 14px !important;
+    }
+
+    /* Inputs plus grands pour les doigts */
+    [data-testid="stTextInput"] input,
+    [data-testid="stSelectbox"] select,
+    [data-testid="stNumberInput"] input {
+        min-height: 44px !important;
+        font-size: 16px !important;
+    }
+
+    /* Tabs scrollables */
+    [data-testid="stTabs"] [role="tablist"] {
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    /* Titres plus petits */
+    h1 { font-size: 1.4rem !important; }
+    h2 { font-size: 1.2rem !important; }
+    h3 { font-size: 1rem !important; }
+
+    /* Expanders plus compacts */
+    [data-testid="stExpander"] {
+        padding: 0.25rem !important;
+    }
+
+    /* Formulaires */
+    [data-testid="stForm"] {
+        padding: 0.5rem !important;
+    }
+
+    /* Cacher les éléments décoratifs sur mobile */
+    [data-testid="stDecoration"] {
+        display: none !important;
+    }
+
+    /* Plotly graphs — responsive */
+    .js-plotly-plot {
+        max-width: 100% !important;
+    }
+
+    /* Download buttons */
+    [data-testid="stDownloadButton"] > button {
+        width: 100% !important;
+        min-height: 44px !important;
+    }
+
+    /* Select sliders */
+    [data-testid="stSlider"] {
+        padding: 0.5rem 0 !important;
+    }
+
+    /* Alertes full width */
+    [data-testid="stAlert"] {
+        padding: 0.5rem 0.75rem !important;
+        font-size: 13px !important;
+    }
+
+    /* Calendrier — forcer scroll horizontal */
+    .cal-container, .gantt-container {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+}
+
+/* Tablettes (768px - 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .main .block-container {
+        padding: 1rem 1.5rem !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 20px !important;
+    }
+    [data-testid="stDataFrame"] table {
+        font-size: 12px !important;
+    }
+}
+
 @media (prefers-color-scheme: dark) {
     [style*="background:#E3F2FD"],[style*="background: #E3F2FD"]{background:var(--bg-info,#0D2137)!important}
     [style*="background:#F0F4FF"],[style*="background: #F0F4FF"]{background:#1E2A3A!important}
