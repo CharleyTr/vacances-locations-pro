@@ -529,7 +529,7 @@ def show():
         _show_score(df, int(annee))
 
     with tab_top:
-        _show_top_mois(df_all[df_all['propriete_id'] == prop_id] if prop_id != 0 else df_all)
+        _show_top_mois(df)
 
     with tab_duree:
         _show_duree_plateforme(df[df["annee"] == annee])
@@ -840,10 +840,11 @@ def _show_top_mois(df):
         st.info("Pas de données."); return
     try:
         df2 = df[df["plateforme"] != "Fermeture"].copy()
-        df2["prix_net"] = pd.to_numeric(df2["prix_net"], errors="coerce").fillna(0)
-        df2["annee"]    = pd.to_numeric(df2["annee"],    errors="coerce").astype("Int64")
-        df2["mois"]     = pd.to_numeric(df2["mois"],     errors="coerce").astype("Int64")
-        df2 = df2.dropna(subset=["annee","mois"])
+        df2["prix_net"]    = pd.to_numeric(df2["prix_net"], errors="coerce").fillna(0)
+        df2["date_arrivee"] = pd.to_datetime(df2["date_arrivee"], errors="coerce")
+        df2 = df2.dropna(subset=["date_arrivee"])
+        df2["annee"] = df2["date_arrivee"].dt.year.astype(int)
+        df2["mois"]  = df2["date_arrivee"].dt.month.astype(int)
 
         rows = []
         for (annee, mois), grp in df2.groupby(["annee","mois"]):
