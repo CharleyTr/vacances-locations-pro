@@ -481,26 +481,24 @@ def show():
         ]
 
     # ── Onglets ───────────────────────────────────────────────────────────────
-    tab_bilan, tab_compar, tab_pays, tab_perf, tab_prev, tab_saison = st.tabs([
+    tab_bilan, tab_compar, tab_pays, tab_perf, tab_prev, tab_saison,     tab_heat, tab_funnel, tab_scatter, tab_obj, tab_comm, tab_sim, tab_score, tab_top, tab_duree = st.tabs([
         "📊 Bilan annuel", "📅 Comparaison pluriannuelle", "🌍 Par pays",
-        "🏆 Performances N vs N-1", "🔮 Prévisions", "🌡️ Saisonnalité"
+        "🏆 Performances N vs N-1", "🔮 Prévisions", "🌡️ Saisonnalité",
+        "🔥 Heatmap", "📐 Entonnoir", "🔵 Durée vs Prix",
+        "🎯 Objectif", "💸 Commissions", "🎲 Simulation",
+        "🏅 Score", "🥇 Top mois", "📏 Durées"
     ])
 
-    # ── TAB 2 : Comparaison pluriannuelle ─────────────────────────────────────
     with tab_compar:
         _show_comparatif(df, int(annee))
 
-    # ── TAB 1 : Bilan annuel ──────────────────────────────────────────────────
-    # ── TAB PAYS ─────────────────────────────────────────────────────────
     with tab_pays:
-        # Filtre année pour les stats pays
         annee_pays = st.selectbox("Année", ["Toutes"] + [str(int(a)) for a in annees],
                                    key="pays_annee")
         df_pays_filtre = df if annee_pays == "Toutes" else df[df["annee"] == int(annee_pays)]
         _show_stats_pays(df_pays_filtre)
 
     with tab_perf:
-        # df est déjà filtré par propriété — pas d'accès aux autres propriétés
         _show_performances(df, props, int(annee))
 
     with tab_prev:
@@ -508,6 +506,33 @@ def show():
 
     with tab_saison:
         _show_saisonnalite(df, props, int(annee))
+
+    with tab_heat:
+        _show_heatmap(df[df["annee"] == annee])
+
+    with tab_funnel:
+        _show_entonnoir(df[df["annee"] == annee])
+
+    with tab_scatter:
+        _show_scatter(df[df["annee"] == annee])
+
+    with tab_obj:
+        _show_objectif(df, int(annee))
+
+    with tab_comm:
+        _show_commissions(df[df["annee"] == annee])
+
+    with tab_sim:
+        _show_simulation(df[df["annee"] == annee])
+
+    with tab_score:
+        _show_score(df, int(annee))
+
+    with tab_top:
+        _show_top_mois(df)
+
+    with tab_duree:
+        _show_duree_plateforme(df[df["annee"] == annee])
 
     with tab_bilan:
         df_an = df[df["annee"] == annee]
@@ -566,3 +591,305 @@ def show():
         if not monthly.empty:
             st.dataframe(monthly.drop(columns=["mois"], errors="ignore"),
                          use_container_width=True, hide_index=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NOUVELLES FONCTIONS ANALYTIQUES
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _show_heatmap(df):
+    """Heatmap occupation par jour de semaine x mois."""
+    st.subheader("🌡️ Heatmap — Nuits louées par jour de semaine et mois")
+    if df.empty:
+        st.info("Pas de données."); return
+    try:
+        df2 = df[df["plateforme"] != "Fermeture"].copy()
+        df2["date_arrivee"] = pd.to_datetime(df2["date_arrivee"], errors="coerce")
+        df2["mois"]     = df2["date_arrivee"].dt.month
+        df2["jour_sem"] = df2["date_arrivee"].dt.dayofweek
+        jours = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"]
+        heat  = df2.groupby(["mois","jour_sem"])["nuitees"].sum().reset_index()
+        pivot = heat.pivot(index="jour_sem", columns="mois", values="nuitees").fillna(0)
+        pivot.index = [jours[i] for i in pivot.index]
+        pivot.columns = [MOIS_FR[m-1] for m in pivot.columns]
+        fig = px.imshow(pivot, color_continuous_scale="Blues",
+                        labels={"color":"Nuits","x":"Mois","y":"Jour"},
+                        text_auto=True, aspect="auto")
+        fig.update_layout(height=320, margin=dict(t=10,b=10))
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.error(f"Erreur heatmap : {e}")
+
+
+def _show_entonnoir(df):
+    """Graphique entonnoir : réservations → payées → avis reçus."""
+    st.subheader("📊 Entonnoir de conversion")
+    if df.empty:
+        st.info("Pas de données."); return
+    try:
+        df2 = df[df["plateforme"] != "Fermeture"]
+        nb_resas   = len(df2)
+        nb_payees  = int(df2.get("paye", pd.Series([False]*len(df2))).sum())
+        # Compter les avis depuis Supabase
+        try:
+            from database.supabase_client import get_supabase
+            sb = get_supabase()
+            prop_id = df2["propriete_id"].iloc[0] if not df2.empty else None
+            if sb and prop_id:
+                res = sb.table("avis").select("id", count="exact").eq("propriete_id", int(prop_id)).eq("token_used", True).execute()
+                nb_avis = res.count or 0
+            else:
+                nb_avis = 0
+        except:
+            nb_avis = 0
+
+        fig = go.Figure(go.Funnel(
+            y=["Réservations", "Payées", "Avis reçus"],
+            x=[nb_resas, nb_payees, nb_avis],
+            textinfo="value+percent initial",
+            marker_color=["#1565C0","#F0B429","#2E7D32"]
+        ))
+        fig.update_layout(height=300, margin=dict(t=10,b=10))
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.error(f"Erreur entonnoir : {e}")
+
+
+def _show_scatter(df):
+    """Scatter : durée séjour vs prix/nuit."""
+    st.subheader("🔵 Durée séjour vs Revenu/nuit")
+    if df.empty:
+        st.info("Pas de données."); return
+    try:
+        df2 = df[df["plateforme"] != "Fermeture"].copy()
+        df2["nuitees"]  = pd.to_numeric(df2["nuitees"], errors="coerce").fillna(0)
+        df2["prix_net"] = pd.to_numeric(df2["prix_net"], errors="coerce").fillna(0)
+        df2 = df2[df2["nuitees"] > 0]
+        df2["rev_nuit"] = (df2["prix_net"] / df2["nuitees"]).round(2)
+        fig = px.scatter(df2, x="nuitees", y="rev_nuit",
+                         color="plateforme", hover_data=["nom_client"],
+                         labels={"nuitees":"Nuits","rev_nuit":"€/nuit","plateforme":"Plateforme"},
+                         size_max=12)
+        fig.update_layout(height=350, margin=dict(t=10,b=10))
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.error(f"Erreur scatter : {e}")
+
+
+def _show_objectif(df, annee):
+    """Jauge CA réel vs objectif annuel."""
+    st.subheader("🎯 Progression vers l'objectif annuel")
+    objectif = st.number_input("Objectif CA Net annuel (€)", min_value=0,
+                                value=50000, step=1000, key="obj_ca")
+    df_an = df[(df["annee"] == annee) & (df["plateforme"] != "Fermeture")]
+    ca_net = float(df_an["prix_net"].sum()) if not df_an.empty else 0
+    pct    = min(100, ca_net / objectif * 100) if objectif > 0 else 0
+
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number+delta",
+        value=ca_net,
+        delta={"reference": objectif, "valueformat": ",.0f"},
+        number={"suffix": " €", "valueformat": ",.0f"},
+        gauge={
+            "axis": {"range": [0, objectif]},
+            "bar":  {"color": "#1565C0"},
+            "steps": [
+                {"range": [0, objectif*0.5], "color": "#FFEBEE"},
+                {"range": [objectif*0.5, objectif*0.8], "color": "#FFF8E1"},
+                {"range": [objectif*0.8, objectif], "color": "#E8F5E9"},
+            ],
+            "threshold": {"line": {"color": "#F0B429", "width": 4},
+                          "thickness": 0.75, "value": objectif}
+        },
+        title={"text": f"CA Net {annee} — Objectif : {objectif:,.0f} €"}
+    ))
+    fig.update_layout(height=300, margin=dict(t=40,b=10))
+    st.plotly_chart(fig, use_container_width=True)
+    st.progress(pct/100, text=f"{pct:.1f}% de l'objectif atteint")
+
+
+def _show_commissions(df):
+    """Analyse commissions par plateforme."""
+    st.subheader("💸 Commissions par plateforme")
+    if df.empty:
+        st.info("Pas de données."); return
+    try:
+        df2 = df[df["plateforme"] != "Fermeture"].copy()
+        df2["commissions"] = pd.to_numeric(df2.get("commissions", 0), errors="coerce").fillna(0)
+        df2["prix_brut"]   = pd.to_numeric(df2.get("prix_brut", 0),   errors="coerce").fillna(0)
+        grp = df2.groupby("plateforme").agg(
+            commissions=("commissions","sum"),
+            ca_brut=("prix_brut","sum"),
+            nb=("id","count")
+        ).reset_index()
+        grp["pct"] = (grp["commissions"] / grp["ca_brut"].replace(0,1) * 100).round(1)
+        grp["commissions_fmt"] = grp["commissions"].apply(lambda x: f"{x:,.0f} €")
+        grp["pct_fmt"] = grp["pct"].apply(lambda x: f"{x:.1f}%")
+
+        c1, c2 = st.columns(2)
+        with c1:
+            fig = px.bar(grp, x="plateforme", y="commissions",
+                         color="plateforme", text="commissions_fmt",
+                         labels={"commissions":"€","plateforme":"Plateforme"})
+            fig.update_layout(height=280, margin=dict(t=10,b=10), showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+        with c2:
+            fig2 = px.bar(grp, x="plateforme", y="pct",
+                          color="plateforme", text="pct_fmt",
+                          labels={"pct":"% commission","plateforme":"Plateforme"})
+            fig2.update_layout(height=280, margin=dict(t=10,b=10), showlegend=False)
+            st.plotly_chart(fig2, use_container_width=True)
+
+        st.dataframe(grp[["plateforme","nb","ca_brut","commissions","pct"]].rename(columns={
+            "plateforme":"Plateforme","nb":"Nb rés.","ca_brut":"CA Brut (€)",
+            "commissions":"Commissions (€)","pct":"% comm."
+        }), use_container_width=True, hide_index=True)
+    except Exception as e:
+        st.error(f"Erreur commissions : {e}")
+
+
+def _show_simulation(df):
+    """Simulation 'et si' — impact d'une variation de prix."""
+    st.subheader("🎲 Simulation — Et si je modifiais mes prix ?")
+    if df.empty:
+        st.info("Pas de données."); return
+
+    df2 = df[df["plateforme"] != "Fermeture"].copy()
+    df2["prix_net"] = pd.to_numeric(df2["prix_net"], errors="coerce").fillna(0)
+    df2["nuitees"]  = pd.to_numeric(df2["nuitees"],  errors="coerce").fillna(0)
+
+    ca_actuel   = float(df2["prix_net"].sum())
+    nuits_tot   = float(df2["nuitees"].sum())
+    rev_nuit_act = ca_actuel / nuits_tot if nuits_tot > 0 else 0
+
+    c1, c2 = st.columns(2)
+    with c1:
+        variation_prix = st.slider("Variation du prix/nuit (%)", -30, 50, 0, key="sim_prix")
+    with c2:
+        variation_occ  = st.slider("Variation du taux d'occupation (%)", -30, 30, 0, key="sim_occ")
+
+    ca_simule   = ca_actuel * (1 + variation_prix/100) * (1 + variation_occ/100)
+    delta_ca    = ca_simule - ca_actuel
+    rev_nuit_new = rev_nuit_act * (1 + variation_prix/100)
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("CA Actuel",  f"{ca_actuel:,.0f} €")
+    col2.metric("CA Simulé",  f"{ca_simule:,.0f} €",
+                delta=f"{delta_ca:+,.0f} €",
+                delta_color="normal")
+    col3.metric("Rev/nuit simulé", f"{rev_nuit_new:,.0f} €",
+                delta=f"{rev_nuit_new-rev_nuit_act:+,.0f} €")
+
+    if variation_prix > 0 and variation_occ < 0:
+        st.warning("⚠️ Une hausse des prix réduit souvent le taux d'occupation — vérifiez vos concurrents.")
+    elif variation_prix < 0 and variation_occ > 0:
+        st.info("💡 Baisser les prix peut attirer plus de réservations — mais surveillez votre rentabilité.")
+    elif ca_simule > ca_actuel:
+        st.success(f"✅ Cette combinaison génère **{delta_ca:+,.0f} €** supplémentaires.")
+
+
+def _show_score(df, annee):
+    """Score de performance global."""
+    st.subheader("🏆 Score de performance global")
+    df_an = df[(df["annee"] == annee) & (df["plateforme"] != "Fermeture")]
+    if df_an.empty:
+        st.info("Pas de données."); return
+
+    df_an = df_an.copy()
+    df_an["prix_net"] = pd.to_numeric(df_an["prix_net"], errors="coerce").fillna(0)
+    df_an["nuitees"]  = pd.to_numeric(df_an["nuitees"],  errors="coerce").fillna(0)
+
+    nuits     = float(df_an["nuitees"].sum())
+    taux_occ  = min(100, nuits / 365 * 100)
+    rev_nuit  = float(df_an["prix_net"].sum()) / nuits if nuits > 0 else 0
+    pct_paye  = float(df_an.get("paye", pd.Series([False]*len(df_an))).sum()) / len(df_an) * 100 if len(df_an) > 0 else 0
+
+    # Scores sur 10
+    s_occ  = min(10, taux_occ / 10)
+    s_rev  = min(10, rev_nuit / 20)
+    s_pay  = pct_paye / 10
+    score  = round((s_occ + s_rev + s_pay) / 3, 1)
+
+    fig = go.Figure()
+    categories = ["Taux d'occupation","Revenu/nuit","Taux de paiement"]
+    values     = [s_occ, s_rev, s_pay]
+    fig.add_trace(go.Scatterpolar(
+        r=values + [values[0]],
+        theta=categories + [categories[0]],
+        fill="toself", name="Performance",
+        line_color="#1565C0", fillcolor="rgba(21,101,192,0.2)"
+    ))
+    fig.update_layout(
+        polar=dict(radialaxis=dict(visible=True, range=[0,10])),
+        height=320, margin=dict(t=20,b=20)
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    emoji = "🏆" if score >= 7 else "👍" if score >= 5 else "⚠️"
+    st.markdown(f"### {emoji} Score global : **{score}/10**")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Taux occupation", f"{taux_occ:.1f}%", f"Score: {s_occ:.1f}/10")
+    c2.metric("Revenu/nuit",     f"{rev_nuit:.0f} €", f"Score: {s_rev:.1f}/10")
+    c3.metric("Taux paiement",   f"{pct_paye:.0f}%",  f"Score: {s_pay:.1f}/10")
+
+
+def _show_top_mois(df):
+    """Classement des meilleurs mois historiques."""
+    st.subheader("🥇 Classement des meilleurs mois (historique)")
+    if df.empty:
+        st.info("Pas de données."); return
+    try:
+        df2 = df[df["plateforme"] != "Fermeture"].copy()
+        df2["prix_net"] = pd.to_numeric(df2["prix_net"], errors="coerce").fillna(0)
+        df2["annee"]    = pd.to_numeric(df2["annee"],    errors="coerce")
+        df2["mois"]     = pd.to_numeric(df2["mois"],     errors="coerce")
+        grp = df2.groupby(["annee","mois"]).agg(
+            ca_net=("prix_net","sum"), nb=("id","count")
+        ).reset_index()
+        grp["periode"] = grp.apply(
+            lambda r: f"{MOIS_FR[int(r['mois'])-1]} {int(r['annee'])}", axis=1
+        )
+        grp = grp.sort_values("ca_net", ascending=False).head(12)
+        fig = px.bar(grp, x="periode", y="ca_net", color="ca_net",
+                     color_continuous_scale="Blues", text="ca_net",
+                     labels={"ca_net":"CA Net (€)","periode":"Mois"})
+        fig.update_traces(texttemplate="%{text:,.0f} €", textposition="outside")
+        fig.update_layout(height=350, margin=dict(t=10,b=10),
+                          coloraxis_showscale=False)
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.error(f"Erreur classement : {e}")
+
+
+def _show_duree_plateforme(df):
+    """Durée moyenne des séjours par plateforme et mois."""
+    st.subheader("📏 Durée moyenne des séjours")
+    if df.empty:
+        st.info("Pas de données."); return
+    try:
+        df2 = df[df["plateforme"] != "Fermeture"].copy()
+        df2["nuitees"] = pd.to_numeric(df2["nuitees"], errors="coerce").fillna(0)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**Par plateforme**")
+            grp_plat = df2.groupby("plateforme")["nuitees"].mean().round(1).reset_index()
+            grp_plat.columns = ["Plateforme","Durée moy. (nuits)"]
+            fig = px.bar(grp_plat, x="Plateforme", y="Durée moy. (nuits)",
+                         color="Plateforme", text="Durée moy. (nuits)")
+            fig.update_layout(height=280, showlegend=False, margin=dict(t=10,b=10))
+            st.plotly_chart(fig, use_container_width=True)
+
+        with c2:
+            st.markdown("**Par mois**")
+            df2["mois"] = pd.to_numeric(df2["mois"], errors="coerce")
+            grp_mois = df2.groupby("mois")["nuitees"].mean().round(1).reset_index()
+            grp_mois["mois_str"] = grp_mois["mois"].apply(
+                lambda m: MOIS_FR[int(m)-1] if 1 <= int(m) <= 12 else "?"
+            )
+            fig2 = px.line(grp_mois, x="mois_str", y="nuitees", markers=True,
+                           labels={"nuitees":"Nuits moy.","mois_str":"Mois"})
+            fig2.update_layout(height=280, margin=dict(t=10,b=10))
+            st.plotly_chart(fig2, use_container_width=True)
+    except Exception as e:
+        st.error(f"Erreur durée : {e}")
