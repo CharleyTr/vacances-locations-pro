@@ -66,7 +66,7 @@ def generate_facture(reservation: dict, propriete_id: int, signataire: str,
     story = []
 
     # ── En-tête ───────────────────────────────────────────────────────────
-    header = Table([[Paragraph(f"🏖 {prop_nom}", s_title)]], colWidths=[17*cm])
+    header = Table([[Paragraph(f"{prop_nom}", s_title)]], colWidths=[17*cm])
     header.setStyle(TableStyle([
         ("BACKGROUND",    (0,0),(-1,-1), NAVY),
         ("TOPPADDING",    (0,0),(-1,-1), 14),
@@ -112,8 +112,8 @@ def generate_facture(reservation: dict, propriete_id: int, signataire: str,
                       f"{adresse_prop}<br/>"
                       f"{'SIRET : ' + siret if siret else ''}", s_body),
             Paragraph(f"{nom_client}<br/>"
-                      f"{'📧 ' + email_client if email_client else ''}<br/>"
-                      f"{'📱 ' + tel_client if tel_client else ''}<br/>"
+                      f"{'Email : ' + email_client if email_client else ''}<br/>"
+                      f"{'Tel : ' + tel_client if tel_client else ''}<br/>"
                       f"{pays_client}", s_body),
         ]
     ]
@@ -131,7 +131,7 @@ def generate_facture(reservation: dict, propriete_id: int, signataire: str,
     story.append(Spacer(1, 0.5*cm))
 
     # ── Détail séjour ─────────────────────────────────────────────────────
-    story.append(Paragraph("📋 Détail de la prestation", s_h2))
+    story.append(Paragraph("Détail de la prestation", s_h2))
 
     date_arr = _ds(reservation, "date_arrivee")[:10]
     date_dep = _ds(reservation, "date_depart")[:10]
@@ -187,7 +187,7 @@ def generate_facture(reservation: dict, propriete_id: int, signataire: str,
 
     # ── Paiement ──────────────────────────────────────────────────────────
     paye = reservation.get("paye", False)
-    statut_paiement = "✅ PAYÉE" if paye else "⏳ EN ATTENTE DE PAIEMENT"
+    statut_paiement = "PAYEE" if paye else "EN ATTENTE DE PAIEMENT"
     couleur_statut  = colors.HexColor("#2E7D32") if paye else colors.HexColor("#E65100")
 
     story.append(Paragraph(f"Statut : {statut_paiement}", ParagraphStyle(
