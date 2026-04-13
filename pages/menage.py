@@ -1,359 +1,615 @@
 """
-Page Menage - Planning des interventions + Checklist par propriete.
+Page Ménage — Suivi RH, pointages et ventilation des heures.
 """
 import streamlit as st
 import pandas as pd
-from datetime import date, timedelta
-from database.proprietes_repo import fetch_all as _fa_props
-from services.auth_service import is_unlocked
+from datetime import date, datetime, time
+from database.supabase_client import get_supabase
 from services.reservation_service import load_reservations
-from services.proprietes_service import get_proprietes_dict
-from services.proprietes_service import get_proprietes_autorises, filter_df, get_propriete_selectionnee
-from database.checklist_repo import get_items, save_item, delete_item, get_done, set_done
-from database.supabase_client import is_connected
+from services.proprietes_service import get_proprietes_autorises
 
-CATEGORIES_DEFAUT = [
-    ("Chambres",       ["Changer les draps", "Taies d'oreillers", "Housses de couette", "Aspirer tapis", "Dépoussiérer"]),
-    ("Salle de bain",  ["Nettoyer douche/baignoire", "Nettoyer WC", "Lavabo et robinets", "Miroirs", "Changer serviettes", "Réapprovisionner savon/shampoing"]),
-    ("Cuisine",        ["Nettoyer plan de travail", "Nettoyer four/micro-ondes", "Nettoyer réfrigérateur", "Vaisselle rangée", "Vider poubelles"]),
-    ("Salon/Séjour",   ["Aspirer/balayer", "Dépoussiérer meubles", "Nettoyer vitres", "Coussins arrangés"]),
-    ("Général",        ["Vérifier ampoules", "Relever compteurs", "Laisser livret accueil", "Vérifier clés/badges", "Inventaire équipements"]),
-]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HELPERS DB
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _sb():
+    return get_supabase()
+
+def get_employes(prop_id):
+    try:
+        return _sb().table("employes_menage").select("*")\
+            .eq("propriete_id", prop_id).eq("actif", True)\
+            .order("nom").execute().data or []
+    except: return []
+
+def get_taches(prop_id):
+    try:
+        r = _sb().table("taches_menage").select("*")\
+            .eq("propriete_id", prop_id).eq("actif", True)\
+            .order("ordre").execute().data or []
+        if not r:
+            # Copier les tâches par défaut
+            defaut = _sb().table("taches_defaut").select("*").order("ordre").execute().data or []
+            for t in defaut:
+                _sb().table("taches_menage").insert({
+                    "propriete_id":  prop_id,
+                    "nom":           t["nom"],
+                    "ordre":         t["ordre"],
+                    "duree_estimee": t["duree_estimee"],
+                }).execute()
+            r = _sb().table("taches_menage").select("*")\
+                .eq("propriete_id", prop_id).eq("actif", True)\
+                .order("ordre").execute().data or []
+        return r
+    except: return []
+
+def get_pointages(prop_id, mois=None, annee=None):
+    try:
+        q = _sb().table("pointages_menage").select(
+            "*, employes_menage(prenom, nom)"
+        ).eq("propriete_id", prop_id).order("date_menage", desc=True)
+        if mois and annee:
+            debut = f"{annee}-{mois:02d}-01"
+            fin   = f"{annee}-{mois:02d}-31"
+            q = q.gte("date_menage", debut).lte("date_menage", fin)
+        return q.execute().data or []
+    except: return []
+
+def get_ventilation(pointage_id):
+    try:
+        return _sb().table("ventilation_taches").select(
+            "*, taches_menage(nom)"
+        ).eq("pointage_id", pointage_id).execute().data or []
+    except: return []
+
+def save_employe(data):
+    try: _sb().table("employes_menage").insert(data).execute(); return True
+    except: return False
+
+def update_employe(emp_id, data):
+    try: _sb().table("employes_menage").update(data).eq("id", emp_id).execute(); return True
+    except: return False
+
+def save_pointage(data):
+    try:
+        r = _sb().table("pointages_menage").insert(data).execute()
+        return r.data[0]["id"] if r.data else None
+    except: return None
+
+def update_pointage(pid, data):
+    try: _sb().table("pointages_menage").update(data).eq("id", pid).execute(); return True
+    except: return False
+
+def save_ventilation(pointage_id, tache_id, duree, notes=""):
+    try:
+        _sb().table("ventilation_taches").insert({
+            "pointage_id":  pointage_id,
+            "tache_id":     tache_id,
+            "duree_minutes":duree,
+            "notes":        notes,
+        }).execute()
+        return True
+    except: return False
+
+def delete_ventilation(pointage_id):
+    try: _sb().table("ventilation_taches").delete().eq("pointage_id", pointage_id).execute()
+    except: pass
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GENERATION PDF BULLETIN
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _generer_bulletin(employe, pointages, prop_nom, mois, annee):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    import io
+
+    NAVY = colors.HexColor("#0B1F3A")
+    BLUE = colors.HexColor("#1565C0")
+    GREY = colors.HexColor("#6B7280")
+    LIGHT= colors.HexColor("#F4F7FF")
+    WHITE= colors.white
+    GOLD = colors.HexColor("#F0B429")
+
+    mois_noms = ["Janvier","Fevrier","Mars","Avril","Mai","Juin",
+                 "Juillet","Aout","Septembre","Octobre","Novembre","Decembre"]
+
+    def s(size, color=NAVY, bold=False, align=0):
+        return ParagraphStyle("_", fontSize=size, textColor=color,
+                              fontName="Helvetica-Bold" if bold else "Helvetica",
+                              alignment=align, leading=size*1.4, spaceAfter=4)
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            leftMargin=2*cm, rightMargin=2*cm,
+                            topMargin=2*cm, bottomMargin=2*cm)
+    story = []
+
+    # En-tête
+    header = Table([[Paragraph(
+        f"RECAPITULATIF DES HEURES<br/>"
+        f"<font size='12'>{mois_noms[mois-1]} {annee}</font>",
+        s(16, WHITE, bold=True, align=1)
+    )]], colWidths=[17*cm])
+    header.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1), NAVY),
+        ("TOPPADDING",(0,0),(-1,-1),14),("BOTTOMPADDING",(0,0),(-1,-1),14),
+    ]))
+    story.append(header)
+
+    bande = Table([[""]], colWidths=[17*cm], rowHeights=[4])
+    bande.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),GOLD)]))
+    story.append(bande)
+    story.append(Spacer(1,0.4*cm))
+
+    # Infos employé / employeur
+    nom_emp  = f"{employe.get('prenom','')} {employe.get('nom','')}".strip()
+    taux     = float(employe.get("taux_horaire",12) or 12)
+    contrat  = employe.get("contrat","CDI") or "CDI"
+
+    parties = [[
+        Paragraph(f"<b>EMPLOYEUR</b><br/>{prop_nom}", s(10, NAVY)),
+        Paragraph(f"<b>EMPLOYE</b><br/>{nom_emp}<br/>"
+                  f"Contrat : {contrat}<br/>"
+                  f"Taux horaire : {taux:.2f} EUR", s(10, NAVY)),
+    ]]
+    pt = Table(parties, colWidths=[8.5*cm,8.5*cm])
+    pt.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(0,0), LIGHT),("BACKGROUND",(1,0),(1,0), LIGHT),
+        ("TOPPADDING",(0,0),(-1,-1),10),("BOTTOMPADDING",(0,0),(-1,-1),10),
+        ("LEFTPADDING",(0,0),(-1,-1),10),
+        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#D0D5DD")),
+    ]))
+    story.append(pt)
+    story.append(Spacer(1,0.5*cm))
+
+    # Détail des pointages
+    story.append(Paragraph("DETAIL DES INTERVENTIONS", s(10, NAVY, bold=True)))
+    story.append(Spacer(1,0.2*cm))
+
+    total_minutes = 0
+    lignes = [[
+        Paragraph("<b>Date</b>", s(9, WHITE, bold=True)),
+        Paragraph("<b>Arrivee</b>", s(9, WHITE, bold=True, align=1)),
+        Paragraph("<b>Depart</b>", s(9, WHITE, bold=True, align=1)),
+        Paragraph("<b>Duree</b>", s(9, WHITE, bold=True, align=1)),
+        Paragraph("<b>Statut</b>", s(9, WHITE, bold=True, align=1)),
+        Paragraph("<b>Notes</b>", s(9, WHITE, bold=True)),
+    ]]
+
+    for p in pointages:
+        duree_min = p.get("duree_minutes") or 0
+        total_minutes += duree_min
+        h, m = divmod(duree_min, 60)
+        duree_str = f"{h}h{m:02d}" if duree_min else "—"
+        statut = "Valide" if p.get("valide") else "En attente"
+        lignes.append([
+            Paragraph(str(p.get("date_menage",""))[:10], s(9, NAVY)),
+            Paragraph(str(p.get("heure_arrivee",""))[:5] or "—", s(9, GREY, align=1)),
+            Paragraph(str(p.get("heure_depart",""))[:5] or "—", s(9, GREY, align=1)),
+            Paragraph(duree_str, s(9, NAVY, bold=True, align=1)),
+            Paragraph(statut, s(9, GREY, align=1)),
+            Paragraph(str(p.get("notes","") or ""), s(8, GREY)),
+        ])
+
+    dt = Table(lignes, colWidths=[2.5*cm,2*cm,2*cm,2*cm,2.5*cm,6*cm])
+    dt.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,0),NAVY),
+        ("ROWBACKGROUNDS",(0,1),(-1,-1),[WHITE,LIGHT]),
+        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#D0D5DD")),
+        ("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6),
+        ("LEFTPADDING",(0,0),(-1,-1),6),
+        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+    ]))
+    story.append(dt)
+    story.append(Spacer(1,0.4*cm))
+
+    # Totaux
+    total_heures = total_minutes / 60
+    salaire_brut = total_heures * taux
+
+    totaux_data = [
+        ["", Paragraph("Total heures :", s(10, GREY, align=2)),
+         Paragraph(f"{total_heures:.2f} h", s(10, NAVY, bold=True, align=2))],
+        ["", Paragraph("Taux horaire :", s(10, GREY, align=2)),
+         Paragraph(f"{taux:.2f} EUR/h", s(10, NAVY, align=2))],
+        ["", Paragraph("<b>SALAIRE BRUT :</b>", s(12, WHITE, bold=True, align=2)),
+         Paragraph(f"<b>{salaire_brut:.2f} EUR</b>", s(12, WHITE, bold=True, align=2))],
+    ]
+    tt = Table(totaux_data, colWidths=[9.5*cm,4*cm,3.5*cm])
+    last = len(totaux_data)-1
+    tt.setStyle(TableStyle([
+        ("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6),
+        ("RIGHTPADDING",(0,0),(-1,-1),8),
+        ("BACKGROUND",(0,last),(-1,last),NAVY),
+    ]))
+    story.append(tt)
+    story.append(Spacer(1,0.8*cm))
+
+    story.append(HRFlowable(width="100%",thickness=0.5,color=GREY))
+    story.append(Spacer(1,0.2*cm))
+    story.append(Paragraph(
+        f"Document genere le {datetime.now().strftime('%d/%m/%Y')} — "
+        "Ce document est un recapitulatif indicatif, non un bulletin de paie officiel.",
+        s(8, GREY, align=1)
+    ))
+
+    doc.build(story)
+    return buffer.getvalue()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE PRINCIPALE
+# ─────────────────────────────────────────────────────────────────────────────
 
 def show():
-    st.title("🧹 Planning Ménage")
+    st.title("🧹 Ménage & RH")
 
-    tab_planning, tab_checklist, tab_modele = st.tabs([
-        "📅 Planning", "✅ Checklist", "⚙️ Configurer checklist"
+    prop_id = st.session_state.get("prop_id", 0) or 0
+    if not prop_id:
+        st.warning("Sélectionnez une propriété.")
+        return
+
+    from database.proprietes_repo import fetch_all as _fa
+    props = {p["id"]: p for p in _fa()}
+    prop  = props.get(prop_id, {})
+    prop_nom = prop.get("nom", "")
+
+    tab_pointage, tab_employes, tab_taches, tab_recap, tab_bulletin = st.tabs([
+        "⏱️ Pointage", "👥 Employés", "📋 Tâches", "📊 Récapitulatif", "📄 Bulletin"
     ])
 
-    with tab_planning:
-        _show_planning()
+    # ── ONGLET POINTAGE ───────────────────────────────────────────────────
+    with tab_pointage:
+        st.subheader("⏱️ Saisie des heures")
 
-    with tab_checklist:
-        _show_checklist()
+        employes = get_employes(prop_id)
+        if not employes:
+            st.warning("Ajoutez d'abord des employés dans l'onglet 'Employés'.")
+        else:
+            with st.form("form_pointage", clear_on_submit=True):
+                c1, c2 = st.columns(2)
+                with c1:
+                    emp_opts = {e["id"]: f"{e['prenom']} {e['nom']}" for e in employes}
+                    emp_id   = st.selectbox("Employé", list(emp_opts.keys()),
+                                             format_func=lambda x: emp_opts[x])
+                    date_men = st.date_input("Date", value=date.today())
+                with c2:
+                    h_arr = st.time_input("Heure d'arrivée",  value=time(8, 0))
+                    h_dep = st.time_input("Heure de départ",  value=time(12, 0))
 
-    with tab_modele:
-        _show_modele()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PLANNING
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _show_planning():
-    df_all = load_reservations()
-    _auth = [p["id"] for p in _fa_props() if not p.get("mot_de_passe") or is_unlocked(p["id"])]
-    df_all = df_all[df_all["propriete_id"].isin(_auth)]
-    df = filter_df(df_all)
-    if df.empty:
-        st.info("Aucune réservation disponible.")
-        return
-
-    today = pd.Timestamp(date.today())
-    in_7  = today + timedelta(days=7)
-    in_30 = today + timedelta(days=30)
-
-    planning = _build_planning(df, today)
-    if planning.empty:
-        st.info("Aucun ménage planifié.")
-        return
-
-    urgents = planning[planning["date_menage"] <= in_7]
-    a_venir = planning[(planning["date_menage"] > in_7) & (planning["date_menage"] <= in_30)]
-    passes  = planning[planning["date_menage"] < today]
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("🔴 Cette semaine", len(urgents))
-    c2.metric("🟡 Dans 30 jours", len(a_venir))
-    c3.metric("📋 Total à venir", len(planning[planning["date_menage"] >= today]))
-    c4.metric("✅ Passés",        len(passes))
-
-    st.divider()
-
-    col1, col2 = st.columns(2)
-    with col1:
-        periode = st.selectbox("Période", [
-            "Cette semaine", "Ce mois", "Tous à venir", "Historique complet"
-        ], key="menage_periode")
-    with col2:
-        _props = get_proprietes_autorises()
-        prop_filter = st.multiselect(
-            "Propriété",
-            options=list(_props.keys()),
-            default=list(_props.keys()),
-            format_func=lambda x: _props.get(x, f"Propriété {x}"),
-            key="menage_prop_filter"
-        )
-
-    df_plan = planning.copy()
-    if prop_filter:
-        df_plan = df_plan[df_plan["propriete_id"].isin(prop_filter)]
-    if periode == "Cette semaine":
-        df_plan = df_plan[(df_plan["date_menage"] >= today) & (df_plan["date_menage"] <= in_7)]
-    elif periode == "Ce mois":
-        df_plan = df_plan[(df_plan["date_menage"] >= today) & (df_plan["date_menage"] <= in_30)]
-    elif periode == "Tous à venir":
-        df_plan = df_plan[df_plan["date_menage"] >= today]
-
-    df_plan = df_plan.sort_values("date_menage")
-    if df_plan.empty:
-        st.info("Aucun ménage pour cette période.")
-        return
-
-    st.subheader(f"📋 {len(df_plan)} intervention(s)")
-
-    for prop_id in sorted(df_plan["propriete_id"].unique()):
-        nom_prop = get_proprietes_autorises().get(int(prop_id), f"Propriété {prop_id}")
-        df_prop  = df_plan[df_plan["propriete_id"] == prop_id]
-
-        with st.expander(f"🏠 {nom_prop} — {len(df_prop)} ménage(s)", expanded=True):
-            for _, row in df_prop.iterrows():
-                date_m = row["date_menage"]
-                jours  = (date_m - today).days
-
-                if jours < 0:     badge, color = "✅ Passé",          "#E8F5E9"
-                elif jours == 0:  badge, color = "🔴 Aujourd'hui !",  "#FFEBEE"
-                elif jours <= 2:  badge, color = f"🔴 Dans {jours}j", "#FFEBEE"
-                elif jours <= 7:  badge, color = f"🟡 Dans {jours}j", "#FFFDE7"
-                else:             badge, color = f"🟢 Dans {jours}j", "#F1F8E9"
-
-                prochain  = row.get("prochain_client", "-")
-                duree     = row.get("nuitees_suivantes", "")
-                duree_txt = f" ({duree} nuits)" if duree else ""
-
-                col_info, col_btn = st.columns([8, 2])
-                with col_info:
-                    st.markdown(
-                        f"""<div style='background:{color};padding:10px 14px;
-                        border-radius:8px;margin-bottom:8px'>
-                        <b>{date_m.strftime('%A %d %B %Y').capitalize()}</b> &nbsp;-&nbsp; {badge}<br>
-                        <small>🛏 Départ : <b>{row['nom_client']}</b> &nbsp;|&nbsp;
-                        ➡ Arrivée : <b>{prochain}{duree_txt}</b></small>
-                        </div>""", unsafe_allow_html=True
-                    )
-                with col_btn:
-                    date_str = date_m.strftime("%Y-%m-%d")
-                    if st.button("✅ Checklist", key=f"ck_{prop_id}_{date_str}",
-                                 help="Ouvrir la checklist pour ce ménage"):
-                        st.session_state["checklist_prop_id"]  = int(prop_id)
-                        st.session_state["checklist_date"]     = date_str
-                        st.session_state["active_tab_menage"]  = 1
-                        st.rerun()
-
-    st.divider()
-    export = df_plan.copy()
-    export["date_menage"] = export["date_menage"].dt.strftime("%d/%m/%Y")
-    export["propriete"] = export["propriete_id"].map(
-        lambda x: get_proprietes_autorises().get(int(x), f"Propriété {x}")
-    )
-    csv = export[["date_menage","propriete","nom_client","prochain_client"]]\
-        .to_csv(index=False).encode("utf-8")
-    st.download_button("⬇️ Exporter planning ménage", csv,
-                       file_name="planning_menage.csv", mime="text/csv")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CHECKLIST
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _show_checklist():
-    props = get_proprietes_dict()
-    if not props:
-        st.info("Aucune propriété configurée.")
-        return
-
-    col1, col2 = st.columns(2)
-    with col1:
-        default_prop = st.session_state.get("checklist_prop_id", list(props.keys())[0])
-        prop_id = st.selectbox(
-            "Propriété", options=list(props.keys()),
-            format_func=lambda x: props[x],
-            index=list(props.keys()).index(default_prop) if default_prop in props else 0,
-            key="ck_prop"
-        )
-    with col2:
-        default_date = st.session_state.get("checklist_date", date.today().isoformat())
-        date_menage  = st.date_input("Date du ménage",
-                                      value=date.fromisoformat(default_date),
-                                      key="ck_date")
-
-    items = get_items(prop_id)
-    if not items:
-        st.info("Aucun item de checklist. Configurez-les dans l'onglet ⚙️.")
-        return
-
-    # Charger état depuis Supabase
-    date_str = date_menage.isoformat()
-    if is_connected():
-        done_map = get_done(prop_id, date_str)
-    else:
-        if "ck_state" not in st.session_state:
-            st.session_state["ck_state"] = {}
-        done_map = st.session_state["ck_state"].get(f"{prop_id}_{date_str}", {})
-
-    # Grouper par catégorie
-    categories = {}
-    for item in items:
-        cat = item.get("categorie", "Général")
-        categories.setdefault(cat, []).append(item)
-
-    total = len(items)
-    fait  = sum(1 for item in items if done_map.get(item["id"], False))
-
-    # Barre de progression
-    pct = fait / total if total > 0 else 0
-    couleur_prog = "#4CAF50" if pct == 1 else "#FF9800" if pct > 0.5 else "#2196F3"
-    st.markdown(
-        f"""<div style='margin-bottom:12px'>
-        <div style='display:flex;justify-content:space-between'>
-          <b>Progression ménage</b> <b>{fait}/{total} items ({pct*100:.0f}%)</b>
-        </div>
-        <div style='background:#E0E0E0;border-radius:8px;height:14px;margin-top:6px'>
-          <div style='background:{couleur_prog};width:{pct*100:.0f}%;height:14px;border-radius:8px'></div>
-        </div></div>""", unsafe_allow_html=True
-    )
-
-    if pct == 1:
-        st.success("🎉 Ménage terminé ! Toutes les tâches sont complétées.")
-
-    # Affichage par catégorie
-    for cat, cat_items in categories.items():
-        nb_cat  = len(cat_items)
-        fait_cat = sum(1 for i in cat_items if done_map.get(i["id"], False))
-        with st.expander(f"{'✅' if fait_cat == nb_cat else '🔲'} **{cat}** — {fait_cat}/{nb_cat}",
-                         expanded=fait_cat < nb_cat):
-            for item in cat_items:
-                item_id  = item["id"]
-                is_done  = done_map.get(item_id, False)
-                new_done = st.checkbox(
-                    item["item"],
-                    value=is_done,
-                    key=f"ck_{prop_id}_{date_str}_{item_id}"
-                )
-                if new_done != is_done:
-                    if is_connected():
-                        set_done(prop_id, date_str, item_id, new_done)
+                # Réservation liée (optionnel)
+                df_resas = load_reservations()
+                if not df_resas.empty:
+                    df_p = df_resas[df_resas["propriete_id"] == prop_id].copy()
+                    df_p["date_depart"] = pd.to_datetime(df_p["date_depart"], errors="coerce")
+                    df_p = df_p[df_p["date_depart"].dt.date >= date_men - pd.Timedelta(days=3)]
+                    if not df_p.empty:
+                        resa_opts = {0: "— Aucune réservation liée —"}
+                        resa_opts.update({
+                            int(r["id"]): f"{r['nom_client']} — {str(r['date_depart'])[:10]}"
+                            for _, r in df_p.iterrows()
+                        })
+                        resa_id = st.selectbox("Réservation liée", list(resa_opts.keys()),
+                                                format_func=lambda x: resa_opts[x])
                     else:
-                        key = f"{prop_id}_{date_str}"
-                        if key not in st.session_state.get("ck_state", {}):
-                            st.session_state.setdefault("ck_state", {})[key] = {}
-                        st.session_state["ck_state"][key][item_id] = new_done
-                    done_map[item_id] = new_done
+                        resa_id = 0
+                else:
+                    resa_id = 0
 
-    # Bouton tout cocher
-    st.divider()
-    col_a, col_b = st.columns(2)
-    with col_a:
-        if st.button("☑️ Tout cocher", use_container_width=True):
-            for item in items:
-                if is_connected():
-                    set_done(prop_id, date_str, item["id"], True)
-            st.rerun()
-    with col_b:
-        if st.button("⬜ Tout décocher", use_container_width=True):
-            for item in items:
-                if is_connected():
-                    set_done(prop_id, date_str, item["id"], False)
-            st.rerun()
+                notes = st.text_area("Notes", height=60, placeholder="Observations...")
+                submitted = st.form_submit_button("💾 Enregistrer le pointage",
+                                                   type="primary", use_container_width=True)
 
+            if submitted:
+                dt_arr = datetime.combine(date_men, h_arr)
+                dt_dep = datetime.combine(date_men, h_dep)
+                duree  = max(0, int((dt_dep - dt_arr).total_seconds() / 60))
+                data = {
+                    "propriete_id":  prop_id,
+                    "employe_id":    emp_id,
+                    "date_menage":   str(date_men),
+                    "heure_arrivee": str(h_arr),
+                    "heure_depart":  str(h_dep),
+                    "duree_minutes": duree,
+                    "notes":         notes or None,
+                    "valide":        False,
+                }
+                if resa_id:
+                    data["reservation_id"] = resa_id
+                pid = save_pointage(data)
+                if pid:
+                    h, m = divmod(duree, 60)
+                    st.success(f"✅ Pointage enregistré — Durée : {h}h{m:02d}")
+                    st.rerun()
+                else:
+                    st.error("❌ Erreur d'enregistrement.")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CONFIGURATION MODÈLE CHECKLIST
-# ─────────────────────────────────────────────────────────────────────────────
+        # Liste des pointages récents
+        st.divider()
+        st.subheader("📋 Pointages récents")
 
-def _show_modele():
-    props = get_proprietes_dict()
-    if not props:
-        st.info("Aucune propriété configurée.")
-        return
+        mois_sel  = st.selectbox("Mois", range(1,13),
+                                  format_func=lambda m: ["Jan","Fév","Mar","Avr","Mai","Jun",
+                                                          "Jul","Aoû","Sep","Oct","Nov","Déc"][m-1],
+                                  index=date.today().month-1, key="men_mois_pt")
+        annee_sel = st.selectbox("Année", [2024,2025,2026,2027],
+                                  index=[2024,2025,2026,2027].index(date.today().year),
+                                  key="men_annee_pt")
 
-    prop_id = st.selectbox(
-        "Propriété", options=list(props.keys()),
-        format_func=lambda x: props[x], key="ck_mod_prop"
-    )
+        pointages = get_pointages(prop_id, mois_sel, annee_sel)
+        emp_dict  = {e["id"]: f"{e['prenom']} {e['nom']}" for e in get_employes(prop_id)}
 
-    items = get_items(prop_id)
+        if not pointages:
+            st.info("Aucun pointage ce mois.")
+        else:
+            for p in pointages:
+                duree_min = p.get("duree_minutes") or 0
+                h, m = divmod(duree_min, 60)
+                emp_nom = emp_dict.get(p.get("employe_id"), "?")
+                valide  = p.get("valide", False)
 
-    if not items and is_connected():
-        if st.button("📋 Initialiser checklist par défaut", type="secondary"):
-            ordre = 0
-            for cat, cat_items in CATEGORIES_DEFAUT:
-                for item_txt in cat_items:
-                    save_item({
-                        "propriete_id": prop_id,
-                        "categorie": cat,
-                        "item": item_txt,
-                        "ordre": ordre
-                    })
-                    ordre += 1
-            st.success("✅ Checklist initialisée !")
-            st.rerun()
-        return
+                with st.expander(
+                    f"{'✅' if valide else '⏳'} {emp_nom} — "
+                    f"{str(p.get('date_menage',''))[:10]} — {h}h{m:02d}",
+                    expanded=False
+                ):
+                    col1, col2, col3 = st.columns(3)
+                    col1.markdown(f"**Arrivée :** {str(p.get('heure_arrivee',''))[:5]}")
+                    col2.markdown(f"**Départ :** {str(p.get('heure_depart',''))[:5]}")
+                    col3.markdown(f"**Durée :** {h}h{m:02d}")
 
-    # Afficher items existants par catégorie
-    categories = {}
-    for item in items:
-        cat = item.get("categorie", "Général")
-        categories.setdefault(cat, []).append(item)
+                    if p.get("notes"):
+                        st.caption(f"Notes : {p['notes']}")
 
-    for cat, cat_items in categories.items():
-        with st.expander(f"**{cat}** ({len(cat_items)} items)"):
-            for item in cat_items:
-                col1, col2 = st.columns([8, 1])
-                col1.write(f"• {item['item']}")
-                if col2.button("🗑️", key=f"del_item_{item['id']}"):
-                    delete_item(item["id"])
+                    # Validation
+                    col_v1, col_v2 = st.columns(2)
+                    with col_v1:
+                        if not valide:
+                            if st.button("✅ Valider", key=f"val_{p['id']}"):
+                                update_pointage(p["id"], {"valide": True})
+                                st.rerun()
+                        else:
+                            if st.button("↩️ Annuler validation", key=f"unval_{p['id']}"):
+                                update_pointage(p["id"], {"valide": False})
+                                st.rerun()
+
+                    # Ventilation des tâches
+                    st.markdown("**Ventilation des tâches :**")
+                    taches = get_taches(prop_id)
+                    ventil = get_ventilation(p["id"])
+                    ventil_dict = {v["tache_id"]: v["duree_minutes"] for v in ventil}
+
+                    with st.form(f"form_ventil_{p['id']}"):
+                        total_ventil = 0
+                        saisies = {}
+                        cols_t = st.columns(2)
+                        for i, t in enumerate(taches):
+                            with cols_t[i % 2]:
+                                duree_t = st.number_input(
+                                    t["nom"],
+                                    min_value=0, max_value=480,
+                                    value=ventil_dict.get(t["id"], 0),
+                                    step=5,
+                                    help=f"Estimé : {t.get('duree_estimee',30)} min",
+                                    key=f"vent_{p['id']}_{t['id']}"
+                                )
+                                saisies[t["id"]] = duree_t
+                                total_ventil += duree_t
+
+                        st.caption(f"Total ventilé : {total_ventil} min / {duree_min} min disponibles")
+                        if st.form_submit_button("💾 Enregistrer ventilation", use_container_width=True):
+                            delete_ventilation(p["id"])
+                            for tid, dur in saisies.items():
+                                if dur > 0:
+                                    save_ventilation(p["id"], tid, dur)
+                            st.success("✅ Ventilation enregistrée !")
+                            st.rerun()
+
+    # ── ONGLET EMPLOYÉS ───────────────────────────────────────────────────
+    with tab_employes:
+        st.subheader("👥 Gestion des employés")
+
+        employes = get_employes(prop_id)
+
+        # Formulaire ajout
+        with st.form("form_add_emp", clear_on_submit=True):
+            st.markdown("**Ajouter un employé**")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                prenom = st.text_input("Prénom *")
+                nom    = st.text_input("Nom *")
+            with c2:
+                telephone = st.text_input("Téléphone")
+                email_emp = st.text_input("Email")
+            with c3:
+                taux     = st.number_input("Taux horaire (€)", min_value=0.0,
+                                            value=12.00, step=0.10)
+                contrat  = st.selectbox("Contrat", ["CDI","CDD","Interim","Auto-entrepreneur"])
+
+            if st.form_submit_button("➕ Ajouter", type="primary", use_container_width=True):
+                if not prenom or not nom:
+                    st.error("Prénom et nom obligatoires.")
+                elif save_employe({
+                    "propriete_id": prop_id, "prenom": prenom.strip(),
+                    "nom": nom.strip(), "telephone": telephone.strip() or None,
+                    "email": email_emp.strip() or None,
+                    "taux_horaire": taux, "contrat": contrat, "actif": True,
+                }):
+                    st.success(f"✅ {prenom} {nom} ajouté !")
                     st.rerun()
 
-    st.divider()
+        st.divider()
 
-    # Ajouter un item
-    with st.expander("➕ Ajouter un item", expanded=False):
-        cats_existantes = list(set(i.get("categorie","Général") for i in items))
-        cats_all = sorted(set(cats_existantes + [c for c, _ in CATEGORIES_DEFAUT]))
+        if not employes:
+            st.info("Aucun employé configuré.")
+        else:
+            for e in employes:
+                with st.expander(f"👤 {e['prenom']} {e['nom']} — {e.get('contrat','?')} — {e.get('taux_horaire',0):.2f} €/h"):
+                    with st.form(f"form_edit_emp_{e['id']}"):
+                        c1, c2, c3 = st.columns(3)
+                        with c1:
+                            new_prenom = st.text_input("Prénom", value=e.get("prenom",""))
+                            new_nom    = st.text_input("Nom",    value=e.get("nom",""))
+                        with c2:
+                            new_tel   = st.text_input("Téléphone", value=e.get("telephone","") or "")
+                            new_email = st.text_input("Email",     value=e.get("email","") or "")
+                        with c3:
+                            new_taux    = st.number_input("Taux (€/h)", value=float(e.get("taux_horaire",12) or 12), step=0.10)
+                            new_contrat = st.selectbox("Contrat",
+                                ["CDI","CDD","Interim","Auto-entrepreneur"],
+                                index=["CDI","CDD","Interim","Auto-entrepreneur"].index(e.get("contrat","CDI"))
+                                if e.get("contrat") in ["CDI","CDD","Interim","Auto-entrepreneur"] else 0)
+
+                        col_s, col_d = st.columns(2)
+                        with col_s:
+                            if st.form_submit_button("💾 Enregistrer", type="primary", use_container_width=True):
+                                update_employe(e["id"], {
+                                    "prenom": new_prenom, "nom": new_nom,
+                                    "telephone": new_tel or None, "email": new_email or None,
+                                    "taux_horaire": new_taux, "contrat": new_contrat,
+                                })
+                                st.success("✅ Mis à jour !")
+                                st.rerun()
+                        with col_d:
+                            if st.form_submit_button("🗑️ Désactiver", use_container_width=True):
+                                update_employe(e["id"], {"actif": False})
+                                st.warning("Employé désactivé.")
+                                st.rerun()
+
+    # ── ONGLET TÂCHES ─────────────────────────────────────────────────────
+    with tab_taches:
+        st.subheader("📋 Configuration des tâches")
+        taches = get_taches(prop_id)
+
+        with st.form("form_add_tache", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            with c1: nom_t = st.text_input("Nom de la tâche *")
+            with c2: duree_t = st.number_input("Durée estimée (min)", min_value=5, value=30, step=5)
+            with c3: ordre_t = st.number_input("Ordre d'affichage", min_value=0, value=len(taches)+1)
+
+            if st.form_submit_button("➕ Ajouter la tâche", use_container_width=True):
+                if not nom_t:
+                    st.error("Nom obligatoire.")
+                else:
+                    _sb().table("taches_menage").insert({
+                        "propriete_id": prop_id, "nom": nom_t.strip(),
+                        "duree_estimee": duree_t, "ordre": ordre_t, "actif": True,
+                    }).execute()
+                    st.success(f"✅ Tâche '{nom_t}' ajoutée !")
+                    st.rerun()
+
+        st.divider()
+        if taches:
+            for t in taches:
+                col1, col2, col3 = st.columns([3,1,1])
+                col1.markdown(f"**{t['nom']}** — {t.get('duree_estimee',0)} min estimées")
+                with col3:
+                    if st.button("🗑️", key=f"del_tache_{t['id']}"):
+                        _sb().table("taches_menage").update({"actif": False}).eq("id", t["id"]).execute()
+                        st.rerun()
+
+    # ── ONGLET RÉCAPITULATIF ──────────────────────────────────────────────
+    with tab_recap:
+        st.subheader("📊 Récapitulatif mensuel")
 
         c1, c2 = st.columns(2)
         with c1:
-            cat_choix = st.selectbox("Catégorie", cats_all + ["+ Nouvelle catégorie"], key="new_cat")
+            mois_r = st.selectbox("Mois", range(1,13),
+                                   format_func=lambda m: ["Janvier","Février","Mars","Avril","Mai","Juin",
+                                                           "Juillet","Août","Septembre","Octobre","Novembre","Décembre"][m-1],
+                                   index=date.today().month-1, key="men_mois_r")
         with c2:
-            if cat_choix == "+ Nouvelle catégorie":
-                cat_choix = st.text_input("Nom de la nouvelle catégorie", key="new_cat_nom")
+            annee_r = st.selectbox("Année", [2024,2025,2026,2027],
+                                    index=[2024,2025,2026,2027].index(date.today().year),
+                                    key="men_annee_r")
 
-        new_item = st.text_input("Description de la tâche", key="new_item_txt")
+        pointages = get_pointages(prop_id, mois_r, annee_r)
+        employes  = get_employes(prop_id)
+        emp_dict  = {e["id"]: e for e in employes}
 
-        if st.button("➕ Ajouter", type="primary"):
-            if new_item and cat_choix:
-                save_item({
-                    "propriete_id": prop_id,
-                    "categorie": cat_choix,
-                    "item": new_item,
-                    "ordre": len(items)
+        if not pointages:
+            st.info("Aucun pointage ce mois.")
+        else:
+            # Grouper par employé
+            recap = {}
+            for p in pointages:
+                eid = p.get("employe_id")
+                if eid not in recap:
+                    recap[eid] = {"minutes": 0, "interventions": 0, "validees": 0}
+                recap[eid]["minutes"]      += p.get("duree_minutes",0) or 0
+                recap[eid]["interventions"] += 1
+                if p.get("valide"):
+                    recap[eid]["validees"] += 1
+
+            rows = []
+            total_sal = 0
+            for eid, data in recap.items():
+                e = emp_dict.get(eid, {})
+                taux = float(e.get("taux_horaire",12) or 12)
+                heures = data["minutes"] / 60
+                salaire = heures * taux
+                total_sal += salaire
+                h, m = divmod(data["minutes"], 60)
+                rows.append({
+                    "Employé":        f"{e.get('prenom','')} {e.get('nom','')}".strip(),
+                    "Contrat":        e.get("contrat","?"),
+                    "Interventions":  data["interventions"],
+                    "Validées":       data["validees"],
+                    "Heures":         f"{h}h{m:02d}",
+                    "Taux (€/h)":    f"{taux:.2f}",
+                    "Salaire brut":   f"{salaire:,.2f} €",
                 })
-                st.success(f"✅ '{new_item}' ajouté !")
-                st.rerun()
 
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.metric("💶 Total masse salariale", f"{total_sal:,.2f} €")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PLANNING BUILDER
-# ─────────────────────────────────────────────────────────────────────────────
+    # ── ONGLET BULLETIN ───────────────────────────────────────────────────
+    with tab_bulletin:
+        st.subheader("📄 Générer un récapitulatif d'heures")
+        st.caption("Ce document est un récapitulatif indicatif pour préparer la paie — pas un bulletin officiel.")
 
-def _build_planning(df: pd.DataFrame, today: pd.Timestamp) -> pd.DataFrame:
-    rows = []
-    for prop_id in df["propriete_id"].unique():
-        df_prop = df[df["propriete_id"] == prop_id].sort_values("date_arrivee").reset_index(drop=True)
-        for i, row in df_prop.iterrows():
-            prochain_client = "-"
-            nuitees_suiv    = None
-            if i + 1 < len(df_prop):
-                nr = df_prop.iloc[i + 1]
-                prochain_client = nr["nom_client"]
-                nuitees_suiv    = int(nr.get("nuitees", 0) or 0)
-            rows.append({
-                "propriete_id":      prop_id,
-                "date_menage":       pd.Timestamp(row["date_depart"]),
-                "nom_client":        row["nom_client"],
-                "prochain_client":   prochain_client,
-                "nuitees_suivantes": nuitees_suiv,
-            })
-    return pd.DataFrame(rows) if rows else pd.DataFrame()
+        employes = get_employes(prop_id)
+        if not employes:
+            st.warning("Ajoutez des employés d'abord.")
+        else:
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                emp_opts = {e["id"]: f"{e['prenom']} {e['nom']}" for e in employes}
+                emp_sel  = st.selectbox("Employé", list(emp_opts.keys()),
+                                         format_func=lambda x: emp_opts[x], key="bul_emp")
+            with c2:
+                mois_b = st.selectbox("Mois", range(1,13),
+                                       format_func=lambda m: ["Janvier","Février","Mars","Avril","Mai","Juin",
+                                                               "Juillet","Août","Septembre","Octobre","Novembre","Décembre"][m-1],
+                                       index=date.today().month-1, key="bul_mois")
+            with c3:
+                annee_b = st.selectbox("Année", [2024,2025,2026,2027],
+                                        index=[2024,2025,2026,2027].index(date.today().year),
+                                        key="bul_annee")
+
+            if st.button("📄 Générer le récapitulatif PDF", type="primary", use_container_width=True):
+                emp_data  = emp_dict = {e["id"]: e for e in employes}
+                employe   = emp_data.get(emp_sel, {})
+                pointages_emp = [p for p in get_pointages(prop_id, mois_b, annee_b)
+                                  if p.get("employe_id") == emp_sel]
+                if not pointages_emp:
+                    st.warning("Aucun pointage pour cet employé ce mois.")
+                else:
+                    with st.spinner("Génération..."):
+                        pdf_bytes = _generer_bulletin(employe, pointages_emp, prop_nom, mois_b, annee_b)
+                    nom_safe = f"{employe.get('prenom','')}_{employe.get('nom','')}".replace(" ","_")
+                    st.download_button(
+                        label="⬇️ Télécharger le récapitulatif PDF",
+                        data=pdf_bytes,
+                        file_name=f"Recap_heures_{nom_safe}_{annee_b}_{mois_b:02d}.pdf",
+                        mime="application/pdf",
+                        type="primary",
+                        use_container_width=True,
+                    )
