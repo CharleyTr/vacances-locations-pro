@@ -1,6 +1,5 @@
 """
 Service de génération de factures PDF professionnelles.
-Utilise reportlab (déjà dans requirements.txt).
 """
 import io
 from datetime import datetime
@@ -18,6 +17,8 @@ GOLD  = colors.HexColor("#F0B429")
 GREY  = colors.HexColor("#6B7280")
 LIGHT = colors.HexColor("#F4F7FF")
 WHITE = colors.white
+GREEN = colors.HexColor("#2E7D32")
+ORANGE= colors.HexColor("#E65100")
 
 
 def _fv(d, key, default=0.0):
@@ -30,16 +31,12 @@ def _fv(d, key, default=0.0):
 
 def _ds(d, key, default=""):
     v = d.get(key, default)
-    return str(v) if v else default
+    return str(v).strip() if v else default
 
 
 def generate_facture(reservation: dict, propriete_id: int, signataire: str,
                      prop_nom: str, numero_facture: str,
                      prop_data: dict = None) -> bytes:
-    """
-    Génère une facture PDF professionnelle.
-    Retourne les bytes du PDF.
-    """
     prop_data = prop_data or {}
     buffer    = io.BytesIO()
 
@@ -50,160 +47,215 @@ def generate_facture(reservation: dict, propriete_id: int, signataire: str,
     )
 
     styles = getSampleStyleSheet()
-    s_title  = ParagraphStyle("t",  fontSize=22, textColor=WHITE,
-                               fontName="Helvetica-Bold", alignment=TA_CENTER)
-    s_sub    = ParagraphStyle("s",  fontSize=11, textColor=GOLD,
-                               fontName="Helvetica", alignment=TA_CENTER)
-    s_h2     = ParagraphStyle("h2", fontSize=12, textColor=NAVY,
-                               fontName="Helvetica-Bold", spaceBefore=12, spaceAfter=4)
-    s_body   = ParagraphStyle("b",  fontSize=10, textColor=GREY, leading=14)
-    s_right  = ParagraphStyle("r",  fontSize=10, textColor=NAVY,
-                               alignment=TA_RIGHT, fontName="Helvetica-Bold")
-    s_note   = ParagraphStyle("n",  fontSize=8,  textColor=GREY, alignment=TA_CENTER)
-    s_total  = ParagraphStyle("tot",fontSize=13, textColor=WHITE,
-                               fontName="Helvetica-Bold", alignment=TA_CENTER)
+
+    def s(size, color=NAVY, bold=False, align=TA_LEFT, space_before=0, space_after=4):
+        return ParagraphStyle("_", fontSize=size, textColor=color,
+                              fontName="Helvetica-Bold" if bold else "Helvetica",
+                              alignment=align, spaceBefore=space_before,
+                              spaceAfter=space_after, leading=size*1.4)
 
     story = []
 
-    # ── En-tête ───────────────────────────────────────────────────────────
-    header = Table([[Paragraph(f"{prop_nom}", s_title)]], colWidths=[17*cm])
-    header.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0),(-1,-1), NAVY),
-        ("TOPPADDING",    (0,0),(-1,-1), 14),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 6),
-        ("ROUNDEDCORNERS",[8]),
-    ]))
-    story.append(header)
+    # ── En-tête : logo + titre FACTURE côte à côte ────────────────────────
+    date_emission = datetime.now().strftime("%d/%m/%Y")
 
-    sub = Table([[Paragraph(f"FACTURE  N° {numero_facture}", s_sub)]], colWidths=[17*cm])
-    sub.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0),(-1,-1), BLUE),
-        ("TOPPADDING",    (0,0),(-1,-1), 6),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 6),
+    header_data = [[
+        Paragraph(f"<b>{prop_nom}</b>", s(18, WHITE, bold=True)),
+        Paragraph(f"FACTURE<br/><font size='10'>N° {numero_facture}</font><br/>"
+                  f"<font size='9'>Date : {date_emission}</font>",
+                  s(16, WHITE, bold=True, align=TA_RIGHT)),
+    ]]
+    header_table = Table(header_data, colWidths=[10*cm, 7*cm])
+    header_table.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0),(-1,-1), NAVY),
+        ("TOPPADDING",    (0,0),(-1,-1), 16),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 16),
+        ("LEFTPADDING",   (0,0),(0,-1),  16),
+        ("RIGHTPADDING",  (1,0),(1,-1),  16),
+        ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
     ]))
-    story.append(sub)
+    story.append(header_table)
+
+    # Bande dorée
+    bande = Table([[""]], colWidths=[17*cm], rowHeights=[4])
+    bande.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1), GOLD)]))
+    story.append(bande)
     story.append(Spacer(1, 0.5*cm))
 
-    # ── Date émission ─────────────────────────────────────────────────────
-    date_emission = datetime.now().strftime("%d/%m/%Y")
-    story.append(Paragraph(f"Date d'émission : {date_emission}", s_right))
-    story.append(Spacer(1, 0.3*cm))
+    # ── Émetteur & Client ─────────────────────────────────────────────────
+    # Construire adresse propriété
+    adresse_lignes = []
+    if prop_data.get("rue"):        adresse_lignes.append(_ds(prop_data, "rue"))
+    cp_ville = " ".join(filter(None, [
+        _ds(prop_data, "code_postal"), _ds(prop_data, "ville")
+    ]))
+    if cp_ville:                    adresse_lignes.append(cp_ville)
+    if prop_data.get("telephone"):  adresse_lignes.append(f"Tel : {_ds(prop_data,'telephone')}")
+    if prop_data.get("email") or prop_data.get("EMAIL_FROM"):
+        email = _ds(prop_data,"email") or _ds(prop_data,"EMAIL_FROM")
+        if email: adresse_lignes.append(f"Email : {email}")
+    if prop_data.get("siret"):      adresse_lignes.append(f"SIRET : {_ds(prop_data,'siret')}")
 
-    # ── Parties ───────────────────────────────────────────────────────────
-    adresse_prop = " — ".join(filter(None, [
-        prop_data.get("rue",""),
-        prop_data.get("code_postal",""),
-        prop_data.get("ville",""),
-    ])) or ""
-    siret = prop_data.get("siret","") or ""
+    emetteur_txt = f"<b>{signataire or prop_nom}</b><br/>" + \
+                   "<br/>".join(adresse_lignes) if adresse_lignes else \
+                   f"<b>{signataire or prop_nom}</b>"
 
-    nom_client = _ds(reservation, "nom_client")
+    # Construire infos client
+    nom_client   = _ds(reservation, "nom_client")
     email_client = _ds(reservation, "email")
-    tel_client = _ds(reservation, "telephone")
-    pays_client = _ds(reservation, "pays")
+    tel_client   = _ds(reservation, "telephone")
+    pays_client  = _ds(reservation, "pays")
+    num_resa     = _ds(reservation, "numero_reservation")
 
-    parties_data = [
-        [
-            Paragraph("<b>ÉMETTEUR</b>", s_h2),
-            Paragraph("<b>CLIENT</b>", s_h2),
-        ],
-        [
-            Paragraph(f"{signataire or prop_nom}<br/>"
-                      f"{adresse_prop}<br/>"
-                      f"{'SIRET : ' + siret if siret else ''}", s_body),
-            Paragraph(f"{nom_client}<br/>"
-                      f"{'Email : ' + email_client if email_client else ''}<br/>"
-                      f"{'Tel : ' + tel_client if tel_client else ''}<br/>"
-                      f"{pays_client}", s_body),
-        ]
+    client_lignes = [f"<b>{nom_client}</b>"]
+    if email_client: client_lignes.append(f"Email : {email_client}")
+    if tel_client:   client_lignes.append(f"Tel : {tel_client}")
+    if pays_client:  client_lignes.append(f"Pays : {pays_client}")
+    if num_resa:     client_lignes.append(f"N° reservation : {num_resa}")
+
+    client_txt = "<br/>".join(client_lignes)
+
+    parties_header = [
+        [Paragraph("EMETTEUR", s(9, WHITE, bold=True, align=TA_CENTER)),
+         Paragraph("CLIENT",   s(9, WHITE, bold=True, align=TA_CENTER))],
+        [Paragraph(emetteur_txt, s(9, NAVY)),
+         Paragraph(client_txt,   s(9, NAVY))],
     ]
-    parties_table = Table(parties_data, colWidths=[8.5*cm, 8.5*cm])
+    parties_table = Table(parties_header, colWidths=[8.5*cm, 8.5*cm])
     parties_table.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0),(0,0), BLUE),
+        ("BACKGROUND",    (1,0),(1,0), NAVY),
         ("BACKGROUND",    (0,1),(0,1), LIGHT),
-        ("BACKGROUND",    (1,1),(1,1), LIGHT),
+        ("BACKGROUND",    (1,1),(1,1), colors.HexColor("#F8FBFF")),
         ("TOPPADDING",    (0,0),(-1,-1), 8),
         ("BOTTOMPADDING", (0,0),(-1,-1), 8),
         ("LEFTPADDING",   (0,0),(-1,-1), 10),
-        ("GRID",          (0,0),(-1,-1), 0.3, colors.HexColor("#E0E0E0")),
-        ("ROUNDEDCORNERS",[4]),
+        ("RIGHTPADDING",  (0,0),(-1,-1), 10),
+        ("GRID",          (0,0),(-1,-1), 0.3, colors.HexColor("#D0D5DD")),
+        ("LINEBELOW",     (0,0),(-1,0), 2, GOLD),
     ]))
     story.append(parties_table)
     story.append(Spacer(1, 0.5*cm))
 
-    # ── Détail séjour ─────────────────────────────────────────────────────
-    story.append(Paragraph("Détail de la prestation", s_h2))
+    # ── Detail sejour ─────────────────────────────────────────────────────
+    story.append(Paragraph("DETAIL DE LA PRESTATION", s(10, NAVY, bold=True)))
+    story.append(Spacer(1, 0.2*cm))
 
-    date_arr = _ds(reservation, "date_arrivee")[:10]
-    date_dep = _ds(reservation, "date_depart")[:10]
-    nuitees  = int(_fv(reservation, "nuitees"))
-    plateforme = _ds(reservation, "plateforme")
-    num_resa   = _ds(reservation, "numero_reservation")
+    date_arr  = _ds(reservation, "date_arrivee")[:10]
+    date_dep  = _ds(reservation, "date_depart")[:10]
+    nuitees   = int(_fv(reservation, "nuitees"))
+    plateforme= _ds(reservation, "plateforme")
+    prix_brut = _fv(reservation, "prix_brut")
+    menage    = _fv(reservation, "prix_menage") or _fv(reservation, "menage")
+    taxes     = _fv(reservation, "taxes_sejour")
+    prix_nuit = round(prix_brut / nuitees, 2) if nuitees > 0 else 0
+    total     = prix_brut + menage + taxes
 
-    prix_brut  = _fv(reservation, "prix_brut")
-    menage     = _fv(reservation, "prix_menage") or _fv(reservation, "menage")
-    taxes      = _fv(reservation, "taxes_sejour")
-    prix_nuit  = round(prix_brut / nuitees, 2) if nuitees > 0 else 0
+    desc_loc = (f"Location meublée - {prop_nom}<br/>"
+                f"Du {date_arr} au {date_dep} ({nuitees} nuit{'s' if nuitees > 1 else ''})<br/>"
+                f"Plateforme : {plateforme}")
 
     lignes = [
-        ["Description", "Qté", "P.U.", "Total"],
-        [f"Location — {prop_nom}\n{date_arr} → {date_dep}\n{plateforme}{' — N° ' + num_resa if num_resa else ''}",
-         f"{nuitees} nuits", f"{prix_nuit:,.2f} €", f"{prix_brut:,.2f} €"],
+        [Paragraph("<b>Description</b>", s(9, WHITE, bold=True)),
+         Paragraph("<b>Qte</b>",  s(9, WHITE, bold=True, align=TA_CENTER)),
+         Paragraph("<b>P.U.</b>", s(9, WHITE, bold=True, align=TA_RIGHT)),
+         Paragraph("<b>Total</b>",s(9, WHITE, bold=True, align=TA_RIGHT))],
+        [Paragraph(desc_loc, s(9, NAVY)),
+         Paragraph(f"{nuitees} nuits", s(9, GREY, align=TA_CENTER)),
+         Paragraph(f"{prix_nuit:,.2f} EUR", s(9, GREY, align=TA_RIGHT)),
+         Paragraph(f"{prix_brut:,.2f} EUR", s(9, NAVY, bold=True, align=TA_RIGHT))],
     ]
     if menage > 0:
-        lignes.append(["Frais de ménage", "1", f"{menage:,.2f} €", f"{menage:,.2f} €"])
+        lignes.append([
+            Paragraph("Frais de menage", s(9, NAVY)),
+            Paragraph("1 forfait", s(9, GREY, align=TA_CENTER)),
+            Paragraph(f"{menage:,.2f} EUR", s(9, GREY, align=TA_RIGHT)),
+            Paragraph(f"{menage:,.2f} EUR", s(9, NAVY, bold=True, align=TA_RIGHT)),
+        ])
     if taxes > 0:
-        lignes.append(["Taxes de séjour", f"{nuitees} nuits", "—", f"{taxes:,.2f} €"])
+        lignes.append([
+            Paragraph("Taxe de sejour", s(9, NAVY)),
+            Paragraph(f"{nuitees} nuits", s(9, GREY, align=TA_CENTER)),
+            Paragraph("—", s(9, GREY, align=TA_RIGHT)),
+            Paragraph(f"{taxes:,.2f} EUR", s(9, NAVY, bold=True, align=TA_RIGHT)),
+        ])
 
-    total = prix_brut + menage + taxes
-
-    detail_table = Table(lignes, colWidths=[9*cm, 2.5*cm, 2.5*cm, 3*cm])
+    col_w = [9*cm, 2.5*cm, 2.5*cm, 3*cm]
+    detail_table = Table(lignes, colWidths=col_w)
+    row_bgs = [WHITE, LIGHT] * 10
     detail_table.setStyle(TableStyle([
         ("BACKGROUND",    (0,0),(-1,0), NAVY),
-        ("TEXTCOLOR",     (0,0),(-1,0), WHITE),
-        ("FONTNAME",      (0,0),(-1,0), "Helvetica-Bold"),
-        ("FONTSIZE",      (0,0),(-1,-1), 9),
-        ("ALIGN",         (1,0),(-1,-1), "CENTER"),
         ("ROWBACKGROUNDS",(0,1),(-1,-1), [WHITE, LIGHT]),
-        ("GRID",          (0,0),(-1,-1), 0.3, colors.HexColor("#E0E0E0")),
+        ("GRID",          (0,0),(-1,-1), 0.3, colors.HexColor("#D0D5DD")),
         ("TOPPADDING",    (0,0),(-1,-1), 7),
         ("BOTTOMPADDING", (0,0),(-1,-1), 7),
         ("LEFTPADDING",   (0,0),(-1,-1), 8),
+        ("RIGHTPADDING",  (0,0),(-1,-1), 8),
         ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
     ]))
     story.append(detail_table)
     story.append(Spacer(1, 0.3*cm))
 
-    # ── Total ─────────────────────────────────────────────────────────────
-    total_table = Table([[Paragraph(f"TOTAL TTC : {total:,.2f} €", s_total)]],
-                         colWidths=[17*cm])
-    total_table.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0),(-1,-1), NAVY),
-        ("TOPPADDING",    (0,0),(-1,-1), 12),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 12),
-        ("ROUNDEDCORNERS",[6]),
-    ]))
-    story.append(total_table)
-    story.append(Spacer(1, 0.5*cm))
+    # ── Sous-total / Total ────────────────────────────────────────────────
+    sous_total_data = [
+        ["", Paragraph("Sous-total HT :", s(9, GREY, align=TA_RIGHT)),
+         Paragraph(f"{(prix_brut+menage):,.2f} EUR", s(9, NAVY, align=TA_RIGHT))],
+    ]
+    if taxes > 0:
+        sous_total_data.append(
+            ["", Paragraph("Taxes de sejour :", s(9, GREY, align=TA_RIGHT)),
+             Paragraph(f"{taxes:,.2f} EUR", s(9, NAVY, align=TA_RIGHT))]
+        )
+    sous_total_data.append(
+        ["", Paragraph("<b>TOTAL TTC :</b>", s(12, WHITE, bold=True, align=TA_RIGHT)),
+         Paragraph(f"<b>{total:,.2f} EUR</b>", s(12, WHITE, bold=True, align=TA_RIGHT))]
+    )
 
-    # ── Paiement ──────────────────────────────────────────────────────────
+    st_table = Table(sous_total_data, colWidths=[9.5*cm, 4*cm, 3.5*cm])
+    st_styles = [
+        ("TOPPADDING",    (0,0),(-1,-1), 5),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 5),
+        ("RIGHTPADDING",  (0,0),(-1,-1), 8),
+    ]
+    # Fond bleu sur la dernière ligne (total)
+    last = len(sous_total_data) - 1
+    st_styles += [
+        ("BACKGROUND", (1,last),(-1,last), NAVY),
+        ("ROUNDEDCORNERS", [4]),
+    ]
+    st_table.setStyle(TableStyle(st_styles))
+    story.append(st_table)
+    story.append(Spacer(1, 0.4*cm))
+
+    # ── Statut paiement ───────────────────────────────────────────────────
     paye = reservation.get("paye", False)
-    statut_paiement = "PAYEE" if paye else "EN ATTENTE DE PAIEMENT"
-    couleur_statut  = colors.HexColor("#2E7D32") if paye else colors.HexColor("#E65100")
+    statut_txt    = "REGLEE" if paye else "EN ATTENTE DE REGLEMENT"
+    statut_color  = GREEN if paye else ORANGE
+    statut_bg     = colors.HexColor("#E8F5E9") if paye else colors.HexColor("#FFF3E0")
 
-    story.append(Paragraph(f"Statut : {statut_paiement}", ParagraphStyle(
-        "paye", fontSize=11, textColor=couleur_statut,
-        fontName="Helvetica-Bold", alignment=TA_CENTER
-    )))
+    statut_table = Table(
+        [[Paragraph(f"<b>Statut : {statut_txt}</b>",
+                    s(11, statut_color, bold=True, align=TA_CENTER))]],
+        colWidths=[17*cm]
+    )
+    statut_table.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0),(-1,-1), statut_bg),
+        ("TOPPADDING",    (0,0),(-1,-1), 10),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 10),
+        ("ROUNDEDCORNERS",[6]),
+        ("BOX",           (0,0),(-1,-1), 1, statut_color),
+    ]))
+    story.append(statut_table)
     story.append(Spacer(1, 0.8*cm))
 
     # ── Mentions légales ──────────────────────────────────────────────────
     story.append(HRFlowable(width="100%", thickness=0.5, color=GREY))
     story.append(Spacer(1, 0.2*cm))
     story.append(Paragraph(
-        "TVA non applicable — art. 293B du CGI · "
-        "Location meublée non professionnelle (LMNP) · "
-        f"Document émis le {date_emission} par {signataire or prop_nom}",
-        s_note
+        "TVA non applicable - art. 293B du CGI  |  "
+        "Location meublee non professionnelle (LMNP)  |  "
+        f"Document emis le {date_emission}",
+        s(8, GREY, align=TA_CENTER)
     ))
 
     doc.build(story)
