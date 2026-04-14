@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Script de rapport mensuel automatique.
 Exécuté le 1er de chaque mois par GitHub Actions.
@@ -46,7 +47,7 @@ def send_email(to_email, to_name, subject, html):
             "htmlContent": html,
         }, timeout=15)
     ok = r.status_code in (200, 201)
-    print(f"Email {'OK' if ok else 'ERREUR'} → {to_email}")
+    print(f"Email {'OK' if ok else 'ERREUR'} -&gt; {to_email}")
     return ok
 
 
@@ -105,7 +106,7 @@ def generer_rapport_html(prop, reservations_mois, reservations_mois_prec,
 
       <!-- Header -->
       <div style="background:#0B1F3A;padding:24px;border-radius:8px 8px 0 0;text-align:center">
-        <h1 style="color:white;margin:0;font-size:22px">🏖️ LodgePro</h1>
+        <h1 style="color:white;margin:0;font-size:22px">LodgePro LodgePro</h1>
         <p style="color:#F0B429;margin:6px 0 0;font-size:14px">Rapport mensuel — {mois_label}</p>
       </div>
 
@@ -137,14 +138,14 @@ def generer_rapport_html(prop, reservations_mois, reservations_mois_prec,
 
         <!-- Heures ménage -->
         <div style="background:white;border-radius:8px;padding:16px;margin-bottom:20px">
-          <h3 style="color:#0B1F3A;margin:0 0 8px">🧹 Ménage</h3>
+          <h3 style="color:#0B1F3A;margin:0 0 8px">[Menage] Ménage</h3>
           <p style="margin:0;color:#666">Heures travaillées ce mois : <strong>{heures_str}</strong></p>
         </div>
 
         <!-- Prochaines réservations -->
         {"" if not resas_futures else f"""
         <div style="background:white;border-radius:8px;padding:16px;margin-bottom:20px">
-          <h3 style="color:#0B1F3A;margin:0 0 12px">📅 Prochaines réservations</h3>
+          <h3 style="color:#0B1F3A;margin:0 0 12px">[Calendrier] Prochaines réservations</h3>
           <table width="100%" style="border-collapse:collapse;font-size:13px">
             <tr style="background:#F4F7FF">
               <th style="padding:8px;text-align:left">Client</th>
@@ -162,7 +163,7 @@ def generer_rapport_html(prop, reservations_mois, reservations_mois_prec,
         <div style="text-align:center;margin-top:20px">
           <a href="{APP_URL}" style="background:#1565C0;color:white;padding:14px 28px;
              border-radius:8px;text-decoration:none;font-weight:bold;font-size:14px">
-            Accéder à mon espace LodgePro →
+            Accéder à mon espace LodgePro -&gt;
           </a>
         </div>
       </div>
@@ -199,7 +200,7 @@ def main():
     debut_2    = f"{mois_2.year}-{mois_2.month:02d}-01"
     fin_2      = f"{mois_2.year}-{mois_2.month:02d}-{monthrange(mois_2.year, mois_2.month)[1]:02d}"
 
-    print(f"Période : {debut_mois} → {fin_mois}")
+    print(f"Période : {debut_mois} -&gt; {fin_mois}")
 
     # Récupérer les propriétés actives
     props = sb_get("proprietes", "actif=eq.true&select=*")
@@ -214,7 +215,7 @@ def main():
             print(f"⚠️ Propriété {prop['nom']} — pas d'email, ignorée")
             continue
 
-        print(f"📧 Traitement {prop['nom']} → {email}")
+        print(f"📧 Traitement {prop['nom']} -&gt; {email}")
 
         # Réservations du mois précédent
         resas_mois = sb_get("reservations",
@@ -242,7 +243,7 @@ def main():
         html = generer_rapport_html(prop, resas_mois, resas_prec,
                                      heures, mois, annee)
 
-        sujet = f"📊 Rapport {MOIS_FR[mois-1]} {annee} — {prop['nom']}"
+        sujet = f"[Rapport] Rapport {MOIS_FR[mois-1]} {annee} — {prop['nom']}"
         send_email(email, signat, sujet, html)
 
     print("=== Rapports envoyés ===")
