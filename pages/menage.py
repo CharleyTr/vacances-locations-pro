@@ -68,7 +68,16 @@ def get_ventilation(pointage_id):
     except: return []
 
 def save_employe(data):
-    try: _sb().table("employes_menage").insert(data).execute(); return True
+    try:
+        r = _sb().table("employes_menage").insert(data).execute()
+        if r.data:
+            emp_id   = r.data[0]["id"]
+            prop_id  = data.get("propriete_id")
+            if prop_id:
+                _sb().table("employe_proprietes").insert({
+                    "employe_id": emp_id, "propriete_id": prop_id
+                }).execute()
+        return True
     except: return False
 
 def update_employe(emp_id, data):
@@ -449,6 +458,31 @@ def show():
                     st.success(f"✅ {prenom} {nom} ajouté !")
                     st.rerun()
 
+        # Rattacher un employé existant d'une autre propriété
+        st.divider()
+        st.markdown("**Rattacher un employé existant à cette propriété**")
+        st.caption("Si cet employé travaille déjà dans une autre propriété, rattachez-le ici.")
+
+        # Récupérer tous les employés actifs pas encore rattachés
+        try:
+            tous = _sb().table("employes_menage").select("*").eq("actif", True).execute().data or []
+            emp_ids_ici = {e["id"] for e in get_employes(prop_id)}
+            disponibles = [e for e in tous if e["id"] not in emp_ids_ici]
+            if disponibles:
+                with st.form("form_rattacher"):
+                    emp_ratt = st.selectbox(
+                        "Employé à rattacher",
+                        [e["id"] for e in disponibles],
+                        format_func=lambda x: next(
+                            (f"{e['prenom']} {e['nom']}" for e in disponibles if e["id"] == x), "?"
+                        )
+                    )
+                    if st.form_submit_button("🔗 Rattacher", use_container_width=True):
+                        if rattacher_employe(emp_ratt, prop_id):
+                            st.success("✅ Employé rattaché !")
+                            st.rerun()
+        except: pass
+
         st.divider()
 
         if not employes:
@@ -522,6 +556,53 @@ def show():
     # ── ONGLET RÉCAPITULATIF ──────────────────────────────────────────────
     with tab_recap:
         st.subheader("📊 Récapitulatif mensuel")
+
+        # Vue consolidée multi-propriétés pour l'admin
+        is_admin = st.session_state.get("is_admin", False)
+        if is_admin:
+            from database.proprietes_repo import fetch_all as _fa_r
+            all_props = _fa_r()
+            all_prop_ids = [p["id"] for p in all_props]
+            if st.checkbox("Vue consolidée toutes propriétés", key="recap_all"):
+                st.info("Vue consolidée — heures cumulées par employé sur toutes les propriétés")
+                emps_all = get_employes_all(all_prop_ids)
+                if emps_all:
+                    # Récupérer tous les pointages de toutes les propriétés
+                    all_pts = []
+                    for pid in all_prop_ids:
+                        all_pts += get_pointages(pid, mois_r if 'mois_r' in dir() else date.today().month,
+                                                  annee_r if 'annee_r' in dir() else date.today().year)
+                    
+                    emp_dict_all = {e["id"]: e for e in emps_all}
+                    recap_all = {}
+                    for p in all_pts:
+                        eid = p.get("employe_id")
+                        if eid not in emp_dict_all: continue
+                        if eid not in recap_all:
+                            recap_all[eid] = {"minutes": 0, "interventions": 0}
+                        recap_all[eid]["minutes"]       += p.get("duree_minutes",0) or 0
+                        recap_all[eid]["interventions"] += 1
+
+                    rows_all = []
+                    for eid, data in recap_all.items():
+                        e = emp_dict_all.get(eid, {})
+                        taux   = float(e.get("taux_horaire",12) or 12)
+                        heures = data["minutes"] / 60
+                        h, m   = divmod(data["minutes"], 60)
+                        nb_props = len(e.get("proprietes_rattachees", []))
+                        rows_all.append({
+                            "Employé":       f"{e.get('prenom','')} {e.get('nom','')}".strip(),
+                            "Propriétés":    nb_props,
+                            "Interventions": data["interventions"],
+                            "Heures":        f"{h}h{m:02d}",
+                            "Taux (€/h)":   f"{taux:.2f}",
+                            "Salaire brut":  f"{heures*taux:,.2f} €",
+                        })
+                    if rows_all:
+                        st.dataframe(pd.DataFrame(rows_all), use_container_width=True, hide_index=True)
+                        total = sum(float(r["Salaire brut"].replace(" €","").replace(",","")) for r in rows_all)
+                        st.metric("💶 Masse salariale totale", f"{total:,.2f} €")
+                return
 
         c1, c2 = st.columns(2)
         with c1:
