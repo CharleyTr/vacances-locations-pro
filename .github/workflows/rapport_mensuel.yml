@@ -2,27 +2,28 @@ name: Rapport mensuel propriétaires
 
 on:
   schedule:
-    - cron: '0 7 1 * *'  # Le 1er de chaque mois à 7h00 UTC
-  workflow_dispatch:       # Permettre le déclenchement manuel
+    - cron: '0 7 1 * *'
+  workflow_dispatch:
 
 jobs:
   rapport:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install supabase requests reportlab pandas
+        run: pip install supabase requests reportlab pandas python-dateutil
 
       - name: Envoyer les rapports mensuels
         env:
-          SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY:      ${{ secrets.SUPABASE_SERVICE_KEY }}
-          BREVO_API_KEY:     ${{ secrets.BREVO_API_KEY }}
-          EMAIL_FROM:        ${{ secrets.EMAIL_FROM }}
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:         ${{ secrets.SUPABASE_SERVICE_KEY }}
+          BREVO_API_KEY:        ${{ secrets.BREVO_API_KEY }}
+          EMAIL_FROM:           ${{ secrets.EMAIL_FROM }}
+          APP_URL:              ${{ secrets.APP_URL }}
         run: python scripts/rapport_mensuel.py
