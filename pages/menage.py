@@ -46,15 +46,19 @@ def get_taches(prop_id):
 
 def get_pointages(prop_id, mois=None, annee=None):
     try:
+        import calendar as _cal
         q = _sb().table("pointages_menage").select(
             "*, employes_menage(prenom, nom)"
         ).eq("propriete_id", prop_id).order("date_menage", desc=True)
         if mois and annee:
             debut = f"{annee}-{mois:02d}-01"
-            fin   = f"{annee}-{mois:02d}-31"
+            dernier_jour = _cal.monthrange(annee, mois)[1]
+            fin = f"{annee}-{mois:02d}-{dernier_jour:02d}"
             q = q.gte("date_menage", debut).lte("date_menage", fin)
         return q.execute().data or []
-    except: return []
+    except Exception as e:
+        print(f"get_pointages error: {e}")
+        return []
 
 def get_ventilation(pointage_id):
     try:
