@@ -84,6 +84,7 @@ def show():
                             "siret": siret.strip() or None,
                             "ical_url": ical_url or None,
                             "signataire": signataire.strip() or None,
+                            "email": email_prop.strip() or None,
                             "actif": actif,
                         })
                         st.success(f"✅ '{nom}' mis à jour !")
