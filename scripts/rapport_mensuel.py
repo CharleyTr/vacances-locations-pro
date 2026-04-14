@@ -101,6 +101,24 @@ def generer_rapport_html(prop, reservations_mois, reservations_mois_prec,
           </td>
         </tr>"""
 
+    if resas_futures:
+        resas_futures_html = (
+            '<div style="background:white;border-radius:8px;padding:16px;margin-bottom:20px">'
+            '<h3 style="color:#0B1F3A;margin:0 0 12px">Prochaines reservations</h3>'
+            '<table width="100%" style="border-collapse:collapse;font-size:13px">'
+            '<tr style="background:#F4F7FF">'
+            '<th style="padding:8px;text-align:left">Client</th>'
+            '<th style="padding:8px;text-align:left">Arrivee</th>'
+            '<th style="padding:8px;text-align:left">Depart</th>'
+            '<th style="padding:8px;text-align:left">Plateforme</th>'
+            '<th style="padding:8px;text-align:left">CA Net</th>'
+            '</tr>'
+            + resas_html +
+            '</table></div>'
+        )
+    else:
+        resas_futures_html = ""
+
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:650px;margin:auto">
 
@@ -143,21 +161,7 @@ def generer_rapport_html(prop, reservations_mois, reservations_mois_prec,
         </div>
 
         <!-- Prochaines réservations -->
-        {"" if not resas_futures else f"""
-        <div style="background:white;border-radius:8px;padding:16px;margin-bottom:20px">
-          <h3 style="color:#0B1F3A;margin:0 0 12px">[Calendrier] Prochaines réservations</h3>
-          <table width="100%" style="border-collapse:collapse;font-size:13px">
-            <tr style="background:#F4F7FF">
-              <th style="padding:8px;text-align:left">Client</th>
-              <th style="padding:8px;text-align:left">Arrivée</th>
-              <th style="padding:8px;text-align:left">Départ</th>
-              <th style="padding:8px;text-align:left">Plateforme</th>
-              <th style="padding:8px;text-align:left">CA Net</th>
-            </tr>
-            {resas_html}
-          </table>
-        </div>
-        """}
+        {resas_futures_html}
 
         <!-- CTA -->
         <div style="text-align:center;margin-top:20px">
