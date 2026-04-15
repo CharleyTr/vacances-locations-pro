@@ -564,12 +564,15 @@ def show():
         st.divider()
         if taches:
             for t in taches:
-                col1, col2, col3 = st.columns([3,1,1])
-                col1.markdown(f"**{t['nom']}** — {t.get('duree_estimee',0)} min estimées")
-                with col3:
-                    if st.button("🗑️", key=f"del_tache_{t['id']}"):
-                        _sb().table("taches_menage").update({"actif": False}).eq("id", t["id"]).execute()
-                        st.rerun()
+                try:
+                    col1, col2, col3 = st.columns([3,1,1])
+                    col1.markdown(f"**{t.get('nom','?')}** — {t.get('duree_estimee',0)} min estimées")
+                    with col3:
+                        if st.button("🗑️", key=f"del_tache_{t.get('id',0)}"):
+                            _sb().table("taches_menage").update({"actif": False}).eq("id", t["id"]).execute()
+                            st.rerun()
+                except Exception as _et:
+                    st.error(f"Erreur tâche : {_et} — données : {t}")
 
     # ── ONGLET RÉCAPITULATIF ──────────────────────────────────────────────
     with tab_recap:
