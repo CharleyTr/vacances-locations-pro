@@ -654,6 +654,8 @@ try: from pages import paiements
 except: paiements = None
 try: from pages import menage
 except: menage = None
+try: from pages import dads
+except: dads = None
 try: from pages import messages
 except: messages = None
 try: from pages import ical_sync
