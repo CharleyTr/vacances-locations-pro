@@ -203,9 +203,16 @@ def _generer_bulletin(employe, pointages, prop_nom, mois, annee, taux_custom=Non
     pas_taux     = float(ex.get("pas_taux", 0.0) or 0.0)
     convention   = ex.get("convention", "Non precisee")
 
-    nom_emp  = f"{employe.get('prenom','')} {employe.get('nom','')}".strip()
-    taux_h   = float(employe.get("taux_horaire", 12) or 12)
-    contrat  = employe.get("contrat", "CDI") or "CDI"
+    nom_emp     = f"{employe.get('prenom','')} {employe.get('nom','')}".strip()
+    taux_h      = float(employe.get("taux_horaire", 12) or 12)
+    contrat     = employe.get("contrat", "CDI") or "CDI"
+    num_ss      = employe.get("numero_ss", "") or "Non renseigne"
+    adresse_sal = " ".join(filter(None, [
+        employe.get("adresse","") or "",
+        employe.get("code_postal","") or "",
+        employe.get("ville","") or "",
+    ])) or "Non renseignee"
+    date_naiss  = str(employe.get("date_naissance","") or "Non renseignee")[:10]
 
     # ── Calculs heures ─────────────────────────────────────────────────────
     total_minutes = sum(p.get("duree_minutes") or 0 for p in pointages)
@@ -279,11 +286,15 @@ def _generer_bulletin(employe, pointages, prop_nom, mois, annee, taux_custom=Non
 
     # Infos salarié
     info = Table([[
-        Paragraph(f"<b>Salarie :</b> {nom_emp}", s(9, NAVY)),
-        Paragraph(f"<b>Contrat :</b> {contrat}", s(9, NAVY)),
-        Paragraph(f"<b>Taux horaire :</b> {taux_h:.2f} EUR/h", s(9, NAVY)),
-        Paragraph(f"<b>Periode :</b> {mois_noms[mois-1]} {annee}", s(9, NAVY)),
-    ]], colWidths=[4.5*cm,4*cm,4*cm,4.9*cm])
+        Paragraph(f"<b>Salarie :</b> {nom_emp}<br/>"
+                  f"<b>N° SS :</b> {num_ss}<br/>"
+                  f"<b>Naissance :</b> {date_naiss}", s(9, NAVY)),
+        Paragraph(f"<b>Adresse :</b> {adresse_sal}", s(9, NAVY)),
+        Paragraph(f"<b>Contrat :</b> {contrat}<br/>"
+                  f"<b>Taux horaire :</b> {taux_h:.2f} EUR/h", s(9, NAVY)),
+        Paragraph(f"<b>Employeur :</b> {prop_nom}<br/>"
+                  f"<b>Periode :</b> {mois_noms[mois-1]} {annee}", s(9, NAVY)),
+    ]], colWidths=[4.5*cm,4.5*cm,3.5*cm,4.9*cm])
     info.setStyle(TableStyle([
         ("BACKGROUND",(0,0),(-1,-1),LIGHT),
         ("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7),
