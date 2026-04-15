@@ -578,6 +578,18 @@ def show():
     with tab_recap:
         st.subheader("📊 Récapitulatif mensuel")
 
+        # Sélecteurs mois/année d'abord
+        c1, c2 = st.columns(2)
+        with c1:
+            mois_r = st.selectbox("Mois", range(1,13),
+                                   format_func=lambda m: ["Janvier","Février","Mars","Avril","Mai","Juin",
+                                                           "Juillet","Août","Septembre","Octobre","Novembre","Décembre"][m-1],
+                                   index=date.today().month-1, key="men_mois_r")
+        with c2:
+            annee_r = st.selectbox("Année", [2024,2025,2026,2027],
+                                    index=[2024,2025,2026,2027].index(date.today().year),
+                                    key="men_annee_r")
+
         # Vue consolidée multi-propriétés pour l'admin
         is_admin = st.session_state.get("is_admin", False)
         if is_admin:
@@ -588,11 +600,9 @@ def show():
                 st.info("Vue consolidée — heures cumulées par employé sur toutes les propriétés")
                 emps_all = get_employes_all(all_prop_ids)
                 if emps_all:
-                    # Récupérer tous les pointages de toutes les propriétés
                     all_pts = []
                     for pid in all_prop_ids:
-                        all_pts += get_pointages(pid, mois_r if 'mois_r' in dir() else date.today().month,
-                                                  annee_r if 'annee_r' in dir() else date.today().year)
+                        all_pts += get_pointages(pid, mois_r, annee_r)
                     
                     emp_dict_all = {e["id"]: e for e in emps_all}
                     recap_all = {}
@@ -624,17 +634,6 @@ def show():
                         total = sum(float(r["Salaire brut"].replace(" €","").replace(",","")) for r in rows_all)
                         st.metric("💶 Masse salariale totale", f"{total:,.2f} €")
                 return
-
-        c1, c2 = st.columns(2)
-        with c1:
-            mois_r = st.selectbox("Mois", range(1,13),
-                                   format_func=lambda m: ["Janvier","Février","Mars","Avril","Mai","Juin",
-                                                           "Juillet","Août","Septembre","Octobre","Novembre","Décembre"][m-1],
-                                   index=date.today().month-1, key="men_mois_r")
-        with c2:
-            annee_r = st.selectbox("Année", [2024,2025,2026,2027],
-                                    index=[2024,2025,2026,2027].index(date.today().year),
-                                    key="men_annee_r")
 
         pointages = get_pointages(prop_id, mois_r, annee_r)
         employes  = get_employes(prop_id)
