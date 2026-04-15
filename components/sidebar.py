@@ -40,8 +40,38 @@ PAGES = {
 
 def sidebar() -> str:
     with st.sidebar:
-        _is_demo_mode = st.session_state.get("prop_id", 0) == 5
-        if _is_demo_mode:
+        _prop_id_sidebar = st.session_state.get("prop_id", 0) or 0
+        _is_demo_mode     = _prop_id_sidebar == 5
+        _is_demo_pro_sb   = 6 <= _prop_id_sidebar <= 25
+
+        if _is_demo_pro_sb:
+            st.markdown("""
+            <div style='background:linear-gradient(135deg,#7C3AED,#0B1F3A);
+                        border-radius:12px;padding:14px;margin-bottom:8px;text-align:center'>
+              <div style='font-size:20px;font-weight:900;color:white;
+                          font-family:Georgia,serif'>LodgePro <span style="color:#F0B429">Pro</span></div>
+              <div style='font-size:10px;color:#A78BFA;font-weight:600;
+                          letter-spacing:2px;margin-top:2px'>DÉMO CONCIERGERIE</div>
+            </div>
+            <div style='background:#7C3AED;color:white;border-radius:8px;
+                        padding:8px 12px;font-size:11px;font-weight:600;
+                        text-align:center;margin-bottom:8px'>
+              🏢 Riviera Conciergerie<br>
+              <span style='font-weight:400;font-size:10px'>20 propriétés — Côte d'Azur</span>
+            </div>
+            <div style='background:#0B1F3A;border:1px solid #7C3AED;border-radius:8px;
+                        padding:10px 12px;text-align:center;margin-bottom:8px'>
+              <div style='color:rgba(255,255,255,0.6);font-size:10px;margin-bottom:6px'>
+                Convaincu ? Découvrez nos tarifs Pro
+              </div>
+              <a href="https://pro.lodgepro.eu#tarifs" target="_blank"
+                 style='display:block;background:#7C3AED;color:white;
+                        padding:8px;border-radius:6px;font-weight:700;
+                        font-size:12px;text-decoration:none'>
+                💳 Voir les tarifs Pro →
+              </a>
+            </div>""", unsafe_allow_html=True)
+        elif _is_demo_mode:
             st.markdown("""
             <div style='background:linear-gradient(135deg,#1565C0,#0B1F3A);
                         border-radius:12px;padding:14px;margin-bottom:8px;text-align:center'>
@@ -132,11 +162,38 @@ def sidebar() -> str:
         st.divider()
 
         # Pages admin uniquement (Villa Tobias)
-        PAGES_ADMIN_ONLY = {"📐 Barèmes fiscaux", "👥 Utilisateurs", "📋 Journal", "💾 Sauvegarde", "🔧 Corrections"}
+        PAGES_ADMIN_ONLY  = {"📐 Barèmes fiscaux", "👥 Utilisateurs", "📋 Journal", "💾 Sauvegarde", "🔧 Corrections"}
         PAGES_DEMO_HIDDEN = {"🔄 Sync iCal", "📥 Import Booking", "📥 Import Airbnb", "💾 Sauvegarde", "🔧 Corrections", "👥 Utilisateurs", "📋 Journal"}
-        is_admin = st.session_state.get("is_admin", False)
 
+        # Pages pour les conciergeries Pro
+        PAGES_PRO = {
+            "📊 Dashboard":         "Dashboard",
+            "📋 Réservations":      "Réservations",
+            "📅 Calendrier":        "Calendrier",
+            "📈 Analyses":          "Analyses",
+            "🧹 Ménage":            "Ménage",
+            "📋 DADS":              "DADS",
+            "📧 Messages":          "Messages",
+            "💬 Chat":              "Chat",
+            "🏠 Propriétés":        "Propriétés",
+            "📊 Rapports":          "Rapports",
+            "👤 Mon profil":        "Mon profil",
+            "📖 Documentation":     "Documentation",
+        }
+
+        is_admin   = st.session_state.get("is_admin", False)
         _user_role = st.session_state.get("user_role", "proprietaire")
+
+        # Détecter si c'est un client Pro (prop_id dans les IDs Pro)
+        _prop_id_cur = st.session_state.get("prop_id", 0) or 0
+        try:
+            from database.proprietes_repo import fetch_all as _fa_sb
+            _props_full = {p["id"]: p for p in _fa_sb()}
+            _prop_cur   = _props_full.get(_prop_id_cur, {})
+            _is_pro_client = _prop_cur.get("mot_de_passe") == "pro2026" or                              st.session_state.get("is_pro_client", False)
+        except:
+            _is_pro_client = False
+
         # Pages visibles uniquement pour gestionnaire
         PAGES_GESTIONNAIRE = {
             "📊 Dashboard", "📋 Réservations", "📅 Calendrier",
@@ -145,17 +202,26 @@ def sidebar() -> str:
 
         if is_admin:
             pages_visibles = dict(PAGES)
+        elif _is_pro_client:
+            # Conciergerie Pro — menu adapté
+            pages_visibles = dict(PAGES_PRO)
         elif _user_role == "gestionnaire":
             pages_visibles = {k: v for k, v in PAGES.items()
                               if k in PAGES_GESTIONNAIRE}
         else:
-            # Propriétaire : tout sauf pages admin
+            # Propriétaire particulier : tout sauf pages admin
             pages_visibles = {k: v for k, v in PAGES.items()
                               if k not in PAGES_ADMIN_ONLY}
 
-        # Mode démo : cacher les pages techniques
-        if st.session_state.get("prop_id", 0) == 5:
+        # Mode démo particulier : cacher les pages techniques
+        if _prop_id_cur == 5:
             pages_visibles = {k: v for k, v in pages_visibles.items()
+                              if k not in PAGES_DEMO_HIDDEN}
+
+        # Mode démo Pro (prop_id dans 6-25) : branding Pro
+        _is_demo_pro = 6 <= _prop_id_cur <= 25
+        if _is_demo_pro and not is_admin:
+            pages_visibles = {k: v for k, v in PAGES_PRO.items()
                               if k not in PAGES_DEMO_HIDDEN}
 
         choice = st.radio(
