@@ -160,7 +160,7 @@ TAUX_2026 = {
     "Allocations familiales":             0.0525,
 }
 
-def _generer_bulletin(employe, pointages, prop_nom, mois, annee, taux_custom=None):
+def _generer_bulletin(employe, pointages, prop_nom, mois, annee, taux_custom=None, extra=None):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import cm
@@ -719,8 +719,17 @@ def show():
 
         with tab_taux:
             st.subheader("⚙️ Taux de cotisations 2026")
-            st.caption("Ces taux sont utilisés pour le calcul indicatif. Modifiez-les si nécessaire.")
+            st.caption("Ces taux sont indicatifs. Modifiez-les selon votre convention collective.")
 
+            # Convention collective
+            convention = st.selectbox("Convention collective", [
+                "Particuliers employeurs (CESU)",
+                "Nettoyage industriel",
+                "Hôtellerie - Restauration",
+                "Autre"
+            ], key="convention_cc")
+
+            st.markdown("---")
             st.markdown("**Cotisations salariales**")
             col_s1, col_s2 = st.columns(2)
             with col_s1:
@@ -742,6 +751,41 @@ def show():
                 t_cho      = st.number_input("Chômage (%)", value=4.05, step=0.01, format="%.2f", key="t_cho")
                 t_ret_pat  = st.number_input("Retraite complémentaire patronal (%)", value=4.60, step=0.01, format="%.2f", key="t_ret_pat")
                 t_form     = st.number_input("Formation professionnelle (%)", value=0.55, step=0.01, format="%.2f", key="t_form")
+
+            st.markdown("---")
+            st.markdown("**Mutuelle d'entreprise**")
+            col_m1, col_m2, col_m3 = st.columns(3)
+            with col_m1:
+                mut_mensuel = st.number_input("Cotisation mensuelle (€)", min_value=0.0,
+                                               value=0.0, step=0.50, format="%.2f",
+                                               key="mut_mensuel",
+                                               help="Montant total de la cotisation mutuelle par mois")
+            with col_m2:
+                mut_sal_pct = st.number_input("Part salariale (%)", min_value=0.0, max_value=100.0,
+                                               value=50.0, step=1.0, format="%.1f",
+                                               key="mut_sal_pct",
+                                               help="% à la charge du salarié (ex: 50%)")
+            with col_m3:
+                mut_pat_pct = st.number_input("Part patronale (%)", min_value=0.0, max_value=100.0,
+                                               value=50.0, step=1.0, format="%.1f",
+                                               key="mut_pat_pct",
+                                               help="% à la charge de l'employeur (ex: 50%)")
+
+            if mut_mensuel > 0:
+                mut_sal_mnt = round(mut_mensuel * mut_sal_pct / 100, 2)
+                mut_pat_mnt = round(mut_mensuel * mut_pat_pct / 100, 2)
+                st.info(f"Part salariale : **{mut_sal_mnt:.2f} €** | Part patronale : **{mut_pat_mnt:.2f} €**")
+
+            st.markdown("---")
+            st.markdown("**Congés payés**")
+            cp_taux = st.number_input("Indemnité congés payés (%)", value=10.0,
+                                       step=0.1, format="%.1f", key="cp_taux",
+                                       help="10% du salaire brut par défaut (légal)")
+
+            st.markdown("**Prélèvement à la source (PAS)**")
+            pas_taux = st.number_input("Taux PAS (%)", min_value=0.0, max_value=45.0,
+                                        value=0.0, step=0.1, format="%.1f", key="pas_taux",
+                                        help="Taux communiqué par l'administration fiscale — 0% si non renseigné")
 
         with tab_gen:
             employes = get_employes(prop_id)
@@ -774,24 +818,37 @@ def show():
                                    f"{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][mois_b-1]} {annee_b}.")
                     else:
                         # Passer les taux personnalisés
+                        ss = st.session_state
+                        mut_mensuel = ss.get("mut_mensuel", 0.0) or 0.0
+                        mut_sal_pct = ss.get("mut_sal_pct", 50.0) or 50.0
+                        mut_pat_pct = ss.get("mut_pat_pct", 50.0) or 50.0
                         taux_custom = {
-                            "Securite sociale maladie salarie":    (st.session_state.get("t_mal_sal", 0.75) or 0.75) / 100,
-                            "Vieillesse plafonnee salarie":        (st.session_state.get("t_viei_sal", 6.90) or 6.90) / 100,
-                            "Retraite complementaire salarie":     (st.session_state.get("t_ret_sal", 3.15) or 3.15) / 100,
-                            "CSG non deductible":                  (st.session_state.get("t_csg_nd", 2.40) or 2.40) / 100,
-                            "CSG/CRDS deductible":                 (st.session_state.get("t_csg_d", 6.80) or 6.80) / 100,
-                            "Securite sociale maladie patronal":   (st.session_state.get("t_mal_pat", 13.00) or 13.00) / 100,
-                            "Vieillesse plafonnee patronal":       (st.session_state.get("t_viei_pat", 8.45) or 8.45) / 100,
-                            "Allocations familiales":              (st.session_state.get("t_fam", 5.25) or 5.25) / 100,
-                            "Accidents du travail":                (st.session_state.get("t_at", 2.20) or 2.20) / 100,
-                            "Chomage":                             (st.session_state.get("t_cho", 4.05) or 4.05) / 100,
-                            "Retraite complementaire patronal":    (st.session_state.get("t_ret_pat", 4.60) or 4.60) / 100,
-                            "Formation professionnelle":           (st.session_state.get("t_form", 0.55) or 0.55) / 100,
+                            "Securite sociale maladie salarie":    (ss.get("t_mal_sal", 0.75) or 0.75) / 100,
+                            "Vieillesse plafonnee salarie":        (ss.get("t_viei_sal", 6.90) or 6.90) / 100,
+                            "Retraite complementaire salarie":     (ss.get("t_ret_sal", 3.15) or 3.15) / 100,
+                            "CSG non deductible":                  (ss.get("t_csg_nd", 2.40) or 2.40) / 100,
+                            "CSG/CRDS deductible":                 (ss.get("t_csg_d", 6.80) or 6.80) / 100,
+                            "Securite sociale maladie patronal":   (ss.get("t_mal_pat", 13.00) or 13.00) / 100,
+                            "Vieillesse plafonnee patronal":       (ss.get("t_viei_pat", 8.45) or 8.45) / 100,
+                            "Allocations familiales":              (ss.get("t_fam", 5.25) or 5.25) / 100,
+                            "Accidents du travail":                (ss.get("t_at", 2.20) or 2.20) / 100,
+                            "Chomage":                             (ss.get("t_cho", 4.05) or 4.05) / 100,
+                            "Retraite complementaire patronal":    (ss.get("t_ret_pat", 4.60) or 4.60) / 100,
+                            "Formation professionnelle":           (ss.get("t_form", 0.55) or 0.55) / 100,
+                        }
+                        extra = {
+                            "mutuelle_mensuel":  mut_mensuel,
+                            "mutuelle_sal_pct":  mut_sal_pct,
+                            "mutuelle_pat_pct":  mut_pat_pct,
+                            "cp_taux":           (ss.get("cp_taux", 10.0) or 10.0) / 100,
+                            "pas_taux":          (ss.get("pas_taux", 0.0) or 0.0) / 100,
+                            "convention":         ss.get("convention_cc", "Particuliers employeurs (CESU)"),
                         }
                         with st.spinner("Génération en cours..."):
                             pdf_bytes = _generer_bulletin(employe, pointages_emp,
                                                           prop_nom, mois_b, annee_b,
-                                                          taux_custom=taux_custom)
+                                                          taux_custom=taux_custom,
+                                                          extra=extra)
                         nom_safe = f"{employe.get('prenom','')}_{employe.get('nom','')}".replace(" ","_")
                         st.download_button(
                             label="⬇️ Télécharger le document PDF",
