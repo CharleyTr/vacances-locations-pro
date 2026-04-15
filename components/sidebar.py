@@ -42,7 +42,11 @@ def sidebar() -> str:
     with st.sidebar:
         _prop_id_sidebar = st.session_state.get("prop_id", 0) or 0
         _is_demo_mode     = _prop_id_sidebar == 5
-        _is_demo_pro_sb   = 6 <= _prop_id_sidebar <= 25
+        try:
+            _type_sidebar    = _props_full.get(_prop_id_sidebar, {}).get("type_client", "particulier") or "particulier"
+            _is_demo_pro_sb  = _type_sidebar in ("pro", "demo_pro")
+        except:
+            _is_demo_pro_sb  = 6 <= _prop_id_sidebar <= 25
 
         if _is_demo_pro_sb:
             st.markdown("""
@@ -184,11 +188,16 @@ def sidebar() -> str:
         is_admin   = st.session_state.get("is_admin", False)
         _user_role = st.session_state.get("user_role", "proprietaire")
 
-        # Détecter si c'est un client Pro
+        # Détecter si c'est un client Pro via type_client
         _prop_id_cur = st.session_state.get("prop_id", 0) or 0
-        # Les propriétés démo Pro ont des IDs entre 6 et 25
-        # Pour les vrais clients Pro, on vérifie le session_state
-        _is_pro_client = (6 <= _prop_id_cur <= 25) or                          st.session_state.get("is_pro_client", False)
+        try:
+            from database.proprietes_repo import fetch_all as _fa_sb
+            _props_full  = {p["id"]: p for p in _fa_sb()}
+            _prop_cur    = _props_full.get(_prop_id_cur, {})
+            _type_client = _prop_cur.get("type_client", "particulier") or "particulier"
+            _is_pro_client = _type_client in ("pro", "demo_pro")
+        except:
+            _is_pro_client = False
 
         # Pages visibles uniquement pour gestionnaire
         PAGES_GESTIONNAIRE = {
@@ -215,7 +224,7 @@ def sidebar() -> str:
                               if k not in PAGES_DEMO_HIDDEN}
 
         # Mode démo Pro (prop_id dans 6-25) : branding Pro
-        _is_demo_pro = 6 <= _prop_id_cur <= 25
+        _is_demo_pro = _type_client in ("demo_pro",)
         if _is_demo_pro and not is_admin:
             pages_visibles = {k: v for k, v in PAGES_PRO.items()
                               if k not in PAGES_DEMO_HIDDEN}
