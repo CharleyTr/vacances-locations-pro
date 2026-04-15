@@ -184,15 +184,11 @@ def sidebar() -> str:
         is_admin   = st.session_state.get("is_admin", False)
         _user_role = st.session_state.get("user_role", "proprietaire")
 
-        # Détecter si c'est un client Pro (prop_id dans les IDs Pro)
+        # Détecter si c'est un client Pro
         _prop_id_cur = st.session_state.get("prop_id", 0) or 0
-        try:
-            from database.proprietes_repo import fetch_all as _fa_sb
-            _props_full = {p["id"]: p for p in _fa_sb()}
-            _prop_cur   = _props_full.get(_prop_id_cur, {})
-            _is_pro_client = _prop_cur.get("mot_de_passe") == "pro2026" or                              st.session_state.get("is_pro_client", False)
-        except:
-            _is_pro_client = False
+        # Les propriétés démo Pro ont des IDs entre 6 et 25
+        # Pour les vrais clients Pro, on vérifie le session_state
+        _is_pro_client = (6 <= _prop_id_cur <= 25) or                          st.session_state.get("is_pro_client", False)
 
         # Pages visibles uniquement pour gestionnaire
         PAGES_GESTIONNAIRE = {
