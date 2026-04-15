@@ -465,6 +465,16 @@ def _show_splash_login():
                 pid=prop_trouvee["id"]
                 is_admin=(pid==admin_prop_id and not is_code_gest)
                 user_role="admin" if is_admin else ("gestionnaire" if is_code_gest else "proprietaire")
+
+                # Capture prospect si c'est la démo (prop_id=5)
+                if pid == 5 and not is_admin:
+                    if not st.session_state.get("demo_capture_done"):
+                        st.session_state["demo_pending_prop"] = prop_trouvee
+                        st.session_state["demo_pending_role"] = user_role
+                        st.session_state["demo_pending_pid"]  = pid
+                        st.session_state["demo_capture_show"] = True
+                        st.rerun()
+
                 st.session_state.update({"global_logged_in":True,"is_admin":is_admin,"user_role":user_role,"prop_id":0 if is_admin else pid})
                 if is_admin:
                     for p in props: st.session_state[f"unlocked_{p['id']}"]=True
@@ -535,6 +545,87 @@ if _restore and not st.session_state.get("global_logged_in"):
 if "session_id" not in st.session_state:
     import uuid
     st.session_state["session_id"] = str(uuid.uuid4())[:16]
+
+# ── Formulaire de capture prospect (démo) ────────────────────────────────
+if st.session_state.get("demo_capture_show"):
+    prop_trouvee = st.session_state.get("demo_pending_prop", {})
+    st.markdown("""<style>[data-testid="stSidebar"],[data-testid="stSidebarNav"],
+    [data-testid="collapsedControl"],#MainMenu,footer{display:none!important}
+    .main .block-container{max-width:460px;margin:3rem auto;padding:2rem}</style>""",
+    unsafe_allow_html=True)
+    st.markdown("""<div style='text-align:center;padding:1rem 0 1.5rem'>
+    <div style='font-size:52px'>🏖️</div>
+    <h2 style='color:#1565C0;margin:0.5rem 0 0.3rem;font-family:Georgia,serif'>Bienvenue sur LodgePro !</h2>
+    <p style='color:#666;font-size:0.9rem'>Avant d'accéder à la démo, dites-nous qui vous êtes.</p>
+    </div>""", unsafe_allow_html=True)
+
+    with st.form("form_demo_capture"):
+        nom_prospect    = st.text_input("👤 Votre nom *", placeholder="Marie Dupont")
+        email_prospect  = st.text_input("📧 Votre email *", placeholder="marie@email.fr")
+        tel_prospect    = st.text_input("📱 Téléphone (optionnel)", placeholder="+33 6 12 34 56 78")
+        nb_props        = st.selectbox("🏠 Nombre de propriétés gérées",
+                                        ["1","2-5","6-20","20+"])
+        st.caption("Ces informations nous permettent de vous contacter et d'améliorer LodgePro.")
+        submitted = st.form_submit_button("Accéder à la démo →", type="primary",
+                                          use_container_width=True)
+
+    if submitted:
+        if not nom_prospect or not email_prospect:
+            st.error("Nom et email obligatoires.")
+        else:
+            # Sauvegarder dans Supabase
+            try:
+                from database.supabase_client import get_supabase as _gsb_cap
+                _sb_cap = _gsb_cap()
+                if _sb_cap:
+                    _sb_cap.table("prospects_demo").insert({
+                        "nom":          nom_prospect.strip(),
+                        "email":        email_prospect.strip(),
+                        "telephone":    tel_prospect.strip() or None,
+                        "nb_proprietes":nb_props,
+                        "source":       "demo_lodgepro",
+                    }).execute()
+            except: pass
+
+            # Envoyer notification Pushover
+            try:
+                from services.pushover_service import send_notification
+                send_notification(
+                    title=f"Nouveau prospect démo !",
+                    message=f"{nom_prospect} ({email_prospect}) — {nb_props} propriétés",
+                    priority=1
+                )
+            except: pass
+
+            # Enregistrer en session et continuer
+            st.session_state["demo_capture_done"] = True
+            st.session_state["demo_capture_show"] = False
+            pid       = st.session_state.get("demo_pending_pid", 5)
+            user_role = st.session_state.get("demo_pending_role", "proprietaire")
+            prop_trouvee = st.session_state.get("demo_pending_prop", {})
+            st.session_state.update({
+                "global_logged_in": True,
+                "is_admin":         False,
+                "user_role":        user_role,
+                "prop_id":          pid,
+                f"unlocked_{pid}":  True,
+            })
+            st.rerun()
+
+    if st.button("Passer cette étape", key="btn_skip_capture"):
+        st.session_state["demo_capture_done"] = True
+        st.session_state["demo_capture_show"] = False
+        pid       = st.session_state.get("demo_pending_pid", 5)
+        user_role = st.session_state.get("demo_pending_role", "proprietaire")
+        st.session_state.update({
+            "global_logged_in": True,
+            "is_admin":         False,
+            "user_role":        user_role,
+            "prop_id":          pid,
+            f"unlocked_{pid}":  True,
+        })
+        st.rerun()
+    st.stop()
 
 if not st.session_state.get("global_logged_in", False):
     _show_splash_login()
