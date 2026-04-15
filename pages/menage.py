@@ -160,21 +160,28 @@ TAUX_2026 = {
     "Allocations familiales":             0.0525,
 }
 
+
 def _generer_bulletin(employe, pointages, prop_nom, mois, annee, taux_custom=None, extra=None):
+    """Génère un document préparatoire de paie complet en PDF."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import cm
     from reportlab.lib import colors
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
     import io
 
-    NAVY = colors.HexColor("#0B1F3A")
-    BLUE = colors.HexColor("#1565C0")
-    GREY = colors.HexColor("#6B7280")
-    LIGHT= colors.HexColor("#F4F7FF")
-    WHITE= colors.white
-    GOLD = colors.HexColor("#F0B429")
+    NAVY  = colors.HexColor("#0B1F3A")
+    BLUE  = colors.HexColor("#1565C0")
+    GREY  = colors.HexColor("#6B7280")
+    LIGHT = colors.HexColor("#F4F7FF")
+    WHITE = colors.white
+    GOLD  = colors.HexColor("#F0B429")
+    GREEN = colors.HexColor("#1B5E20")
+    LGREEN= colors.HexColor("#E8F5E9")
+    RED   = colors.HexColor("#B71C1C")
+    LRED  = colors.HexColor("#FFEBEE")
+    LBLUE = colors.HexColor("#E3F2FD")
 
     mois_noms = ["Janvier","Fevrier","Mars","Avril","Mai","Juin",
                  "Juillet","Aout","Septembre","Octobre","Novembre","Decembre"]
@@ -182,130 +189,314 @@ def _generer_bulletin(employe, pointages, prop_nom, mois, annee, taux_custom=Non
     def s(size, color=NAVY, bold=False, align=0):
         return ParagraphStyle("_", fontSize=size, textColor=color,
                               fontName="Helvetica-Bold" if bold else "Helvetica",
-                              alignment=align, leading=size*1.4, spaceAfter=4)
+                              alignment=align, leading=size*1.45, spaceAfter=2)
 
+    # ── Paramètres ────────────────────────────────────────────────────────
+    tc    = taux_custom or {}
+    ex    = extra or {}
+    mut_mensuel  = float(ex.get("mutuelle_mensuel", 0.0) or 0.0)
+    mut_sal_pct  = float(ex.get("mutuelle_sal_pct", 50.0) or 50.0)
+    mut_pat_pct  = float(ex.get("mutuelle_pat_pct", 50.0) or 50.0)
+    mut_sal_mnt  = round(mut_mensuel * mut_sal_pct / 100, 2)
+    mut_pat_mnt  = round(mut_mensuel * mut_pat_pct / 100, 2)
+    cp_taux      = float(ex.get("cp_taux", 0.10) or 0.10)
+    pas_taux     = float(ex.get("pas_taux", 0.0) or 0.0)
+    convention   = ex.get("convention", "Non precisee")
+
+    nom_emp  = f"{employe.get('prenom','')} {employe.get('nom','')}".strip()
+    taux_h   = float(employe.get("taux_horaire", 12) or 12)
+    contrat  = employe.get("contrat", "CDI") or "CDI"
+
+    # ── Calculs heures ─────────────────────────────────────────────────────
+    total_minutes = sum(p.get("duree_minutes") or 0 for p in pointages)
+    total_heures  = total_minutes / 60
+    salaire_brut  = round(total_heures * taux_h, 2)
+
+    # ── Cotisations salariales ────────────────────────────────────────────
+    cs = [
+        ("Securite sociale maladie", tc.get("Securite sociale maladie salarie", 0.0075), "pct"),
+        ("Vieillesse plafonnee", tc.get("Vieillesse plafonnee salarie", 0.0690), "pct"),
+        ("Retraite complementaire AGIRC-ARRCO", tc.get("Retraite complementaire salarie", 0.0315), "pct"),
+        ("CSG non deductible", tc.get("CSG non deductible", 0.0240), "pct"),
+        ("CSG/CRDS deductible", tc.get("CSG/CRDS deductible", 0.0680), "pct"),
+    ]
+    if mut_sal_mnt > 0:
+        cs.append(("Mutuelle - part salariale", mut_sal_mnt, "fixe"))
+
+    total_cotis_sal = sum(
+        round(salaire_brut * v, 2) if t == "pct" else v
+        for _, v, t in cs
+    )
+    indemnite_cp   = round(salaire_brut * cp_taux, 2)
+    net_avant_pas  = round(salaire_brut - total_cotis_sal + indemnite_cp, 2)
+    pas_montant    = round(net_avant_pas * pas_taux, 2) if pas_taux > 0 else 0.0
+    net_a_payer    = round(net_avant_pas - pas_montant, 2)
+
+    # ── Cotisations patronales ────────────────────────────────────────────
+    cp_list = [
+        ("Securite sociale maladie", tc.get("Securite sociale maladie patronal", 0.1300), "pct"),
+        ("Vieillesse plafonnee", tc.get("Vieillesse plafonnee patronal", 0.0845), "pct"),
+        ("Allocations familiales", tc.get("Allocations familiales", 0.0525), "pct"),
+        ("Accidents du travail", tc.get("Accidents du travail", 0.0220), "pct"),
+        ("Chomage", tc.get("Chomage", 0.0405), "pct"),
+        ("Retraite complementaire AGIRC-ARRCO", tc.get("Retraite complementaire patronal", 0.0460), "pct"),
+        ("Formation professionnelle", tc.get("Formation professionnelle", 0.0055), "pct"),
+    ]
+    if mut_pat_mnt > 0:
+        cp_list.append(("Mutuelle - part patronale", mut_pat_mnt, "fixe"))
+
+    total_cotis_pat = sum(
+        round(salaire_brut * v, 2) if t == "pct" else v
+        for _, v, t in cp_list
+    )
+    cout_total = round(salaire_brut + total_cotis_pat + indemnite_cp, 2)
+
+    # ── PDF ───────────────────────────────────────────────────────────────
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4,
-                            leftMargin=2*cm, rightMargin=2*cm,
-                            topMargin=2*cm, bottomMargin=2*cm)
+                            leftMargin=1.8*cm, rightMargin=1.8*cm,
+                            topMargin=1.8*cm, bottomMargin=1.8*cm)
     story = []
 
     # En-tête
-    header = Table([[Paragraph(
-        f"RECAPITULATIF DES HEURES<br/>"
-        f"<font size='12'>{mois_noms[mois-1]} {annee}</font>",
-        s(16, WHITE, bold=True, align=1)
-    )]], colWidths=[17*cm])
-    header.setStyle(TableStyle([
-        ("BACKGROUND",(0,0),(-1,-1), NAVY),
-        ("TOPPADDING",(0,0),(-1,-1),14),("BOTTOMPADDING",(0,0),(-1,-1),14),
-    ]))
-    story.append(header)
-
-    bande = Table([[""]], colWidths=[17*cm], rowHeights=[4])
-    bande.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),GOLD)]))
-    story.append(bande)
-    story.append(Spacer(1,0.4*cm))
-
-    # Infos employé / employeur
-    nom_emp  = f"{employe.get('prenom','')} {employe.get('nom','')}".strip()
-    taux     = float(employe.get("taux_horaire",12) or 12)
-    contrat  = employe.get("contrat","CDI") or "CDI"
-
-    parties = [[
-        Paragraph(f"<b>EMPLOYEUR</b><br/>{prop_nom}", s(10, NAVY)),
-        Paragraph(f"<b>EMPLOYE</b><br/>{nom_emp}<br/>"
-                  f"Contrat : {contrat}<br/>"
-                  f"Taux horaire : {taux:.2f} EUR", s(10, NAVY)),
-    ]]
-    pt = Table(parties, colWidths=[8.5*cm,8.5*cm])
-    pt.setStyle(TableStyle([
-        ("BACKGROUND",(0,0),(0,0), LIGHT),("BACKGROUND",(1,0),(1,0), LIGHT),
-        ("TOPPADDING",(0,0),(-1,-1),10),("BOTTOMPADDING",(0,0),(-1,-1),10),
-        ("LEFTPADDING",(0,0),(-1,-1),10),
-        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#D0D5DD")),
-    ]))
-    story.append(pt)
-    story.append(Spacer(1,0.5*cm))
-
-    # Détail des pointages
-    story.append(Paragraph("DETAIL DES INTERVENTIONS", s(10, NAVY, bold=True)))
-    story.append(Spacer(1,0.2*cm))
-
-    total_minutes = 0
-    lignes = [[
-        Paragraph("<b>Date</b>", s(9, WHITE, bold=True)),
-        Paragraph("<b>Arrivee</b>", s(9, WHITE, bold=True, align=1)),
-        Paragraph("<b>Depart</b>", s(9, WHITE, bold=True, align=1)),
-        Paragraph("<b>Duree</b>", s(9, WHITE, bold=True, align=1)),
-        Paragraph("<b>Statut</b>", s(9, WHITE, bold=True, align=1)),
-        Paragraph("<b>Notes</b>", s(9, WHITE, bold=True)),
-    ]]
-
-    for p in pointages:
-        duree_min = p.get("duree_minutes") or 0
-        total_minutes += duree_min
-        h, m = divmod(duree_min, 60)
-        duree_str = f"{h}h{m:02d}" if duree_min else "—"
-        statut = "Valide" if p.get("valide") else "En attente"
-        lignes.append([
-            Paragraph(str(p.get("date_menage",""))[:10], s(9, NAVY)),
-            Paragraph(str(p.get("heure_arrivee",""))[:5] or "—", s(9, GREY, align=1)),
-            Paragraph(str(p.get("heure_depart",""))[:5] or "—", s(9, GREY, align=1)),
-            Paragraph(duree_str, s(9, NAVY, bold=True, align=1)),
-            Paragraph(statut, s(9, GREY, align=1)),
-            Paragraph(str(p.get("notes","") or ""), s(8, GREY)),
-        ])
-
-    dt = Table(lignes, colWidths=[2.5*cm,2*cm,2*cm,2*cm,2.5*cm,6*cm])
-    dt.setStyle(TableStyle([
-        ("BACKGROUND",(0,0),(-1,0),NAVY),
-        ("ROWBACKGROUNDS",(0,1),(-1,-1),[WHITE,LIGHT]),
-        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#D0D5DD")),
-        ("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6),
-        ("LEFTPADDING",(0,0),(-1,-1),6),
+    hd = Table([[
+        Paragraph(f"<b>{prop_nom}</b><br/><font size='8'>{convention}</font>", s(13, WHITE, bold=True)),
+        Paragraph(f"DOCUMENT PREPARATOIRE DE PAIE<br/>"
+                  f"<font size='10'>{mois_noms[mois-1]} {annee}</font>",
+                  s(12, WHITE, bold=True, align=2)),
+    ]], colWidths=[8.7*cm, 8.7*cm])
+    hd.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1),NAVY),
+        ("TOPPADDING",(0,0),(-1,-1),12),("BOTTOMPADDING",(0,0),(-1,-1),12),
+        ("LEFTPADDING",(0,0),(0,-1),14),("RIGHTPADDING",(1,0),(1,-1),14),
         ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
     ]))
-    story.append(dt)
-    story.append(Spacer(1,0.4*cm))
+    story.append(hd)
+    bande = Table([[""]], colWidths=[17.4*cm], rowHeights=[4])
+    bande.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),GOLD)]))
+    story.append(bande)
+    story.append(Spacer(1, 0.3*cm))
 
-    # Totaux
-    total_heures = total_minutes / 60
-    salaire_brut = total_heures * taux
-
-    totaux_data = [
-        ["", Paragraph("Total heures :", s(10, GREY, align=2)),
-         Paragraph(f"{total_heures:.2f} h", s(10, NAVY, bold=True, align=2))],
-        ["", Paragraph("Taux horaire :", s(10, GREY, align=2)),
-         Paragraph(f"{taux:.2f} EUR/h", s(10, NAVY, align=2))],
-        ["", Paragraph("<b>SALAIRE BRUT :</b>", s(12, WHITE, bold=True, align=2)),
-         Paragraph(f"<b>{salaire_brut:.2f} EUR</b>", s(12, WHITE, bold=True, align=2))],
-    ]
-    tt = Table(totaux_data, colWidths=[9.5*cm,4*cm,3.5*cm])
-    last = len(totaux_data)-1
-    tt.setStyle(TableStyle([
-        ("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6),
-        ("RIGHTPADDING",(0,0),(-1,-1),8),
-        ("BACKGROUND",(0,last),(-1,last),NAVY),
+    # Infos salarié
+    info = Table([[
+        Paragraph(f"<b>Salarie :</b> {nom_emp}", s(9, NAVY)),
+        Paragraph(f"<b>Contrat :</b> {contrat}", s(9, NAVY)),
+        Paragraph(f"<b>Taux horaire :</b> {taux_h:.2f} EUR/h", s(9, NAVY)),
+        Paragraph(f"<b>Periode :</b> {mois_noms[mois-1]} {annee}", s(9, NAVY)),
+    ]], colWidths=[4.5*cm,4*cm,4*cm,4.9*cm])
+    info.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1),LIGHT),
+        ("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7),
+        ("LEFTPADDING",(0,0),(-1,-1),8),
+        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#D0D5DD")),
     ]))
-    story.append(tt)
-    story.append(Spacer(1,0.8*cm))
+    story.append(info)
+    story.append(Spacer(1, 0.35*cm))
 
-    story.append(HRFlowable(width="100%",thickness=0.5,color=GREY))
-    story.append(Spacer(1,0.2*cm))
+    # Section 1 — Détail pointages
+    story.append(Paragraph("1. HEURES TRAVAILLEES", s(9, NAVY, bold=True)))
+    story.append(Spacer(1, 0.1*cm))
+    lig_pts = [[
+        Paragraph("<b>Date</b>", s(8, WHITE, bold=True)),
+        Paragraph("<b>Arrivee</b>", s(8, WHITE, bold=True, align=1)),
+        Paragraph("<b>Depart</b>", s(8, WHITE, bold=True, align=1)),
+        Paragraph("<b>Duree</b>", s(8, WHITE, bold=True, align=1)),
+        Paragraph("<b>Valide</b>", s(8, WHITE, bold=True, align=1)),
+        Paragraph("<b>Notes</b>", s(8, WHITE, bold=True)),
+    ]]
+    for p in sorted(pointages, key=lambda x: x.get("date_menage","")):
+        dm = p.get("duree_minutes") or 0
+        h, m = divmod(dm, 60)
+        lig_pts.append([
+            Paragraph(str(p.get("date_menage",""))[:10], s(8, NAVY)),
+            Paragraph(str(p.get("heure_arrivee",""))[:5] or "--", s(8, GREY, align=1)),
+            Paragraph(str(p.get("heure_depart",""))[:5] or "--", s(8, GREY, align=1)),
+            Paragraph(f"{h}h{m:02d}", s(8, NAVY, bold=True, align=1)),
+            Paragraph("Oui" if p.get("valide") else "Non", s(8, GREY, align=1)),
+            Paragraph(str(p.get("notes","") or "")[:35], s(7, GREY)),
+        ])
+    lig_pts.append([
+        Paragraph("<b>TOTAL</b>", s(9, WHITE, bold=True)),
+        Paragraph("", s(8)),Paragraph("", s(8)),
+        Paragraph(f"<b>{int(total_heures)}h{int((total_heures%1)*60):02d}</b>", s(9, WHITE, bold=True, align=1)),
+        Paragraph("", s(8)),Paragraph("", s(8)),
+    ])
+    last_pt = len(lig_pts)-1
+    dt = Table(lig_pts, colWidths=[2.4*cm,2*cm,2*cm,2*cm,2*cm,6.9*cm])
+    dt.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,0),NAVY),
+        ("BACKGROUND",(0,last_pt),(-1,last_pt),BLUE),
+        ("ROWBACKGROUNDS",(0,1),(-1,last_pt-1),[WHITE,LIGHT]),
+        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#D0D5DD")),
+        ("TOPPADDING",(0,0),(-1,-1),4),("BOTTOMPADDING",(0,0),(-1,-1),4),
+        ("LEFTPADDING",(0,0),(-1,-1),5),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+    ]))
+    story.append(dt)
+    story.append(Spacer(1, 0.35*cm))
+
+    # Section 2 — Cotisations salariales
+    story.append(Paragraph("2. COTISATIONS SALARIALES", s(9, NAVY, bold=True)))
+    story.append(Spacer(1, 0.1*cm))
+    lig_sal = [[
+        Paragraph("<b>Rubrique</b>", s(8, WHITE, bold=True)),
+        Paragraph("<b>Base</b>", s(8, WHITE, bold=True, align=1)),
+        Paragraph("<b>Taux</b>", s(8, WHITE, bold=True, align=1)),
+        Paragraph("<b>Montant</b>", s(8, WHITE, bold=True, align=2)),
+    ]]
+    lig_sal.append([
+        Paragraph("Salaire brut", s(9, NAVY, bold=True)),
+        Paragraph(f"{salaire_brut:.2f}", s(8, GREY, align=1)),
+        Paragraph(f"{total_heures:.2f} h x {taux_h:.2f}", s(8, GREY, align=1)),
+        Paragraph(f"{salaire_brut:.2f} EUR", s(9, NAVY, bold=True, align=2)),
+    ])
+    for nom_c, val_c, typ_c in cs:
+        if typ_c == "pct":
+            mnt_c = round(salaire_brut * val_c, 2)
+            taux_str = f"{val_c*100:.2f}%"
+            base_str = f"{salaire_brut:.2f}"
+        else:
+            mnt_c = val_c
+            taux_str = "forfait"
+            base_str = "--"
+        lig_sal.append([
+            Paragraph(nom_c, s(8, NAVY)),
+            Paragraph(base_str, s(8, GREY, align=1)),
+            Paragraph(taux_str, s(8, GREY, align=1)),
+            Paragraph(f"-{mnt_c:.2f} EUR", s(8, RED, align=2)),
+        ])
+    lig_sal.append([
+        Paragraph("Indemnite conges payes", s(8, GREEN)),
+        Paragraph(f"{salaire_brut:.2f}", s(8, GREY, align=1)),
+        Paragraph(f"{cp_taux*100:.1f}%", s(8, GREY, align=1)),
+        Paragraph(f"+{indemnite_cp:.2f} EUR", s(8, GREEN, align=2)),
+    ])
+    if pas_montant > 0:
+        lig_sal.append([
+            Paragraph(f"Prelevement a la source", s(8, RED)),
+            Paragraph(f"{net_avant_pas:.2f}", s(8, GREY, align=1)),
+            Paragraph(f"{pas_taux*100:.1f}%", s(8, GREY, align=1)),
+            Paragraph(f"-{pas_montant:.2f} EUR", s(8, RED, align=2)),
+        ])
+    lig_sal.append([
+        Paragraph("<b>NET A PAYER</b>", s(10, WHITE, bold=True)),
+        Paragraph("", s(8)),Paragraph("", s(8)),
+        Paragraph(f"<b>{net_a_payer:.2f} EUR</b>", s(10, WHITE, bold=True, align=2)),
+    ])
+    last_sal = len(lig_sal)-1
+    st_sal = Table(lig_sal, colWidths=[8*cm,3*cm,2.5*cm,3.9*cm])
+    st_sal.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,0),NAVY),
+        ("BACKGROUND",(0,1),(-1,1),LIGHT),
+        ("ROWBACKGROUNDS",(0,2),(-1,last_sal-1),[WHITE,LIGHT]),
+        ("BACKGROUND",(0,last_sal),(-1,last_sal),GREEN),
+        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#D0D5DD")),
+        ("TOPPADDING",(0,0),(-1,-1),4),("BOTTOMPADDING",(0,0),(-1,-1),4),
+        ("LEFTPADDING",(0,0),(-1,-1),7),
+    ]))
+    story.append(st_sal)
+    story.append(Spacer(1, 0.35*cm))
+
+    # Section 3 — Cotisations patronales
+    story.append(Paragraph("3. CHARGES PATRONALES", s(9, NAVY, bold=True)))
+    story.append(Spacer(1, 0.1*cm))
+    lig_pat = [[
+        Paragraph("<b>Rubrique</b>", s(8, WHITE, bold=True)),
+        Paragraph("<b>Base</b>", s(8, WHITE, bold=True, align=1)),
+        Paragraph("<b>Taux</b>", s(8, WHITE, bold=True, align=1)),
+        Paragraph("<b>Montant</b>", s(8, WHITE, bold=True, align=2)),
+    ]]
+    for nom_c, val_c, typ_c in cp_list:
+        if typ_c == "pct":
+            mnt_c = round(salaire_brut * val_c, 2)
+            taux_str = f"{val_c*100:.2f}%"
+            base_str = f"{salaire_brut:.2f}"
+        else:
+            mnt_c = val_c
+            taux_str = "forfait"
+            base_str = "--"
+        lig_pat.append([
+            Paragraph(nom_c, s(8, NAVY)),
+            Paragraph(base_str, s(8, GREY, align=1)),
+            Paragraph(taux_str, s(8, GREY, align=1)),
+            Paragraph(f"{mnt_c:.2f} EUR", s(8, NAVY, align=2)),
+        ])
+    lig_pat.append([
+        Paragraph("<b>TOTAL CHARGES PATRONALES</b>", s(9, WHITE, bold=True)),
+        Paragraph("", s(8)),Paragraph("", s(8)),
+        Paragraph(f"<b>{total_cotis_pat:.2f} EUR</b>", s(9, WHITE, bold=True, align=2)),
+    ])
+    last_pat = len(lig_pat)-1
+    st_pat = Table(lig_pat, colWidths=[8*cm,3*cm,2.5*cm,3.9*cm])
+    st_pat.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,0),NAVY),
+        ("ROWBACKGROUNDS",(0,1),(-1,last_pat-1),[WHITE,LIGHT]),
+        ("BACKGROUND",(0,last_pat),(-1,last_pat),BLUE),
+        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#D0D5DD")),
+        ("TOPPADDING",(0,0),(-1,-1),4),("BOTTOMPADDING",(0,0),(-1,-1),4),
+        ("LEFTPADDING",(0,0),(-1,-1),7),
+    ]))
+    story.append(st_pat)
+    story.append(Spacer(1, 0.35*cm))
+
+    # Section 4 — Récapitulatif
+    story.append(Paragraph("4. RECAPITULATIF", s(9, NAVY, bold=True)))
+    story.append(Spacer(1, 0.1*cm))
+    recap = [
+        [Paragraph("Heures travaillees", s(9, NAVY)),
+         Paragraph(f"{total_heures:.2f} h", s(9, NAVY, bold=True, align=2))],
+        [Paragraph("Salaire brut", s(9, NAVY)),
+         Paragraph(f"{salaire_brut:.2f} EUR", s(9, NAVY, align=2))],
+        [Paragraph("Total cotisations salariales", s(9, RED)),
+         Paragraph(f"-{total_cotis_sal:.2f} EUR", s(9, RED, align=2))],
+        [Paragraph("Indemnite conges payes", s(9, GREEN)),
+         Paragraph(f"+{indemnite_cp:.2f} EUR", s(9, GREEN, align=2))],
+    ]
+    if pas_montant > 0:
+        recap.append([
+            Paragraph("Prelevement a la source", s(9, RED)),
+            Paragraph(f"-{pas_montant:.2f} EUR", s(9, RED, align=2))
+        ])
+    recap += [
+        [Paragraph("<b>NET A PAYER AU SALARIE</b>", s(10, GREEN, bold=True)),
+         Paragraph(f"<b>{net_a_payer:.2f} EUR</b>", s(10, GREEN, bold=True, align=2))],
+        [Paragraph("Charges patronales", s(9, GREY)),
+         Paragraph(f"{total_cotis_pat:.2f} EUR", s(9, GREY, align=2))],
+        [Paragraph("<b>COUT TOTAL EMPLOYEUR</b>", s(10, BLUE, bold=True)),
+         Paragraph(f"<b>{cout_total:.2f} EUR</b>", s(10, BLUE, bold=True, align=2))],
+    ]
+    idx_net = len(recap) - 3
+    idx_cout = len(recap) - 1
+    rt = Table(recap, colWidths=[11.5*cm,5.9*cm])
+    rt_styles = [
+        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#D0D5DD")),
+        ("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6),
+        ("LEFTPADDING",(0,0),(-1,-1),10),("RIGHTPADDING",(0,0),(-1,-1),10),
+        ("BACKGROUND",(0,idx_net),(-1,idx_net),LGREEN),
+        ("BACKGROUND",(0,idx_cout),(-1,idx_cout),LBLUE),
+        ("LINEABOVE",(0,idx_net),(-1,idx_net),1.5,GREEN),
+        ("LINEABOVE",(0,idx_cout),(-1,idx_cout),1.5,BLUE),
+    ]
+    for i in range(len(recap)):
+        if i % 2 == 0 and i not in [idx_net, idx_cout]:
+            rt_styles.append(("BACKGROUND",(0,i),(-1,i),LIGHT))
+    rt.setStyle(TableStyle(rt_styles))
+    story.append(rt)
+    story.append(Spacer(1, 0.5*cm))
+
+    # Pied de page
+    story.append(HRFlowable(width="100%", thickness=0.5, color=GREY))
+    story.append(Spacer(1, 0.15*cm))
+    from datetime import datetime as _dt
     story.append(Paragraph(
-        f"Document genere le {datetime.now().strftime('%d/%m/%Y')} — "
-        "Ce document est un recapitulatif indicatif, non un bulletin de paie officiel.",
-        s(8, GREY, align=1)
+        f"Document preparatoire - non contractuel - taux indicatifs 2026 - "
+        f"Convention : {convention} - "
+        f"Genere le {_dt.now().strftime('%d/%m/%Y')} par LodgePro",
+        s(7, GREY, align=1)
     ))
 
     doc.build(story)
     return buffer.getvalue()
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE PRINCIPALE
-# ─────────────────────────────────────────────────────────────────────────────
 
 def show():
     st.title("🧹 Ménage & RH")
