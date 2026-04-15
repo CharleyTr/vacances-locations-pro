@@ -593,12 +593,19 @@ def show():
         # Vue consolidée multi-propriétés pour l'admin
         is_admin = st.session_state.get("is_admin", False)
         if is_admin:
-            from database.proprietes_repo import fetch_all as _fa_r
-            all_props = _fa_r()
-            all_prop_ids = [p["id"] for p in all_props]
+            try:
+                from database.proprietes_repo import fetch_all as _fa_r
+                all_props = _fa_r()
+                all_prop_ids = [p["id"] for p in all_props]
+            except:
+                all_prop_ids = []
             if st.checkbox("Vue consolidée toutes propriétés", key="recap_all"):
                 st.info("Vue consolidée — heures cumulées par employé sur toutes les propriétés")
-                emps_all = get_employes_all(all_prop_ids)
+                try:
+                    emps_all = get_employes_all(all_prop_ids)
+                except Exception as _e_all:
+                    st.error(f"Erreur vue consolidée : {_e_all}")
+                    emps_all = []
                 if emps_all:
                     all_pts = []
                     for pid in all_prop_ids:
