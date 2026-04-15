@@ -114,6 +114,24 @@ def delete_ventilation(pointage_id):
 # GENERATION PDF BULLETIN
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Taux de cotisations 2026 (approximatifs)
+TAUX_2026 = {
+    "Sécurité sociale maladie salarié":   0.0075,
+    "Sécurité sociale vieillesse salarié":0.0690,
+    "Chômage salarié":                    0.0000,  # à charge employeur uniquement
+    "Retraite complémentaire salarié":    0.0315,
+    "CSG non déductible":                 0.0240,
+    "CSG/CRDS déductible":                0.0680,
+    # Patronales
+    "Sécurité sociale maladie patronal":  0.1300,
+    "Sécurité sociale vieillesse patronal":0.0845,
+    "Chômage patronal":                   0.0405,
+    "Retraite complémentaire patronal":   0.0460,
+    "Accidents du travail (moyen)":       0.0220,
+    "Formation professionnelle":          0.0055,
+    "Allocations familiales":             0.0525,
+}
+
 def _generer_bulletin(employe, pointages, prop_nom, mois, annee):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
