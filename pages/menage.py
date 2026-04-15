@@ -16,6 +16,20 @@ from services.proprietes_service import get_proprietes_autorises
 def _sb():
     return get_supabase()
 
+def _parse_date(val):
+    """Convertit JJ/MM/AAAA ou AAAA-MM-JJ en AAAA-MM-JJ pour Supabase."""
+    if not val or not str(val).strip():
+        return None
+    val = str(val).strip()
+    if len(val) == 10 and val[2] == "/":
+        try:
+            j, m, a = val.split("/")
+            return f"{a}-{m}-{j}"
+        except: return None
+    if len(val) >= 10 and val[4] == "-":
+        return val[:10]
+    return None
+
 def get_employes(prop_id):
     try:
         return _sb().table("employes_menage").select("*")\
@@ -794,7 +808,7 @@ def show():
                                     "adresse":       new_adresse.strip() or None,
                                     "code_postal":   new_cp_e.strip() or None,
                                     "ville":         new_ville_e.strip() or None,
-                                    "date_naissance":new_naissance.strip() or None,
+                                    "date_naissance":_parse_date(new_naissance),
                                 })
                                 st.success("✅ Mis à jour !")
                                 st.rerun()
