@@ -755,25 +755,46 @@ def show():
                     with st.form(f"form_edit_emp_{e['id']}"):
                         c1, c2, c3 = st.columns(3)
                         with c1:
-                            new_prenom = st.text_input("Prénom", value=e.get("prenom",""))
-                            new_nom    = st.text_input("Nom",    value=e.get("nom",""))
+                            new_prenom    = st.text_input("Prénom *", value=e.get("prenom",""))
+                            new_nom       = st.text_input("Nom *",    value=e.get("nom",""))
+                            new_naissance = st.text_input("Date naissance",
+                                                           value=str(e.get("date_naissance","") or ""),
+                                                           placeholder="JJ/MM/AAAA")
                         with c2:
                             new_tel   = st.text_input("Téléphone", value=e.get("telephone","") or "")
                             new_email = st.text_input("Email",     value=e.get("email","") or "")
+                            new_ss    = st.text_input("N° Sécurité sociale",
+                                                       value=e.get("numero_ss","") or "",
+                                                       placeholder="1 85 12 75 123 456 78")
                         with c3:
                             new_taux    = st.number_input("Taux (€/h)", value=float(e.get("taux_horaire",12) or 12), step=0.10)
                             new_contrat = st.selectbox("Contrat",
                                 ["CDI","CDD","Interim","Auto-entrepreneur"],
                                 index=["CDI","CDD","Interim","Auto-entrepreneur"].index(e.get("contrat","CDI"))
                                 if e.get("contrat") in ["CDI","CDD","Interim","Auto-entrepreneur"] else 0)
+                            new_adresse = st.text_input("Adresse", value=e.get("adresse","") or "")
+
+                        c4, c5 = st.columns([2,3])
+                        with c4:
+                            new_cp_e    = st.text_input("Code postal", value=e.get("code_postal","") or "")
+                        with c5:
+                            new_ville_e = st.text_input("Ville",       value=e.get("ville","") or "")
 
                         col_s, col_d = st.columns(2)
                         with col_s:
                             if st.form_submit_button("💾 Enregistrer", type="primary", use_container_width=True):
                                 update_employe(e["id"], {
-                                    "prenom": new_prenom, "nom": new_nom,
-                                    "telephone": new_tel or None, "email": new_email or None,
-                                    "taux_horaire": new_taux, "contrat": new_contrat,
+                                    "prenom":        new_prenom,
+                                    "nom":           new_nom,
+                                    "telephone":     new_tel or None,
+                                    "email":         new_email or None,
+                                    "taux_horaire":  new_taux,
+                                    "contrat":       new_contrat,
+                                    "numero_ss":     new_ss.strip() or None,
+                                    "adresse":       new_adresse.strip() or None,
+                                    "code_postal":   new_cp_e.strip() or None,
+                                    "ville":         new_ville_e.strip() or None,
+                                    "date_naissance":new_naissance.strip() or None,
                                 })
                                 st.success("✅ Mis à jour !")
                                 st.rerun()
