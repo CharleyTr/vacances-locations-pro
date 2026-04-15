@@ -160,7 +160,7 @@ TAUX_2026 = {
     "Allocations familiales":             0.0525,
 }
 
-def _generer_bulletin(employe, pointages, prop_nom, mois, annee):
+def _generer_bulletin(employe, pointages, prop_nom, mois, annee, taux_custom=None):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import cm
@@ -712,44 +712,93 @@ def show():
 
     # ── ONGLET BULLETIN ───────────────────────────────────────────────────
     with tab_bulletin:
-        st.subheader("📄 Générer un récapitulatif d'heures")
-        st.caption("Ce document est un récapitulatif indicatif pour préparer la paie — pas un bulletin officiel.")
+        st.subheader("📄 Document préparatoire de paie")
+        st.caption("Récapitulatif complet avec cotisations salariales et patronales 2026 — à transmettre à votre cabinet de paie.")
 
-        employes = get_employes(prop_id)
-        if not employes:
-            st.warning("Ajoutez des employés d'abord.")
-        else:
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                emp_opts = {e["id"]: f"{e['prenom']} {e['nom']}" for e in employes}
-                emp_sel  = st.selectbox("Employé", list(emp_opts.keys()),
-                                         format_func=lambda x: emp_opts[x], key="bul_emp")
-            with c2:
-                mois_b = st.selectbox("Mois", range(1,13),
-                                       format_func=lambda m: ["Janvier","Février","Mars","Avril","Mai","Juin",
-                                                               "Juillet","Août","Septembre","Octobre","Novembre","Décembre"][m-1],
-                                       index=date.today().month-1, key="bul_mois")
-            with c3:
-                annee_b = st.selectbox("Année", [2024,2025,2026,2027],
-                                        index=[2024,2025,2026,2027].index(date.today().year),
-                                        key="bul_annee")
+        tab_gen, tab_taux = st.tabs(["📄 Générer", "⚙️ Taux de cotisations"])
 
-            if st.button("📄 Générer le récapitulatif PDF", type="primary", use_container_width=True):
-                emp_data  = emp_dict = {e["id"]: e for e in employes}
-                employe   = emp_data.get(emp_sel, {})
-                pointages_emp = [p for p in get_pointages(prop_id, mois_b, annee_b)
-                                  if p.get("employe_id") == emp_sel]
-                if not pointages_emp:
-                    st.warning("Aucun pointage pour cet employé ce mois.")
-                else:
-                    with st.spinner("Génération..."):
-                        pdf_bytes = _generer_bulletin(employe, pointages_emp, prop_nom, mois_b, annee_b)
-                    nom_safe = f"{employe.get('prenom','')}_{employe.get('nom','')}".replace(" ","_")
-                    st.download_button(
-                        label="⬇️ Télécharger le récapitulatif PDF",
-                        data=pdf_bytes,
-                        file_name=f"Recap_heures_{nom_safe}_{annee_b}_{mois_b:02d}.pdf",
-                        mime="application/pdf",
-                        type="primary",
-                        use_container_width=True,
-                    )
+        with tab_taux:
+            st.subheader("⚙️ Taux de cotisations 2026")
+            st.caption("Ces taux sont utilisés pour le calcul indicatif. Modifiez-les si nécessaire.")
+
+            st.markdown("**Cotisations salariales**")
+            col_s1, col_s2 = st.columns(2)
+            with col_s1:
+                t_mal_sal  = st.number_input("Maladie salarié (%)", value=0.75, step=0.01, format="%.2f", key="t_mal_sal")
+                t_viei_sal = st.number_input("Vieillesse salarié (%)", value=6.90, step=0.01, format="%.2f", key="t_viei_sal")
+                t_ret_sal  = st.number_input("Retraite complémentaire salarié (%)", value=3.15, step=0.01, format="%.2f", key="t_ret_sal")
+            with col_s2:
+                t_csg_nd   = st.number_input("CSG non déductible (%)", value=2.40, step=0.01, format="%.2f", key="t_csg_nd")
+                t_csg_d    = st.number_input("CSG/CRDS déductible (%)", value=6.80, step=0.01, format="%.2f", key="t_csg_d")
+
+            st.markdown("**Cotisations patronales**")
+            col_p1, col_p2 = st.columns(2)
+            with col_p1:
+                t_mal_pat  = st.number_input("Maladie patronal (%)", value=13.00, step=0.01, format="%.2f", key="t_mal_pat")
+                t_viei_pat = st.number_input("Vieillesse patronal (%)", value=8.45, step=0.01, format="%.2f", key="t_viei_pat")
+                t_fam      = st.number_input("Allocations familiales (%)", value=5.25, step=0.01, format="%.2f", key="t_fam")
+                t_at       = st.number_input("Accidents du travail (%)", value=2.20, step=0.01, format="%.2f", key="t_at")
+            with col_p2:
+                t_cho      = st.number_input("Chômage (%)", value=4.05, step=0.01, format="%.2f", key="t_cho")
+                t_ret_pat  = st.number_input("Retraite complémentaire patronal (%)", value=4.60, step=0.01, format="%.2f", key="t_ret_pat")
+                t_form     = st.number_input("Formation professionnelle (%)", value=0.55, step=0.01, format="%.2f", key="t_form")
+
+        with tab_gen:
+            employes = get_employes(prop_id)
+            if not employes:
+                st.warning("Ajoutez des employés dans l'onglet 'Employés' d'abord.")
+            else:
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    emp_opts = {e["id"]: f"{e['prenom']} {e['nom']}" for e in employes}
+                    emp_sel  = st.selectbox("Employé", list(emp_opts.keys()),
+                                             format_func=lambda x: emp_opts[x], key="bul_emp")
+                with c2:
+                    mois_b = st.selectbox("Mois", range(1,13),
+                                           format_func=lambda m: ["Janvier","Février","Mars","Avril","Mai","Juin",
+                                                                   "Juillet","Août","Septembre","Octobre","Novembre","Décembre"][m-1],
+                                           index=date.today().month-1, key="bul_mois")
+                with c3:
+                    annee_b = st.selectbox("Année", [2024,2025,2026,2027],
+                                            index=[2024,2025,2026,2027].index(date.today().year),
+                                            key="bul_annee")
+
+                if st.button("📄 Générer le document préparatoire PDF",
+                              type="primary", use_container_width=True):
+                    emp_data = {e["id"]: e for e in employes}
+                    employe  = emp_data.get(emp_sel, {})
+                    pointages_emp = [p for p in get_pointages(prop_id, mois_b, annee_b)
+                                      if p.get("employe_id") == emp_sel]
+                    if not pointages_emp:
+                        st.warning(f"Aucun pointage pour cet employé en "
+                                   f"{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][mois_b-1]} {annee_b}.")
+                    else:
+                        # Passer les taux personnalisés
+                        taux_custom = {
+                            "Securite sociale maladie salarie":    (st.session_state.get("t_mal_sal", 0.75) or 0.75) / 100,
+                            "Vieillesse plafonnee salarie":        (st.session_state.get("t_viei_sal", 6.90) or 6.90) / 100,
+                            "Retraite complementaire salarie":     (st.session_state.get("t_ret_sal", 3.15) or 3.15) / 100,
+                            "CSG non deductible":                  (st.session_state.get("t_csg_nd", 2.40) or 2.40) / 100,
+                            "CSG/CRDS deductible":                 (st.session_state.get("t_csg_d", 6.80) or 6.80) / 100,
+                            "Securite sociale maladie patronal":   (st.session_state.get("t_mal_pat", 13.00) or 13.00) / 100,
+                            "Vieillesse plafonnee patronal":       (st.session_state.get("t_viei_pat", 8.45) or 8.45) / 100,
+                            "Allocations familiales":              (st.session_state.get("t_fam", 5.25) or 5.25) / 100,
+                            "Accidents du travail":                (st.session_state.get("t_at", 2.20) or 2.20) / 100,
+                            "Chomage":                             (st.session_state.get("t_cho", 4.05) or 4.05) / 100,
+                            "Retraite complementaire patronal":    (st.session_state.get("t_ret_pat", 4.60) or 4.60) / 100,
+                            "Formation professionnelle":           (st.session_state.get("t_form", 0.55) or 0.55) / 100,
+                        }
+                        with st.spinner("Génération en cours..."):
+                            pdf_bytes = _generer_bulletin(employe, pointages_emp,
+                                                          prop_nom, mois_b, annee_b,
+                                                          taux_custom=taux_custom)
+                        nom_safe = f"{employe.get('prenom','')}_{employe.get('nom','')}".replace(" ","_")
+                        st.download_button(
+                            label="⬇️ Télécharger le document PDF",
+                            data=pdf_bytes,
+                            file_name=f"Paie_{nom_safe}_{annee_b}_{mois_b:02d}.pdf",
+                            mime="application/pdf",
+                            type="primary",
+                            use_container_width=True,
+                        )
+                        st.success("✅ Document prêt !")
