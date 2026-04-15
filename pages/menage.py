@@ -109,6 +109,34 @@ def delete_ventilation(pointage_id):
     try: _sb().table("ventilation_taches").delete().eq("pointage_id", pointage_id).execute()
     except: pass
 
+def get_employes_all(prop_ids: list):
+    """Retourne tous les employés pour une liste de propriétés."""
+    try:
+        if not prop_ids:
+            return []
+        liens = _sb().table("employe_proprietes").select("employe_id, propriete_id")            .in_("propriete_id", [int(p) for p in prop_ids]).execute().data or []
+        ids = list({l["employe_id"] for l in liens})
+        if not ids:
+            return []
+        emps = _sb().table("employes_menage").select("*")            .in_("id", ids).eq("actif", True).order("nom").execute().data or []
+        emp_props = {}
+        for l in liens:
+            emp_props.setdefault(l["employe_id"], []).append(l["propriete_id"])
+        for e in emps:
+            e["proprietes_rattachees"] = emp_props.get(e["id"], [])
+        return emps
+    except Exception as e:
+        print(f"get_employes_all error: {e}")
+        return []
+
+def rattacher_employe(employe_id, prop_id):
+    try:
+        _sb().table("employe_proprietes").insert({
+            "employe_id": employe_id, "propriete_id": prop_id
+        }).execute()
+        return True
+    except: return False
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # GENERATION PDF BULLETIN
