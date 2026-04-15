@@ -745,7 +745,15 @@ elif page == "Analyses":           analytics.show()
 elif page == "Créneaux":           gaps.show()
 elif page == "Paiements":          paiements.show()       if paiements       else st.error("Uploadez pages/paiements.py")
 elif page == "Ménage":             menage.show()          if menage          else st.error("Uploadez pages/menage.py")
-elif page == "DADS":               dads.show()            if dads            else st.error("Uploadez pages/dads.py")
+elif page == "DADS":
+    if dads:
+        dads.show()
+    else:
+        try:
+            from pages import dads as _dads_retry
+            _dads_retry.show()
+        except Exception as _e:
+            st.error(f"Erreur import DADS : {_e}")
 elif page == "Messages":           messages.show()        if messages        else st.error("Uploadez pages/messages.py")
 elif page == "iCal":               ical_sync.show()       if ical_sync       else st.error("Uploadez pages/ical_sync.py")
 elif page == "Propriétés":         _page_proprietes.show() if _page_proprietes else st.error("Uploadez pages/proprietes.py")
