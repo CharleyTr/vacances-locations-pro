@@ -523,6 +523,185 @@ def _generer_bulletin(employe, pointages, prop_nom, mois, annee, taux_custom=Non
     return buffer.getvalue()
 
 
+def _generer_fiche_employe(employe: dict, prop_nom: str, prop: dict) -> bytes:
+    """Génère une fiche récapitulative individuelle d'un employé en PDF."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    from datetime import datetime as _dt
+    import io
+
+    NAVY  = colors.HexColor("#0B1F3A")
+    BLUE  = colors.HexColor("#1565C0")
+    GOLD  = colors.HexColor("#F0B429")
+    GREY  = colors.HexColor("#6B7280")
+    LIGHT = colors.HexColor("#F4F7FF")
+    WHITE = colors.white
+    GREEN = colors.HexColor("#1B5E20")
+    LGREEN= colors.HexColor("#E8F5E9")
+
+    def s(size, color=NAVY, bold=False, align=0):
+        return ParagraphStyle("_", fontSize=size, textColor=color,
+                              fontName="Helvetica-Bold" if bold else "Helvetica",
+                              alignment=align, leading=size*1.5, spaceAfter=3)
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4,
+                            leftMargin=2*cm, rightMargin=2*cm,
+                            topMargin=2*cm, bottomMargin=2*cm)
+    story = []
+
+    nom_emp    = f"{employe.get('prenom','')} {employe.get('nom','')}".strip()
+    contrat    = employe.get("contrat","CDI") or "CDI"
+    taux_h     = float(employe.get("taux_horaire",12) or 12)
+    num_ss     = employe.get("numero_ss","") or "Non renseigne"
+    date_naiss = str(employe.get("date_naissance","") or "Non renseignee")[:10]
+    telephone  = employe.get("telephone","") or "Non renseigne"
+    email_emp  = employe.get("email","") or "Non renseigne"
+    adresse_emp = " ".join(filter(None, [
+        employe.get("adresse","") or "",
+        employe.get("code_postal","") or "",
+        employe.get("ville","") or "",
+    ])) or "Non renseignee"
+    date_entree = str(employe.get("created_at","") or "")[:10]
+
+    # Infos propriété / employeur
+    prop_adresse = " ".join(filter(None, [
+        prop.get("rue","") or "",
+        prop.get("code_postal","") or "",
+        prop.get("ville","") or "",
+    ])) or ""
+    prop_siret   = prop.get("siret","") or "Non renseigne"
+    prop_tel     = prop.get("telephone","") or "Non renseigne"
+    prop_email   = prop.get("email","") or "Non renseigne"
+
+    # ── En-tête ───────────────────────────────────────────────────────────
+    hd = Table([[
+        Paragraph(f"<b>FICHE SALARIE</b>", s(16, WHITE, bold=True)),
+        Paragraph(f"{prop_nom}<br/><font size='9'>Employeur</font>",
+                  s(11, WHITE, bold=True, align=2)),
+    ]], colWidths=[8.7*cm, 8.7*cm])
+    hd.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1),NAVY),
+        ("TOPPADDING",(0,0),(-1,-1),14),("BOTTOMPADDING",(0,0),(-1,-1),14),
+        ("LEFTPADDING",(0,0),(0,-1),14),("RIGHTPADDING",(1,0),(1,-1),14),
+        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+    ]))
+    story.append(hd)
+    bande = Table([[""]], colWidths=[17.4*cm], rowHeights=[5])
+    bande.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),GOLD)]))
+    story.append(bande)
+    story.append(Spacer(1, 0.5*cm))
+
+    # ── Bloc employeur ────────────────────────────────────────────────────
+    story.append(Paragraph("INFORMATIONS EMPLOYEUR", s(10, BLUE, bold=True)))
+    story.append(Spacer(1, 0.15*cm))
+    emp_data = [[
+        Paragraph(f"<b>Raison sociale :</b> {prop_nom}", s(9, NAVY)),
+        Paragraph(f"<b>Adresse :</b> {prop_adresse}", s(9, NAVY)),
+    ],[
+        Paragraph(f"<b>SIRET :</b> {prop_siret}", s(9, NAVY)),
+        Paragraph(f"<b>Tel :</b> {prop_tel}   <b>Email :</b> {prop_email}", s(9, NAVY)),
+    ]]
+    et = Table(emp_data, colWidths=[8.7*cm, 8.7*cm])
+    et.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1),LIGHT),
+        ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),
+        ("LEFTPADDING",(0,0),(-1,-1),10),
+        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#D0D5DD")),
+    ]))
+    story.append(et)
+    story.append(Spacer(1, 0.4*cm))
+
+    # ── Identité salarié ──────────────────────────────────────────────────
+    story.append(Paragraph("IDENTITE DU SALARIE", s(10, BLUE, bold=True)))
+    story.append(Spacer(1, 0.15*cm))
+    id_data = [
+        [Paragraph("<b>Nom et Prénom</b>", s(9, GREY, bold=True)),
+         Paragraph(nom_emp, s(10, NAVY, bold=True))],
+        [Paragraph("<b>Date de naissance</b>", s(9, GREY, bold=True)),
+         Paragraph(date_naiss, s(9, NAVY))],
+        [Paragraph("<b>N° Sécurité sociale</b>", s(9, GREY, bold=True)),
+         Paragraph(num_ss, s(9, NAVY, bold=True))],
+        [Paragraph("<b>Adresse</b>", s(9, GREY, bold=True)),
+         Paragraph(adresse_emp, s(9, NAVY))],
+        [Paragraph("<b>Téléphone</b>", s(9, GREY, bold=True)),
+         Paragraph(telephone, s(9, NAVY))],
+        [Paragraph("<b>Email</b>", s(9, GREY, bold=True)),
+         Paragraph(email_emp, s(9, NAVY))],
+    ]
+    it = Table(id_data, colWidths=[5*cm, 12.4*cm])
+    it.setStyle(TableStyle([
+        ("ROWBACKGROUNDS",(0,0),(-1,-1),[WHITE, LIGHT]),
+        ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),
+        ("LEFTPADDING",(0,0),(-1,-1),10),
+        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#D0D5DD")),
+        ("LINEAFTER",(0,0),(0,-1),1,colors.HexColor("#D0D5DD")),
+    ]))
+    story.append(it)
+    story.append(Spacer(1, 0.4*cm))
+
+    # ── Contrat ───────────────────────────────────────────────────────────
+    story.append(Paragraph("CONDITIONS D'EMPLOI", s(10, BLUE, bold=True)))
+    story.append(Spacer(1, 0.15*cm))
+    contrat_data = [
+        [Paragraph("<b>Type de contrat</b>", s(9, GREY, bold=True)),
+         Paragraph(contrat, s(9, NAVY, bold=True))],
+        [Paragraph("<b>Taux horaire</b>", s(9, GREY, bold=True)),
+         Paragraph(f"{taux_h:.2f} EUR / heure", s(9, NAVY, bold=True))],
+        [Paragraph("<b>Date d'entrée</b>", s(9, GREY, bold=True)),
+         Paragraph(date_entree or "Non renseignee", s(9, NAVY))],
+        [Paragraph("<b>Convention collective</b>", s(9, GREY, bold=True)),
+         Paragraph("Voir paramètres bulletin de paie", s(9, GREY))],
+    ]
+    ct = Table(contrat_data, colWidths=[5*cm, 12.4*cm])
+    ct.setStyle(TableStyle([
+        ("ROWBACKGROUNDS",(0,0),(-1,-1),[WHITE, LIGHT]),
+        ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),
+        ("LEFTPADDING",(0,0),(-1,-1),10),
+        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#D0D5DD")),
+        ("LINEAFTER",(0,0),(0,-1),1,colors.HexColor("#D0D5DD")),
+        ("BACKGROUND",(0,1),(-1,1),LGREEN),
+    ]))
+    story.append(ct)
+    story.append(Spacer(1, 0.4*cm))
+
+    # ── Signatures ────────────────────────────────────────────────────────
+    story.append(Paragraph("SIGNATURES", s(10, BLUE, bold=True)))
+    story.append(Spacer(1, 0.15*cm))
+    sig_data = [[
+        Paragraph("L'employeur<br/><br/><br/><br/>___________________<br/>"
+                  f"{prop_nom}", s(9, NAVY, align=1)),
+        Paragraph("Le salarié<br/><br/><br/><br/>___________________<br/>"
+                  f"{nom_emp}", s(9, NAVY, align=1)),
+        Paragraph("Date<br/><br/><br/><br/>___________________<br/>"
+                  f"{_dt.now().strftime('%d/%m/%Y')}", s(9, NAVY, align=1)),
+    ]]
+    st_sig = Table(sig_data, colWidths=[5.8*cm, 5.8*cm, 5.8*cm])
+    st_sig.setStyle(TableStyle([
+        ("TOPPADDING",(0,0),(-1,-1),12),("BOTTOMPADDING",(0,0),(-1,-1),12),
+        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#D0D5DD")),
+        ("VALIGN",(0,0),(-1,-1),"TOP"),
+    ]))
+    story.append(st_sig)
+    story.append(Spacer(1, 0.5*cm))
+
+    # Pied de page
+    story.append(HRFlowable(width="100%", thickness=0.5, color=GREY))
+    story.append(Spacer(1, 0.15*cm))
+    story.append(Paragraph(
+        f"Document genere le {_dt.now().strftime('%d/%m/%Y')} par LodgePro — "
+        "A conserver dans le dossier du salarie",
+        s(7, GREY, align=1)
+    ))
+
+    doc.build(story)
+    return buffer.getvalue()
+
+
 def show():
     st.title("🧹 Ménage & RH")
 
@@ -536,8 +715,8 @@ def show():
     prop  = props.get(prop_id, {})
     prop_nom = prop.get("nom", "")
 
-    tab_pointage, tab_employes, tab_taches, tab_recap, tab_bulletin = st.tabs([
-        "⏱️ Pointage", "👥 Employés", "📋 Tâches", "📊 Récapitulatif", "📄 Bulletin"
+    tab_pointage, tab_employes, tab_taches, tab_recap, tab_bulletin, tab_fiches = st.tabs([
+        "⏱️ Pointage", "👥 Employés", "📋 Tâches", "📊 Récapitulatif", "📄 Bulletin", "📁 Fiches"
     ])
 
     # ── ONGLET POINTAGE ───────────────────────────────────────────────────
@@ -1110,3 +1289,56 @@ def show():
                             use_container_width=True,
                         )
                         st.success("✅ Document prêt !")
+
+    # ── ONGLET FICHES RÉCAPITULATIVES ─────────────────────────────────────
+    with tab_fiches:
+        st.subheader("📁 Fiche récapitulative individuelle")
+        st.caption("Résumé complet par employé — informations personnelles, contrat et historique.")
+
+        employes = get_employes(prop_id)
+        if not employes:
+            st.warning("Aucun employé configuré.")
+        else:
+            emp_sel_f = st.selectbox(
+                "Sélectionner un employé",
+                [e["id"] for e in employes],
+                format_func=lambda x: next(
+                    (f"{e['prenom']} {e['nom']}" for e in employes if e["id"] == x), "?"
+                ),
+                key="fiche_emp_sel"
+            )
+            emp = next((e for e in employes if e["id"] == emp_sel_f), {})
+
+            if st.button("📄 Générer la fiche PDF", type="primary", use_container_width=True):
+                pdf_bytes = _generer_fiche_employe(emp, prop_nom, prop)
+                nom_safe = f"{emp.get('prenom','')}_{emp.get('nom','')}".replace(" ","_")
+                st.download_button(
+                    label="⬇️ Télécharger la fiche",
+                    data=pdf_bytes,
+                    file_name=f"Fiche_{nom_safe}.pdf",
+                    mime="application/pdf",
+                    type="primary",
+                    use_container_width=True,
+                )
+                st.success("✅ Fiche générée !")
+
+            # Aperçu en tableau
+            st.divider()
+            st.markdown("**Informations enregistrées :**")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown(f"**Nom complet :** {emp.get('prenom','')} {emp.get('nom','')}")
+                st.markdown(f"**Date de naissance :** {str(emp.get('date_naissance','') or 'Non renseignée')[:10]}")
+                st.markdown(f"**N° Sécurité sociale :** {emp.get('numero_ss','') or 'Non renseigné'}")
+                st.markdown(f"**Téléphone :** {emp.get('telephone','') or 'Non renseigné'}")
+                st.markdown(f"**Email :** {emp.get('email','') or 'Non renseigné'}")
+            with c2:
+                adresse_aff = " ".join(filter(None, [
+                    emp.get("adresse","") or "",
+                    emp.get("code_postal","") or "",
+                    emp.get("ville","") or "",
+                ])) or "Non renseignée"
+                st.markdown(f"**Adresse :** {adresse_aff}")
+                st.markdown(f"**Contrat :** {emp.get('contrat','') or 'Non renseigné'}")
+                st.markdown(f"**Taux horaire :** {float(emp.get('taux_horaire',0) or 0):.2f} €/h")
+                st.markdown(f"**Actif depuis :** {str(emp.get('created_at',''))[:10]}")
