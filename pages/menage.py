@@ -684,24 +684,38 @@ def show():
             st.markdown("**Ajouter un employé**")
             c1, c2, c3 = st.columns(3)
             with c1:
-                prenom = st.text_input("Prénom *")
-                nom    = st.text_input("Nom *")
+                prenom    = st.text_input("Prénom *")
+                nom       = st.text_input("Nom *")
+                naissance = st.text_input("Date naissance", placeholder="JJ/MM/AAAA")
             with c2:
                 telephone = st.text_input("Téléphone")
                 email_emp = st.text_input("Email")
+                num_ss_a  = st.text_input("N° Sécurité sociale", placeholder="1 85 12 75 123 456 78")
             with c3:
-                taux     = st.number_input("Taux horaire (€)", min_value=0.0,
-                                            value=12.00, step=0.10)
-                contrat  = st.selectbox("Contrat", ["CDI","CDD","Interim","Auto-entrepreneur"])
+                taux      = st.number_input("Taux horaire (€)", min_value=0.0, value=12.00, step=0.10)
+                contrat   = st.selectbox("Contrat", ["CDI","CDD","Interim","Auto-entrepreneur"])
+                adresse_a = st.text_input("Adresse")
+            c4, c5 = st.columns([2,3])
+            with c4: cp_a    = st.text_input("Code postal")
+            with c5: ville_a = st.text_input("Ville")
 
             if st.form_submit_button("➕ Ajouter", type="primary", use_container_width=True):
                 if not prenom or not nom:
                     st.error("Prénom et nom obligatoires.")
                 elif save_employe({
-                    "propriete_id": prop_id, "prenom": prenom.strip(),
-                    "nom": nom.strip(), "telephone": telephone.strip() or None,
-                    "email": email_emp.strip() or None,
-                    "taux_horaire": taux, "contrat": contrat, "actif": True,
+                    "propriete_id":  prop_id,
+                    "prenom":        prenom.strip(),
+                    "nom":           nom.strip(),
+                    "telephone":     telephone.strip() or None,
+                    "email":         email_emp.strip() or None,
+                    "taux_horaire":  taux,
+                    "contrat":       contrat,
+                    "numero_ss":     num_ss_a.strip() or None,
+                    "adresse":       adresse_a.strip() or None,
+                    "code_postal":   cp_a.strip() or None,
+                    "ville":         ville_a.strip() or None,
+                    "date_naissance":naissance.strip() or None,
+                    "actif":         True,
                 }):
                     st.success(f"✅ {prenom} {nom} ajouté !")
                     st.rerun()
