@@ -756,6 +756,7 @@ elif page == "DADS":
             _dads_retry.show()
         except Exception as _e:
             st.error(f"Erreur import DADS : {_e}")
+elif page == "Contrats":       contrats.show()    if contrats    else st.error("Uploadez pages/contrats.py")
 elif page == "Messages":           messages.show()        if messages        else st.error("Uploadez pages/messages.py")
 elif page == "iCal":               ical_sync.show()       if ical_sync       else st.error("Uploadez pages/ical_sync.py")
 elif page == "Propriétés":         _page_proprietes.show() if _page_proprietes else st.error("Uploadez pages/proprietes.py")
