@@ -44,6 +44,7 @@ def show():
     df_all["propriete_id"] = df_all["propriete_id"].fillna(0).astype(int)
     prop_choix = get_propriete_selectionnee()
     props      = get_proprietes_dict()
+    st.caption(f"DEBUG — prop_choix={prop_choix} type={type(prop_choix).__name__} auth={_auth[:5]}")
 
     # Si l'utilisateur n'est autorisé que sur une propriété → forcer ce filtre
     if prop_choix == 0 and len(_auth) == 1:
