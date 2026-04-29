@@ -76,8 +76,10 @@ def show():
                         horizontal=True, key="cal_vue")
 
     df_f = df_all.copy()
-    if prop_choix != 0:
-        df_f = df_f[df_f["propriete_id"] == prop_choix]
+    if prop_choix and prop_choix != 0:
+        prop_choix_int = int(prop_choix)
+        df_f["propriete_id"] = df_f["propriete_id"].astype(int)
+        df_f = df_f[df_f["propriete_id"] == prop_choix_int]
 
     # Inclure les réservations qui CHEVAUCHENT l'année sélectionnée
     # (pas seulement celles qui commencent dans cette année)
