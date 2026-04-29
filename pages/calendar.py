@@ -31,7 +31,11 @@ def show():
     st.title("📅 Calendrier des réservations")
 
     df_all = load_reservations()
-    _auth = [p["id"] for p in _fa_props() if not p.get("mot_de_passe") or is_unlocked(p["id"])]
+    _is_admin = st.session_state.get("is_admin", False)
+    if _is_admin:
+        _auth = [p["id"] for p in _fa_props()]
+    else:
+        _auth = [p["id"] for p in _fa_props() if not p.get("mot_de_passe") or is_unlocked(p["id"])]
     df_all = df_all[df_all["propriete_id"].isin(_auth)]
     if df_all.empty:
         st.info("Aucune réservation à afficher.")
