@@ -311,7 +311,9 @@ def _show_formulaire_modifier():
         return
 
     options = {
-        row["id"]: f"{row['nom_client']}  |  "
+        row["id"]: (
+            f"⚠️ " if (not row.get("email") or not row.get("telephone")) and row.get("ical_uid") else ""
+        ) + f"{row['nom_client']}  |  "
                    f"{row['date_arrivee'].strftime('%d/%m/%Y')} → {row['date_depart'].strftime('%d/%m/%Y')}  |  "
                    f"{row['plateforme']}"
         for _, row in df_sorted.iterrows()
@@ -335,6 +337,13 @@ def _show_formulaire_modifier():
 
         with col1:
             st.markdown("**👤 Client**")
+            # Bandeau infos manquantes
+            if row.get("ical_uid") and (not row.get("email") or not row.get("telephone")):
+                manquants = []
+                if not row.get("email"): manquants.append("Email")
+                if not row.get("telephone"): manquants.append("Téléphone")
+                st.warning(f"⚠️ Infos manquantes importées iCal : **{', '.join(manquants)}**")
+
             nom_client  = st.text_input("Nom du client *", value=str(row.get("nom_client", "")))
             email       = st.text_input("Email", value=str(row.get("email", "") or ""))
             telephone = st.text_input("Téléphone",
