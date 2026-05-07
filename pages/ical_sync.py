@@ -206,3 +206,6 @@ def _show_import():
             )
             if result.get("erreurs", 0) > 0:
                 st.warning(f"⚠️ {result['erreurs']} erreur(s)")
+                if result.get("detail_erreurs"):
+                    for err in result["detail_erreurs"]:
+                        st.caption(f"→ {err}")
