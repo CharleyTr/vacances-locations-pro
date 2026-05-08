@@ -4,12 +4,10 @@ Chaque utilisateur ne voit que SES propriétés
 """
 import streamlit as st
 import streamlit.components.v1 as components
-from services.auth_service import require_auth, is_admin, get_accessible_prop_ids
+from services.auth_service import is_admin, get_accessible_prop_ids
 from database.proprietes_repo import fetch_all as fetch_proprietes
 
 def show():
-    require_auth()
-    
     st.title("📅 Mon Calendrier Google")
     
     # Récupérer l'utilisateur et ses permissions
