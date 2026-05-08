@@ -91,18 +91,36 @@ def sync_propriete(prop_id, plateforme, url):
         res_clean = {k: v for k, v in res.items() if k in CHAMPS_AUTORISES}
 
         try:
+            # AMÉLIORATION 1 : Vérifier si l'ical_uid existe déjà pour UNE AUTRE propriété
+            existing_other = sb.table("reservations")\
+                .select("id, propriete_id")\
+                .eq("ical_uid", res_clean["ical_uid"])\
+                .neq("propriete_id", prop_id)\
+                .execute()
+            
+            if existing_other.data:
+                # Cette réservation appartient déjà à une autre propriété → SKIP
+                print(f"    ⚠️ SKIP {res_clean['ical_uid'][:30]}... (appartient déjà à prop {existing_other.data[0]['propriete_id']})")
+                continue
+
+            # AMÉLIORATION 2 : Vérifier si elle existe pour CETTE propriété
             existing = sb.table("reservations")\
-                .select("id")\
+                .select("id, plateforme")\
                 .eq("ical_uid", res_clean["ical_uid"])\
                 .eq("propriete_id", prop_id)\
                 .execute()
 
             if existing.data:
-                sb.table("reservations")\
-                    .update({k: v for k, v in res_clean.items()
-                             if k not in ("ical_uid","propriete_id")})\
-                    .eq("id", existing.data[0]["id"])\
-                    .execute()
+                # UPDATE seulement si la plateforme correspond
+                if existing.data[0]["plateforme"] == plateforme:
+                    sb.table("reservations")\
+                        .update({k: v for k, v in res_clean.items()
+                                 if k not in ("ical_uid","propriete_id","plateforme")})\
+                        .eq("id", existing.data[0]["id"])\
+                        .execute()
+                else:
+                    print(f"    ⚠️ SKIP {res_clean['ical_uid'][:30]}... (plateforme différente : {existing.data[0]['plateforme']} vs {plateforme})")
+                    continue
             else:
                 sb.table("reservations").insert(res_clean).execute()
             count += 1
