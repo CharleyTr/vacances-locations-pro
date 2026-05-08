@@ -105,11 +105,11 @@ def show():
         
         Configurez les IDs de calendrier Google dans la base de données :
         
-        ```sql
+```sql
         UPDATE proprietes 
         SET google_calendar_id = 'votre_calendar_id@group.calendar.google.com'
         WHERE id = 1;
-        ```
+```
         """)
         return
     
