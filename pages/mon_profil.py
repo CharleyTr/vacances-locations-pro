@@ -1,215 +1,236 @@
 """
-Page Mon Profil — fonctionne avec connexion PIN et email.
+Page Mon Profil - Configuration propriétaire
+Permet à chaque propriétaire de configurer son calendrier Google
 """
 import streamlit as st
-import hashlib
+from services.auth_service import is_admin, get_accessible_prop_ids
+from database.proprietes_repo import fetch_all as fetch_proprietes
 from database.supabase_client import get_supabase
+import requests
 
-
-def _hash(val: str) -> str:
-    return hashlib.sha256(val.strip().encode()).hexdigest()
-
+def test_ical_url(url):
+    """Teste si une URL iCal est valide"""
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200 and "BEGIN:VCALENDAR" in response.text:
+            event_count = response.text.count("BEGIN:VEVENT")
+            return True, f"✅ URL valide - {event_count} événement(s) trouvé(s)"
+        else:
+            return False, "❌ URL invalide - Aucun calendrier trouvé"
+    except Exception as e:
+        return False, f"❌ Erreur : {str(e)}"
 
 def show():
-    st.title("👤 Mon profil")
-
-    user_id    = st.session_state.get("auth_user_id", "")
+    st.title("👤 Mon Profil")
+    
+    # Récupérer les informations utilisateur
+    admin = is_admin()
+    accessible_ids = get_accessible_prop_ids()
     user_email = st.session_state.get("auth_user_email", "")
-    prop_id    = st.session_state.get("prop_id", 0) or 0
-    is_admin   = st.session_state.get("is_admin", False)
-
-    # ── Mode connexion PIN ────────────────────────────────────────────────
-    if not user_id and prop_id:
-        _show_profil_pin(prop_id, is_admin)
+    user_role = st.session_state.get("user_role", "proprietaire")
+    
+    # Charger les propriétés
+    all_props = fetch_proprietes()
+    
+    # Filtrer selon les permissions
+    if accessible_ids is None:
+        my_props = all_props
+    else:
+        my_props = [p for p in all_props if p["id"] in accessible_ids]
+    
+    if not my_props:
+        st.warning("⚠️ Aucune propriété accessible")
         return
-
-    # ── Mode connexion email ──────────────────────────────────────────────
-    if user_id and user_email:
-        _show_profil_email(user_id, user_email)
-        return
-
-    st.warning("Vous devez être connecté pour accéder à cette page.")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PROFIL MODE PIN
-# ─────────────────────────────────────────────────────────────────────────────
-def _show_profil_pin(prop_id: int, is_admin: bool):
-    from database.proprietes_repo import fetch_all
-
-    # Charger la propriété
-    props = {p["id"]: p for p in fetch_all(force_refresh=True)}
-    prop  = props.get(prop_id, {})
-
-    if not prop:
-        st.error("Propriété introuvable.")
-        return
-
-    st.markdown(f"""
-    <div style='background:var(--bg-info,#E3F2FD);border-radius:10px;
-                padding:14px 20px;margin-bottom:1.5rem'>
-        <strong>🏠 {prop.get('nom','')}</strong><br>
-        <span style='color:#666;font-size:13px'>
-            Connexion par code PIN · {'Admin' if is_admin else 'Propriétaire'}
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    tab1, tab2 = st.tabs(["🔑 Code d'accès", "✍️ Informations"])
-
-    # ── Onglet 1 : Changer le code PIN ────────────────────────────────────
-    with tab1:
-        st.subheader("Modifier le code d'accès")
-        st.caption("Ce code est utilisé pour se connecter à l'application.")
-
-        with st.form("form_pin_profil"):
-            ancien  = st.text_input("Code actuel", type="password",
-                                     placeholder="Votre code actuel")
-            nouveau = st.text_input("Nouveau code *", type="password",
-                                     placeholder="Au moins 4 caractères")
-            confirmer = st.text_input("Confirmer *", type="password",
-                                       placeholder="Répétez le nouveau code")
-            ok = st.form_submit_button("💾 Enregistrer", type="primary",
-                                        use_container_width=True)
-
-        if ok:
-            if not ancien or not nouveau:
-                st.error("Tous les champs sont obligatoires.")
-            elif len(nouveau) < 4:
-                st.error("Le code doit contenir au moins 4 caractères.")
-            elif nouveau != confirmer:
-                st.error("Les codes ne correspondent pas.")
+    
+    # Afficher les informations utilisateur
+    st.markdown("---")
+    st.subheader("📋 Mes informations")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if admin:
+            st.info("👑 **Rôle** : Administrateur")
+        elif user_role == "gestionnaire":
+            st.info("🔑 **Rôle** : Gestionnaire")
+        else:
+            st.info("🏠 **Rôle** : Propriétaire")
+    
+    with col2:
+        if user_email:
+            st.info(f"📧 **Email** : {user_email}")
+        else:
+            st.info("🔐 **Connexion** : Code PIN")
+    
+    # Liste des propriétés
+    st.markdown("---")
+    st.subheader("🏠 Mes propriétés")
+    
+    if len(my_props) == 1:
+        st.success(f"**{my_props[0]['nom']}**")
+    else:
+        for prop in my_props:
+            st.write(f"• {prop['nom']}")
+    
+    # Configuration Google Calendar
+    st.markdown("---")
+    st.subheader("📅 Configuration Google Calendar")
+    
+    st.info("""
+    **Synchronisez vos réservations avec Google Calendar !**
+    
+    En ajoutant votre calendrier Google, vos réservations Airbnb, Booking, etc. 
+    seront automatiquement visibles dans Lodgepro.
+    """)
+    
+    # Sélection de la propriété (si plusieurs)
+    if len(my_props) > 1:
+        selected_prop = st.selectbox(
+            "Propriété à configurer",
+            options=my_props,
+            format_func=lambda p: p['nom'],
+            key="profile_prop_select"
+        )
+    else:
+        selected_prop = my_props[0]
+    
+    prop_id = selected_prop['id']
+    current_url = selected_prop.get('ical_secret_url', '')
+    
+    # Formulaire de configuration
+    with st.form("form_ical_config"):
+        st.markdown(f"### Configuration : {selected_prop['nom']}")
+        
+        # Afficher l'URL actuelle si elle existe
+        if current_url:
+            st.success("✅ Calendrier Google déjà configuré")
+            with st.expander("🔍 Voir l'URL actuelle"):
+                st.code(current_url, language="text")
+        
+        # Instructions
+        with st.expander("📖 Comment obtenir l'URL secrète ?"):
+            st.markdown("""
+            ### Étapes pour récupérer votre URL iCal secrète :
+            
+            1. **Ouvrez** [Google Calendar](https://calendar.google.com)
+            2. **Cliquez** sur votre calendrier dans la liste de gauche
+            3. **Cliquez** sur les **3 points** → **"Paramètres et partage"**
+            4. **Scrollez** jusqu'à **"Intégrer l'agenda"**
+            5. **Copiez** l'**"Adresse secrète au format iCal"**
+            
+            L'URL doit ressembler à :
+            ```
+            https://calendar.google.com/calendar/ical/XXXX@group.calendar.google.com/private-YYYY/basic.ics
+            ```
+            
+            ⚠️ **Important** : Ne partagez jamais cette URL publiquement !
+            """)
+        
+        # Champ de saisie
+        new_url = st.text_input(
+            "URL iCal secrète",
+            value=current_url,
+            placeholder="https://calendar.google.com/calendar/ical/...",
+            help="Collez l'adresse secrète de votre calendrier Google"
+        )
+        
+        # Boutons
+        col1, col2, col3 = st.columns([2, 1, 1])
+        
+        with col1:
+            submit = st.form_submit_button("💾 Enregistrer", type="primary", use_container_width=True)
+        
+        with col2:
+            test = st.form_submit_button("🧪 Tester", use_container_width=True)
+        
+        with col3:
+            remove = st.form_submit_button("🗑️ Supprimer", use_container_width=True)
+    
+    # Traitement du formulaire
+    if test and new_url:
+        with st.spinner("🔄 Test de l'URL..."):
+            valid, message = test_ical_url(new_url)
+            if valid:
+                st.success(message)
             else:
-                stored = prop.get("mot_de_passe", "") or ""
-                if ancien.strip() != stored and _hash(ancien.strip()) != stored:
-                    st.error("❌ Code actuel incorrect.")
-                else:
-                    try:
-                        sb = get_supabase()
-                        sb.table("proprietes").update(
-                            {"mot_de_passe": nouveau.strip()}
-                        ).eq("id", prop_id).execute()
-                        st.success("✅ Code d'accès mis à jour !")
-                        st.info("Utilisez ce nouveau code à votre prochaine connexion.")
-                    except Exception as e:
-                        st.error(f"❌ Erreur : {e}")
-
-    # ── Onglet 2 : Informations propriété ────────────────────────────────
-    with tab2:
-        st.subheader("Informations de la propriété")
-
-        with st.form("form_info_profil"):
-            signataire = st.text_input("Signataire (messages)",
-                                        value=prop.get("signataire", "") or "",
-                                        placeholder="Ex: Annick & Charley")
-            tel_whatsapp = st.text_input("Téléphone WhatsApp",
-                                          value=prop.get("tel_whatsapp", "") or "",
-                                          placeholder="+33612345678")
-            tel_sms = st.text_input("Téléphone SMS",
-                                     value=prop.get("tel_sms", "") or "",
-                                     placeholder="+33612345678")
-            nom_exp = st.text_input("Nom expéditeur SMS",
-                                     value=prop.get("nom_expediteur", "") or "",
-                                     placeholder="VLPro")
-
-            save = st.form_submit_button("💾 Enregistrer", type="primary",
-                                          use_container_width=True)
-
-        if save:
+                st.error(message)
+    
+    if submit:
+        if not new_url:
+            st.error("❌ Veuillez saisir une URL")
+        elif not new_url.startswith("https://calendar.google.com/calendar/ical/"):
+            st.error("❌ L'URL doit commencer par : https://calendar.google.com/calendar/ical/")
+        else:
+            # Sauvegarder dans la base de données
             try:
                 sb = get_supabase()
-                sb.table("proprietes").update({
-                    "signataire":     signataire.strip(),
-                    "tel_whatsapp":   tel_whatsapp.strip(),
-                    "tel_sms":        tel_sms.strip(),
-                    "nom_expediteur": nom_exp.strip(),
-                }).eq("id", prop_id).execute()
-                st.success("✅ Informations mises à jour !")
+                if sb:
+                    result = sb.table("proprietes").update({
+                        "ical_secret_url": new_url
+                    }).eq("id", prop_id).execute()
+                    
+                    if result.data:
+                        st.success("✅ Calendrier Google configuré avec succès !")
+                        st.balloons()
+                        
+                        # Proposer de tester
+                        if st.button("🧪 Tester maintenant"):
+                            valid, message = test_ical_url(new_url)
+                            if valid:
+                                st.success(message)
+                            else:
+                                st.error(message)
+                        
+                        # Attendre 2 secondes et recharger
+                        import time
+                        time.sleep(2)
+                        st.rerun()
+                    else:
+                        st.error("❌ Erreur lors de l'enregistrement")
+                else:
+                    st.error("❌ Connexion Supabase indisponible")
             except Exception as e:
                 st.error(f"❌ Erreur : {e}")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PROFIL MODE EMAIL
-# ─────────────────────────────────────────────────────────────────────────────
-def _show_profil_email(user_id: str, user_email: str):
-    try:
-        from database.auth_repo import set_code_acces, get_profile
-        profile  = get_profile(user_id) or {}
-        has_code = bool(profile.get("code_acces"))
-    except:
-        profile  = {}
-        has_code = False
-
-    st.markdown(f"""
-    <div style='background:var(--bg-info,#E3F2FD);border-radius:10px;
-                padding:14px 20px;margin-bottom:1.5rem'>
-        <strong>📧 {user_email}</strong><br>
-        <span style='color:#666;font-size:13px'>
-            Rôle : {profile.get('role','proprietaire').capitalize()} ·
-            Code d'accès : {'✅ Configuré' if has_code else '❌ Non configuré'}
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    tab1, tab2 = st.tabs(["🔑 Code d'accès", "🔒 Mot de passe"])
-
-    with tab1:
-        st.subheader("Code d'accès rapide")
-        st.caption("Permet de vous connecter avec email + ce code (sans mot de passe Supabase).")
-
-        with st.form("form_code_email"):
-            if has_code:
-                ancien = st.text_input("Code actuel", type="password")
-            else:
-                ancien = None
-                st.info("Pas encore de code — définissez-en un.")
-            nouveau   = st.text_input("Nouveau code *", type="password",
-                                       placeholder="Au moins 4 caractères")
-            confirmer = st.text_input("Confirmer *", type="password")
-            ok = st.form_submit_button("💾 Enregistrer", type="primary",
-                                        use_container_width=True)
-
-        if ok:
-            if not nouveau or len(nouveau) < 4:
-                st.error("Code trop court (minimum 4 caractères).")
-            elif nouveau != confirmer:
-                st.error("Les codes ne correspondent pas.")
-            elif has_code:
-                stored = profile.get("code_acces", "")
-                if (ancien or "").strip() != stored and _hash((ancien or "").strip()) != stored:
-                    st.error("❌ Code actuel incorrect.")
-                else:
-                    try:
-                        set_code_acces(user_id, nouveau.strip(), "")
-                        st.success("✅ Code mis à jour !")
-                    except Exception as e:
-                        st.error(f"❌ {e}")
-            else:
-                try:
-                    set_code_acces(user_id, nouveau.strip(), "")
-                    st.success(f"✅ Code créé ! Connectez-vous avec **{user_email}** + ce code.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ {e}")
-
-    with tab2:
-        st.subheader("Changer le mot de passe Supabase")
-        st.caption("Envoi d'un lien de réinitialisation par email.")
-        if st.button("📧 Envoyer un lien de réinitialisation", use_container_width=True):
+    
+    if remove:
+        if current_url:
             try:
-                import os, requests as _req
-                _surl = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL",""))
-                _skey = st.secrets.get("SUPABASE_KEY", os.environ.get("SUPABASE_KEY",""))
-                _redir = st.secrets.get("AUTH_REDIRECT_URL",
-                                         os.environ.get("AUTH_REDIRECT_URL",""))
-                r = _req.post(f"{_surl}/auth/v1/recover",
-                              headers={"apikey": _skey, "Content-Type": "application/json"},
-                              json={"email": user_email, "redirect_to": _redir},
-                              timeout=10)
-                if r.status_code in (200, 201):
-                    st.success(f"✅ Email envoyé à {user_email} !")
+                sb = get_supabase()
+                if sb:
+                    result = sb.table("proprietes").update({
+                        "ical_secret_url": None
+                    }).eq("id", prop_id).execute()
+                    
+                    if result.data:
+                        st.success("✅ Calendrier Google supprimé")
+                        import time
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("❌ Erreur lors de la suppression")
                 else:
-                    st.error(f"❌ Erreur : {r.json().get('message','')}")
+                    st.error("❌ Connexion Supabase indisponible")
             except Exception as e:
-                st.error(f"❌ {e}")
+                st.error(f"❌ Erreur : {e}")
+        else:
+            st.warning("⚠️ Aucun calendrier à supprimer")
+    
+    # Liens utiles
+    st.markdown("---")
+    st.subheader("🔗 Liens utiles")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("[📅 Google Calendar](https://calendar.google.com)")
+    
+    with col2:
+        st.markdown("[📖 Documentation](https://support.google.com/calendar)")
+    
+    with col3:
+        if admin:
+            st.markdown("[⚙️ Gérer les utilisateurs](utilisateurs)")
+
+
+if __name__ == "__main__":
+    show()
