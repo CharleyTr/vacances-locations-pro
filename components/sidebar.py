@@ -8,7 +8,7 @@ PAGES = {
     "📊 Dashboard":      "Dashboard",
     "📋 Réservations":   "Réservations",
     "📅 Calendrier":     "Calendrier",
-    "📅 Mon Calendrier Google"
+    "📅 Google Calendar":  "Mon Calendrier Google",
     "📈 Analyses":       "Analyses",
     "💳 Paiements":      "Paiements",
     "🧹 Ménage":         "Ménage",
