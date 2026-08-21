@@ -246,7 +246,7 @@ def _show_formulaire_ajout():
             "prix_brut":         prix_brut,
             "commissions":       commissions,
             "frais_cb":          frais_cb,
-            "prix_net":          prix_net_calc,
+            "prix_net":          prix_brut - commissions - frais_cb,
             "menage":            menage,
             "taxes_sejour":      taxes_sejour,
             "base":              prix_brut - commissions - menage - taxes_sejour,
