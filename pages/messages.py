@@ -256,8 +256,9 @@ def _show_whatsapp(df: pd.DataFrame):
             _apercu_html = st.session_state[_trad_key]
         st.markdown("**Aperçu :**")
         st.markdown(
-            f"<div style='background:#F8F9FA;border:1px solid #DEE2E6;border-radius:8px;"
-            f"padding:12px 16px;font-size:13px;white-space:pre-wrap;line-height:1.6'>"
+            f"<div style='background:var(--bg-neutral,transparent);border:1px solid var(--border-color,#DEE2E6);"
+            f"border-radius:8px;padding:12px 16px;font-size:13px;white-space:pre-wrap;line-height:1.6;"
+            f"color:var(--text-primary,#212121)'>"
             f"{_apercu_html.replace(chr(10), '<br>')}</div>",
             unsafe_allow_html=True
         )
