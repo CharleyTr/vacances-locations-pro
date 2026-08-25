@@ -14,14 +14,27 @@ from services.proprietes_service import get_proprietes_dict, get_propriete_selec
 from services.conflict_service import detect_conflicts
 from database.reservations_repo import insert_reservation
 from database.supabase_client import is_connected
+from database.platforms_repo import fetch_all as _fetch_platforms
 
-COULEURS = {
+_COULEURS_FALLBACK = {
     "Booking":   "#1565C0",
     "Airbnb":    "#E53935",
     "Direct":    "#2E7D32",
     "Abritel":   "#F57C00",
     "Fermeture": "#9E9E9E",
 }
+
+
+def _get_couleurs() -> dict:
+    """Couleurs par plateforme, lues dynamiquement depuis la table platforms."""
+    try:
+        plats = _fetch_platforms(force_refresh=True)
+        couleurs = {p["nom"]: (p.get("couleur") or "#607D8B") for p in plats if p.get("nom")}
+        couleurs.setdefault("Fermeture", "#9E9E9E")
+        return couleurs or _COULEURS_FALLBACK
+    except Exception:
+        return _COULEURS_FALLBACK
+
 MOIS_FR  = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
              "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
 JOURS_FR = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
@@ -173,7 +186,7 @@ def _show_google_calendar(df: pd.DataFrame, annee: int, mois: int):
 
     mois_fr_json   = json.dumps(MOIS_FR)
     jours_fr_json  = json.dumps(JOURS_FR)
-    couleurs_json  = json.dumps(COULEURS)
+    couleurs_json  = json.dumps(_get_couleurs())
     plateau_json   = json.dumps([
         {
             "date": str(j[0]),
@@ -313,6 +326,7 @@ PLATEAU.forEach(day => {{
 
 def _show_week_view(df: pd.DataFrame, annee: int, mois: int, props: dict, prop_choix: int):
     st.subheader("🗓️ Vue semaine")
+    _couleurs = _get_couleurs()
 
     # Sélection de la semaine
     import calendar as cal_lib
@@ -375,7 +389,7 @@ def _show_week_view(df: pd.DataFrame, annee: int, mois: int, props: dict, prop_c
             else:
                 content = ""
                 for r in resa_jour:
-                    couleur = COULEURS.get(r.get("plateforme", ""), "#607D8B")
+                    couleur = _couleurs.get(r.get("plateforme", ""), "#607D8B")
                     is_arr  = r["date_arrivee"].date() == jour if hasattr(r["date_arrivee"], 'date') else False
                     is_dep  = r["date_depart"].date()  == jour if hasattr(r["date_depart"],  'date') else False
                     icon    = "→" if is_arr else ("←" if is_dep else "·")
@@ -576,7 +590,7 @@ def _show_gantt(df: pd.DataFrame, prop_choix: int):
         color="plateforme",
         hover_name="nom_client",
         hover_data={"date_arrivee": True, "date_depart": True, "nuitees": True, "prix_net": True},
-        color_discrete_map=COULEURS,
+        color_discrete_map=_get_couleurs(),
     )
     fig.update_yaxes(autorange="reversed")
     fig.update_layout(height=max(350, len(df) * 30 + 100),
