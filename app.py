@@ -650,6 +650,8 @@ if st.session_state.get("global_logged_in"):
 
 # ── Imports pages ─────────────────────────────────────────────────────────────
 from pages import dashboard, reservations, calendar, analytics, gaps
+try: from pages import plateformes
+except: plateformes = None
 try: from pages import google_calendar
 except: google_calendar = None
 try: from pages import paiements
@@ -746,6 +748,7 @@ if not _is_admin:
 # ── Routing ───────────────────────────────────────────────────────────────────
 if   page == "Dashboard":          dashboard.show()
 elif page == "Réservations":       reservations.show()
+elif page == "Plateformes":        plateformes.show() if plateformes else st.error("Uploadez pages/plateformes.py")
 elif page == "Calendrier":         calendar.show()
 elif page == "Mon Calendrier Google": google_calendar.show() if google_calendar else st.error("Uploadez pages/google_calendar.py")
 elif page == "Analyses":           analytics.show()
