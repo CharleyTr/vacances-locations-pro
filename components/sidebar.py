@@ -7,6 +7,7 @@ from services.auth_service import is_unlocked, lock
 PAGES = {
     "📊 Dashboard":      "Dashboard",
     "📋 Réservations":   "Réservations",
+    "🏷️ Plateformes":    "Plateformes",
     "📅 Calendrier":     "Calendrier",
     "📅 Google Calendar": "Mon Calendrier Google",  
     "📈 Analyses":       "Analyses",
