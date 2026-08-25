@@ -18,9 +18,15 @@ def _get_props_autorises() -> dict:
 from services.import_service import import_csv_file, preview_csv
 from database.supabase_client import is_connected
 import database.reservations_repo as repo
+from database.platforms_repo import fetch_noms_actifs as _fetch_plateformes_actives
 
 
-PLATEFORMES = ["Booking", "Airbnb", "Direct", "Abritel", "Fermeture"]
+def _get_plateformes() -> list[str]:
+    """Liste dynamique des plateformes actives + 'Fermeture' (blocage calendrier, pas une plateforme facturée)."""
+    noms = _fetch_plateformes_actives(force_refresh=True)
+    if "Fermeture" not in noms:
+        noms = noms + ["Fermeture"]
+    return noms
 
 COLONNES_AFFICHAGE = [
     "id", "nom_client", "plateforme", "date_arrivee", "date_depart",
@@ -75,7 +81,7 @@ def _show_liste():
         )
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            plateforme = st.multiselect("Plateforme", PLATEFORMES, key="filt_plat")
+            plateforme = st.multiselect("Plateforme", _get_plateformes(), key="filt_plat")
         with col2:
             from datetime import date as _date
             if "annee" in df.columns:
@@ -193,7 +199,7 @@ def _show_formulaire_ajout():
                 options=list(_get_props_autorises().keys()),
                 format_func=lambda x: _get_props_autorises()[x]
             )
-            plateforme = st.selectbox("Plateforme *", PLATEFORMES)
+            plateforme = st.selectbox("Plateforme *", _get_plateformes())
             date_arrivee = st.date_input("Date d'arrivée *", value=date.today())
             date_depart  = st.date_input(
                 "Date de départ *",
@@ -386,8 +392,9 @@ def _show_formulaire_modifier():
                 format_func=lambda x: _props_auth[x],
                 index=_idx,
             )
-            plat_idx = PLATEFORMES.index(row["plateforme"]) if row.get("plateforme") in PLATEFORMES else 0
-            plateforme   = st.selectbox("Plateforme *", PLATEFORMES, index=plat_idx)
+            _plateformes_dispo = _get_plateformes()
+            plat_idx = _plateformes_dispo.index(row["plateforme"]) if row.get("plateforme") in _plateformes_dispo else 0
+            plateforme   = st.selectbox("Plateforme *", _plateformes_dispo, index=plat_idx)
             date_arrivee = st.date_input("Date d'arrivée *",
                                          value=row["date_arrivee"].date()
                                          if hasattr(row["date_arrivee"], "date")
