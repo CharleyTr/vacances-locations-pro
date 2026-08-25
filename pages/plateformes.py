@@ -1,67 +1,101 @@
-"""CRUD pour la table platforms."""
-from database.supabase_client import get_supabase
-
-TABLE = "platforms"
-_cache: list | None = None
-
-
-def fetch_all(force_refresh: bool = False) -> list[dict]:
-    """Retourne toutes les plateformes (actives et inactives) depuis Supabase."""
-    global _cache
-    if _cache is not None and not force_refresh:
-        return _cache
-    sb = get_supabase()
-    if sb is None:
-        return _fallback()
-    try:
-        result = sb.table(TABLE).select("*").order("nom").execute()
-        _cache = result.data or []
-        return _cache
-    except Exception:
-        if _cache is not None:
-            return _cache
-        return _fallback()
+"""
+Page Plateformes - Gestion de la liste des plateformes de réservation
+(Airbnb, Booking, Abritel, PAP, Direct, VRBO, ...).
+"""
+import streamlit as st
+from database.platforms_repo import fetch_all, insert_platform, update_platform
+from database.supabase_client import is_connected
 
 
-def fetch_actives(force_refresh: bool = False) -> list[dict]:
-    """Retourne uniquement les plateformes actives."""
-    return [p for p in fetch_all(force_refresh) if p.get("actif", True)]
+def show():
+    st.title("🏷️ Plateformes")
+    st.caption("Gère la liste des plateformes de réservation utilisées dans l'app.")
 
+    if not is_connected():
+        st.error("⛔ Connexion Supabase requise.")
+        return
 
-def fetch_noms_actifs(force_refresh: bool = False) -> list[str]:
-    """Retourne juste la liste des noms actifs, pour alimenter les selectbox/multiselect."""
-    return [p["nom"] for p in fetch_actives(force_refresh)]
+    # --- Formulaire d'ajout ---
+    with st.expander("➕ Ajouter une plateforme", expanded=False):
+        with st.form("add_platform_form", clear_on_submit=True):
+            col1, col2, col3 = st.columns([2, 1, 1])
+            with col1:
+                nom = st.text_input("Nom de la plateforme *")
+            with col2:
+                couleur = st.color_picker("Couleur", value="#4F46E5")
+            with col3:
+                commission = st.number_input(
+                    "Commission %", min_value=0.0, max_value=100.0, value=0.0, step=0.5
+                )
 
+            submitted = st.form_submit_button("Ajouter", type="primary")
+            if submitted:
+                if not nom.strip():
+                    st.error("Le nom est obligatoire.")
+                else:
+                    try:
+                        insert_platform({
+                            "nom": nom.strip(),
+                            "couleur": couleur,
+                            "commission_pct": commission,
+                            "actif": True,
+                        })
+                        st.success(f"Plateforme '{nom}' ajoutée.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erreur lors de l'ajout (nom probablement déjà utilisé) : {e}")
 
-def insert_platform(data: dict) -> dict:
-    sb = get_supabase()
-    if sb is None:
-        raise ConnectionError("Supabase non configuré")
-    global _cache
-    _cache = None
-    result = sb.table(TABLE).insert(data).execute()
-    return result.data[0] if result.data else {}
+    st.divider()
 
+    # --- Liste des plateformes existantes ---
+    platforms = fetch_all(force_refresh=True)
 
-def update_platform(platform_id: str, data: dict) -> dict:
-    sb = get_supabase()
-    if sb is None:
-        raise ConnectionError("Supabase non configuré")
-    global _cache
-    _cache = None
-    result = sb.table(TABLE).update(data).eq("id", platform_id).execute()
-    return result.data[0] if result.data else {}
+    if not platforms:
+        st.info("Aucune plateforme enregistrée pour le moment.")
+        return
 
+    st.subheader("Plateformes existantes")
 
-def _fallback() -> list[dict]:
-    """Données par défaut si Supabase non disponible (garantit que l'app ne casse pas)."""
-    return [
-        {"id": None, "nom": "Airbnb", "couleur": "#FF5A5F", "commission_pct": 0, "actif": True},
-        {"id": None, "nom": "Airbnb/Annule", "couleur": "#FF5A5F", "commission_pct": 0, "actif": True},
-        {"id": None, "nom": "Booking", "couleur": "#003580", "commission_pct": 0, "actif": True},
-        {"id": None, "nom": "Booking/Annule", "couleur": "#003580", "commission_pct": 0, "actif": True},
-        {"id": None, "nom": "Abritel", "couleur": "#4CAF50", "commission_pct": 0, "actif": True},
-        {"id": None, "nom": "PAP", "couleur": "#9C27B0", "commission_pct": 0, "actif": True},
-        {"id": None, "nom": "Direct", "couleur": "#607D8B", "commission_pct": 0, "actif": True},
-        {"id": None, "nom": "VRBO", "couleur": "#3D67FF", "commission_pct": 0, "actif": True},
-    ]
+    for p in platforms:
+        col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
+        with col1:
+            st.markdown(f"**{p['nom']}**")
+        with col2:
+            st.markdown(
+                f"<div style='width:24px;height:24px;border-radius:4px;"
+                f"background:{p.get('couleur') or '#CCCCCC'};border:1px solid #999'></div>",
+                unsafe_allow_html=True,
+            )
+        with col3:
+            st.text(f"{p.get('commission_pct', 0) or 0}%")
+        with col4:
+            actif = st.toggle("Actif", value=p["actif"], key=f"actif_{p['id']}")
+            if actif != p["actif"]:
+                update_platform(p["id"], {"actif": actif})
+                st.rerun()
+        with col5:
+            if st.button("✏️", key=f"edit_{p['id']}"):
+                st.session_state[f"editing_{p['id']}"] = not st.session_state.get(f"editing_{p['id']}", False)
+
+        if st.session_state.get(f"editing_{p['id']}"):
+            with st.form(f"edit_form_{p['id']}"):
+                new_nom = st.text_input("Nom", value=p["nom"])
+                new_couleur = st.color_picker("Couleur", value=p.get("couleur") or "#CCCCCC")
+                new_commission = st.number_input(
+                    "Commission %", value=float(p.get("commission_pct") or 0),
+                    min_value=0.0, max_value=100.0, step=0.5
+                )
+                col_save, col_cancel = st.columns(2)
+                with col_save:
+                    if st.form_submit_button("Enregistrer"):
+                        update_platform(p["id"], {
+                            "nom": new_nom.strip(),
+                            "couleur": new_couleur,
+                            "commission_pct": new_commission,
+                        })
+                        st.session_state[f"editing_{p['id']}"] = False
+                        st.rerun()
+                with col_cancel:
+                    if st.form_submit_button("Annuler"):
+                        st.session_state[f"editing_{p['id']}"] = False
+                        st.rerun()
